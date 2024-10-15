@@ -5,22 +5,18 @@
  * 2.0.
  */
 
-import React, { Fragment } from 'react';
+import React, { Fragment, useEffect, useState } from 'react';
 import { FormattedMessage } from '@kbn/i18n-react';
 
-import {
-  EuiButton,
-  EuiEmptyPrompt,
-  EuiSpacer,
-  EuiPageHeader,
-  EuiPageContent_Deprecated as EuiPageContent,
-} from '@elastic/eui';
+import { EuiButton, EuiSpacer, EuiPageHeader, EuiPageTemplate } from '@elastic/eui';
 import { useHistory } from 'react-router-dom';
 import { reactRouterNavigate } from '@kbn/kibana-react-plugin/public';
+import { usePolicyListContext } from './policy_list_context';
+import { useIsReadOnly } from '../../lib/use_is_read_only';
 import { PolicyFromES } from '../../../../common/types';
-import { PolicyTable } from './components/policy_table';
-import { getPolicyCreatePath } from '../../services/navigation';
-import { ListActionHandler } from './components/list_action_handler';
+import { getPoliciesListPath, getPolicyCreatePath } from '../../services/navigation';
+import { PolicyTable, ListActionHandler } from './components';
+import { ViewPolicyFlyout } from './policy_flyout';
 
 interface Props {
   policies: PolicyFromES[];
@@ -29,6 +25,19 @@ interface Props {
 
 export const PolicyList: React.FunctionComponent<Props> = ({ policies, updatePolicies }) => {
   const history = useHistory();
+  const isReadOnly = useIsReadOnly();
+  const { setListAction } = usePolicyListContext();
+  const [flyoutPolicy, setFlyoutPolicy] = useState<PolicyFromES | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(history.location.search);
+    const policyParam = decodeURIComponent(params.get('policy') ?? '');
+    const policyFromParam = policies.find((policy) => policy.name === policyParam);
+    if (policyFromParam) {
+      setFlyoutPolicy(policyFromParam);
+    } else {
+      setFlyoutPolicy(null);
+    }
+  }, [history.location.search, policies, setListAction]);
 
   const createPolicyButton = (
     <EuiButton
@@ -46,36 +55,42 @@ export const PolicyList: React.FunctionComponent<Props> = ({ policies, updatePol
 
   if (policies.length === 0) {
     return (
-      <EuiPageContent verticalPosition="center" horizontalPosition="center" color="subdued">
-        <EuiEmptyPrompt
-          iconType="managementApp"
-          title={
-            <h1>
+      <EuiPageTemplate.EmptyPrompt
+        iconType="managementApp"
+        title={
+          <h1>
+            <FormattedMessage
+              id="xpack.indexLifecycleMgmt.policyTable.emptyPromptTitle"
+              defaultMessage="Create your first index lifecycle policy"
+            />
+          </h1>
+        }
+        body={
+          <Fragment>
+            <p>
               <FormattedMessage
-                id="xpack.indexLifecycleMgmt.policyTable.emptyPromptTitle"
-                defaultMessage="Create your first index lifecycle policy"
+                id="xpack.indexLifecycleMgmt.policyTable.emptyPromptDescription"
+                defaultMessage=" An index lifecycle policy helps you manage your indices as they age."
               />
-            </h1>
-          }
-          body={
-            <Fragment>
-              <p>
-                <FormattedMessage
-                  id="xpack.indexLifecycleMgmt.policyTable.emptyPromptDescription"
-                  defaultMessage=" An index lifecycle policy helps you manage your indices as they age."
-                />
-              </p>
-            </Fragment>
-          }
-          actions={createPolicyButton}
-        />
-      </EuiPageContent>
+            </p>
+          </Fragment>
+        }
+        actions={createPolicyButton}
+      />
     );
   }
 
+  const rightSideItems = isReadOnly ? [] : [createPolicyButton];
   return (
     <>
-      <ListActionHandler updatePolicies={updatePolicies} />
+      <ListActionHandler
+        deletePolicyCallback={() => {
+          // if a flyout was open, then close it
+          history.push(getPoliciesListPath());
+          // update the policies in the list after 1 was deleted
+          updatePolicies();
+        }}
+      />
 
       <EuiPageHeader
         pageTitle={
@@ -94,12 +109,14 @@ export const PolicyList: React.FunctionComponent<Props> = ({ policies, updatePol
           />
         }
         bottomBorder
-        rightSideItems={[createPolicyButton]}
+        rightSideItems={rightSideItems}
       />
 
       <EuiSpacer size="l" />
 
       <PolicyTable policies={policies} />
+
+      {flyoutPolicy && <ViewPolicyFlyout policy={flyoutPolicy} />}
     </>
   );
 };

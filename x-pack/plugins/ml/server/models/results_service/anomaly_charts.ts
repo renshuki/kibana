@@ -12,8 +12,23 @@ import type * as estypes from '@elastic/elasticsearch/lib/api/types';
 import { extent, max, min } from 'd3';
 import { isPopulatedObject } from '@kbn/ml-is-populated-object';
 import { isDefined } from '@kbn/ml-is-defined';
+import {
+  aggregationTypeTransform,
+  getEntityFieldList,
+  isMultiBucketAnomaly,
+  type InfluencersFilterQuery,
+  type MlAnomalyRecordDoc,
+  type MlEntityField,
+  type MlRecordForInfluencer,
+  _DOC_COUNT,
+  DOC_COUNT,
+  ES_AGGREGATION,
+  ML_JOB_AGGREGATION,
+} from '@kbn/ml-anomaly-utils';
+import { isRuntimeMappings } from '@kbn/ml-runtime-field-utils';
+import { parseInterval } from '@kbn/ml-parse-interval';
+
 import type { MlClient } from '../../lib/ml_client';
-import { isRuntimeMappings } from '../../../common';
 import type {
   MetricData,
   ModelPlotOutput,
@@ -33,24 +48,15 @@ import {
   ML_MEDIAN_PERCENTS,
   mlFunctionToESAggregation,
 } from '../../../common/util/job_utils';
-import { CriteriaField } from './results_service';
-import {
-  aggregationTypeTransform,
-  EntityField,
-  getEntityFieldList,
-  isMultiBucketAnomaly,
-} from '../../../common/util/anomaly_utils';
-import { InfluencersFilterQuery } from '../../../common/types/es_client';
-import { AnomalyRecordDoc, CombinedJob, Datafeed, RecordForInfluencer } from '../../shared';
-import { ES_AGGREGATION, ML_JOB_AGGREGATION } from '../../../common/constants/aggregation_types';
-import { parseInterval } from '../../../common/util/parse_interval';
-import { _DOC_COUNT, DOC_COUNT } from '../../../common/constants/field_types';
+import type { CriteriaField } from './results_service';
+import type { CombinedJob, Datafeed } from '../../shared';
 
 import { getDatafeedAggregations } from '../../../common/util/datafeed_utils';
 import { findAggField } from '../../../common/util/validation_utils';
-import { CHART_TYPE, ChartType } from '../../../common/constants/charts';
+import type { ChartType } from '../../../common/constants/charts';
+import { CHART_TYPE, SCHEDULE_EVENT_MARKER_ENTITY } from '../../../common/constants/charts';
 import { getChartType } from '../../../common/util/chart_utils';
-import { MlJob } from '../..';
+import type { MlJob } from '../..';
 
 export function chartLimits(data: ChartPoint[] = []) {
   const domain = extent(data, (d) => {
@@ -129,7 +135,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
 
   async function fetchMetricData(
     index: string,
-    entityFields: EntityField[],
+    entityFields: MlEntityField[],
     query: object | undefined,
     metricFunction: string | null, // ES aggregation name
     metricFieldName: string | undefined,
@@ -222,7 +228,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
       esSearchRequest.query!.bool!.minimum_should_match = shouldCriteria.length / 2;
     }
 
-    esSearchRequest.aggs!.byTime.aggs = {};
+    esSearchRequest.aggs!.byTime.aggs = Object.create(null);
 
     if (metricFieldName !== undefined && metricFieldName !== '' && metricFunction) {
       const metricAgg: any = {
@@ -253,7 +259,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
         }
         esSearchRequest.aggs!.byTime.aggs = tempAggs;
       } else {
-        esSearchRequest.aggs!.byTime.aggs.metric = metricAgg;
+        esSearchRequest.aggs!.byTime.aggs!.metric = metricAgg;
       }
     } else {
       // if metricFieldName is not defined, it's probably a variation of the non zero count function
@@ -453,16 +459,16 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
 
   function processRecordsForDisplay(
     combinedJobRecords: Record<string, MlJob>,
-    anomalyRecords: RecordForInfluencer[]
+    anomalyRecords: MlRecordForInfluencer[]
   ): { records: ChartRecord[]; errors: Record<string, Set<string>> | undefined } {
     // Aggregate the anomaly data by detector, and entity (by/over/partition).
     if (anomalyRecords.length === 0) {
       return { records: [], errors: undefined };
     }
     // Aggregate by job, detector, and analysis fields (partition, by, over).
-    const aggregatedData: Record<string, any> = {};
+    const aggregatedData: Record<string, any> = Object.create(null);
 
-    const jobsErrorMessage: Record<string, string> = {};
+    const jobsErrorMessage: Record<string, string> = Object.create(null);
     each(anomalyRecords, (record) => {
       // Check if we can plot a chart for this record, depending on whether the source data
       // is chartable, and if model plot is enabled for the job.
@@ -511,36 +517,36 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
       }
       const jobId = record.job_id;
       if (aggregatedData[jobId] === undefined) {
-        aggregatedData[jobId] = {};
+        aggregatedData[jobId] = Object.create(null);
       }
       const detectorsForJob = aggregatedData[jobId];
 
       const detectorIndex = record.detector_index;
       if (detectorsForJob[detectorIndex] === undefined) {
-        detectorsForJob[detectorIndex] = {};
+        detectorsForJob[detectorIndex] = Object.create(null);
       }
 
       // TODO - work out how best to display results from detectors with just an over field.
       const firstFieldName =
-        record.partition_field_name || record.by_field_name || record.over_field_name;
+        record.partition_field_name ?? record.by_field_name ?? record.over_field_name;
       const firstFieldValue =
-        record.partition_field_value || record.by_field_value || record.over_field_value;
+        record.partition_field_value ?? record.by_field_value ?? record.over_field_value;
       if (firstFieldName !== undefined && firstFieldValue !== undefined) {
         const groupsForDetector = detectorsForJob[detectorIndex];
 
         if (groupsForDetector[firstFieldName] === undefined) {
-          groupsForDetector[firstFieldName] = {};
+          groupsForDetector[firstFieldName] = Object.create(null);
         }
         const valuesForGroup: Record<string, any> = groupsForDetector[firstFieldName];
         if (valuesForGroup[firstFieldValue] === undefined) {
-          valuesForGroup[firstFieldValue] = {};
+          valuesForGroup[firstFieldValue] = Object.create(null);
         }
 
         const dataForGroupValue = valuesForGroup[firstFieldValue];
 
         let isSecondSplit = false;
         if (record.partition_field_name !== undefined) {
-          const splitFieldName = record.over_field_name || record.by_field_name;
+          const splitFieldName = record.over_field_name ?? record.by_field_name;
           if (splitFieldName !== undefined) {
             isSecondSplit = true;
           }
@@ -558,17 +564,17 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
           }
         } else {
           // Aggregate another level for the over or by field.
-          const secondFieldName = record.over_field_name || record.by_field_name;
-          const secondFieldValue = record.over_field_value || record.by_field_value;
+          const secondFieldName = record.over_field_name ?? record.by_field_name;
+          const secondFieldValue = record.over_field_value ?? record.by_field_value;
 
           if (secondFieldName !== undefined && secondFieldValue !== undefined) {
             if (dataForGroupValue[secondFieldName] === undefined) {
-              dataForGroupValue[secondFieldName] = {};
+              dataForGroupValue[secondFieldName] = Object.create(null);
             }
 
             const splitsForGroup = dataForGroupValue[secondFieldName];
             if (splitsForGroup[secondFieldValue] === undefined) {
-              splitsForGroup[secondFieldValue] = {};
+              splitsForGroup[secondFieldValue] = Object.create(null);
             }
 
             const dataForSplitValue = splitsForGroup[secondFieldValue];
@@ -599,7 +605,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
     });
 
     // Group job id by error message instead of by job:
-    const errorMessages: Record<string, Set<string>> | undefined = {};
+    const errorMessages: Record<string, Set<string>> = Object.create(null);
     Object.keys(jobsErrorMessage).forEach((jobId) => {
       const msg = jobsErrorMessage[jobId];
       if (errorMessages[msg] === undefined) {
@@ -733,7 +739,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
     // Add extra properties used by the explorer dashboard charts.
     fullSeriesConfig.functionDescription = record.function_description;
 
-    const parsedBucketSpan = parseInterval(job.analysis_config.bucket_span);
+    const parsedBucketSpan = parseInterval(job.analysis_config.bucket_span!);
     if (parsedBucketSpan !== null) {
       fullSeriesConfig.bucketSpanSeconds = parsedBucketSpan.asSeconds();
     }
@@ -762,12 +768,12 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
     }
 
     // Build the tooltip data for the chart info icon, showing further details on what is being plotted.
-    let functionLabel = `${config.metricFunction}`;
+    let functionLabel = `${fullSeriesConfig.metricFunction ?? config.metricFunction}`;
     if (
       fullSeriesConfig.metricFieldName !== undefined &&
       fullSeriesConfig.metricFieldName !== null
     ) {
-      functionLabel += ` ${fullSeriesConfig.metricFieldName}`;
+      functionLabel += `(${fullSeriesConfig.metricFieldName})`;
     }
 
     fullSeriesConfig.infoTooltip = {
@@ -902,13 +908,13 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
     handleError = (errorMsg: string, jobId: string) => {
       // Group the jobIds by the type of error message
       if (!errorMessages) {
-        errorMessages = {};
+        errorMessages = Object.create(null);
       }
 
-      if (errorMessages[errorMsg]) {
-        errorMessages[errorMsg].add(jobId);
+      if (errorMessages![errorMsg]) {
+        errorMessages![errorMsg].add(jobId);
       } else {
-        errorMessages[errorMsg] = new Set([jobId]);
+        errorMessages![errorMsg] = new Set([jobId]);
       }
     };
   }
@@ -1040,7 +1046,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
       let chartData: ChartPoint[] = [];
       if (metricData !== undefined) {
         if (records.length > 0) {
-          const filterField = records[0].by_field_value || records[0].over_field_value;
+          const filterField = records[0].by_field_value ?? records[0].over_field_value;
           if (eventDistribution && eventDistribution.length > 0) {
             chartData = eventDistribution.filter((d: { entity: any }) => d.entity !== filterField);
           }
@@ -1049,9 +1055,11 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
             // differently because of how the source data is structured.
             // For rare chart values we are only interested wether a value is either `0` or not,
             // `0` acts like a flag in the chart whether to display the dot/marker.
-            // All other charts (single metric, population) are metric based and with
+            // For single metric chart, we need to pass null values to display data gaps.
+            // All other charts are distribution based and with
             // those a value of `null` acts as the flag to hide a data point.
             if (
+              chartType === CHART_TYPE.SINGLE_METRIC ||
               (chartType === CHART_TYPE.EVENT_DISTRIBUTION && value > 0) ||
               (chartType !== CHART_TYPE.EVENT_DISTRIBUTION && value !== null)
             ) {
@@ -1073,6 +1081,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
       // Iterate through the anomaly records, adding anomalyScore properties
       // to the chartData entries for anomalous buckets.
       const chartDataForPointSearch = getChartDataForPointSearch(chartData, records[0], chartType);
+      let shouldSortChartData = false;
       each(records, (record) => {
         // Look for a chart point with the same time as the record.
         // If none found, insert a point for anomalies due to a gap in the data.
@@ -1081,9 +1090,16 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
         if (chartPoint === undefined) {
           chartPoint = { date: recordTime, value: null };
           chartData.push(chartPoint);
+          shouldSortChartData = true;
         }
         if (chartPoint !== undefined) {
           chartPoint.anomalyScore = record.record_score;
+
+          // If it is an empty chart point, set the value to the actual value
+          // To properly display the anomaly marker on the chart
+          if (chartPoint.value === null) {
+            chartPoint.value = Array.isArray(record.actual) ? record.actual[0] : record.actual;
+          }
 
           if (record.actual !== undefined) {
             chartPoint.actual = record.actual;
@@ -1113,15 +1129,31 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
         }
       });
 
+      // Chart data is sorted by default, but if we added points for anomalies,
+      // we need to sort again to ensure the points are in the correct order.
+      if (shouldSortChartData) {
+        chartData.sort((a, b) => a.date - b.date);
+      }
+
       // Add a scheduledEvents property to any points in the chart data set
       // which correspond to times of scheduled events for the job.
       if (scheduledEvents !== undefined) {
         each(scheduledEvents, (events, time) => {
           const chartPoint = findChartPointForTime(chartDataForPointSearch, Number(time));
           if (chartPoint !== undefined) {
-            // Note if the scheduled event coincides with an absence of the underlying metric data,
-            // we don't worry about plotting the event.
             chartPoint.scheduledEvents = events;
+          } else {
+            // If there's no underlying metric data point for the scheduled event,
+            // create a new chart point with a value of 0.
+            // Except for Single Metric Charts, where we want to create a point at the bottom of the chart.
+            // Which is not always `0`.
+            const eventChartPoint: ChartPoint = {
+              date: Number(time),
+              value: chartType === CHART_TYPE.SINGLE_METRIC ? null : 0,
+              entity: SCHEDULE_EVENT_MARKER_ENTITY,
+              scheduledEvents: events,
+            };
+            chartData.push(eventChartPoint);
           }
         });
       }
@@ -1131,7 +1163,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
 
     function getChartDataForPointSearch(
       chartData: ChartPoint[],
-      record: AnomalyRecordDoc,
+      record: MlAnomalyRecordDoc,
       chartType: ChartType
     ) {
       if (
@@ -1139,7 +1171,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
         chartType === CHART_TYPE.POPULATION_DISTRIBUTION
       ) {
         return chartData.filter((d) => {
-          return d.entity === (record && (record.by_field_value || record.over_field_value));
+          return d.entity === (record && (record.by_field_value ?? record.over_field_value));
         });
       }
 
@@ -1205,11 +1237,11 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
     // If the job uses aggregation or scripted fields, and if it's a config we don't support
     // use model plot data if model plot is enabled
     // else if source data can be plotted, use that, otherwise model plot will be available.
-    // @ts-ignore
+    // @ts-expect-error
     const useSourceData = isSourceDataChartableForDetector(job, detectorIndex);
 
     if (useSourceData) {
-      const datafeedQuery = get(config, 'datafeedConfig.query', null);
+      const datafeedQuery = get(config, 'datafeedConfig.query');
 
       try {
         return await fetchMetricData(
@@ -1403,7 +1435,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
     const dataByJobId = get(resp, ['aggregations', 'jobs', 'buckets'], []);
     each(dataByJobId, (dataForJob: any) => {
       const jobId: string = dataForJob.key;
-      const resultsForTime: Record<string, any> = {};
+      const resultsForTime: Record<string, any> = Object.create(null);
       const dataByTime = get(dataForJob, ['times', 'buckets'], []);
       each(dataByTime, (dataForTime: any) => {
         const time: string = dataForTime.key;
@@ -1439,8 +1471,8 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
 
   async function getEventDistributionData(
     index: string,
-    splitField: EntityField | undefined | null,
-    filterField: EntityField | undefined | null,
+    splitField: MlEntityField | undefined | null,
+    filterField: MlEntityField | undefined | null,
     query: any,
     metricFunction: string | undefined | null, // ES aggregation name
     metricFieldName: string | undefined,
@@ -1538,7 +1570,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
       typeof metricFunction === 'string'
     ) {
       // @ts-ignore
-      body.aggs.sample.aggs.byTime.aggs.entities.aggs = {};
+      body.aggs.sample.aggs.byTime.aggs.entities.aggs = Object.create(null);
 
       const metricAgg = {
         [metricFunction]: {
@@ -1645,7 +1677,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
   }
 
   async function getRecordsForCriteriaChart(config: SeriesConfigWithMetadata, range: ChartRange) {
-    let criteria: EntityField[] = [];
+    let criteria: MlEntityField[] = [];
     criteria.push({ fieldName: 'detector_index', fieldValue: config.detectorIndex });
     criteria = criteria.concat(config.entityFields);
 
@@ -1812,13 +1844,13 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
 
   async function getRecordsForInfluencer(
     jobIds: string[],
-    influencers: EntityField[],
+    influencers: MlEntityField[],
     threshold: number,
     earliestMs: number,
     latestMs: number,
     maxResults: number,
     influencersFilterQuery?: InfluencersFilterQuery
-  ): Promise<RecordForInfluencer[]> {
+  ): Promise<MlRecordForInfluencer[]> {
     // Build the criteria to use in the bool filter part of the request.
     // Add criteria for the time range, record score, plus any specified job IDs.
     const boolCriteria: estypes.QueryDslBoolQuery['must'] = [
@@ -1894,7 +1926,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
       });
     }
 
-    const response = await mlClient.anomalySearch<estypes.SearchResponse<RecordForInfluencer>>(
+    const response = await mlClient.anomalySearch<estypes.SearchResponse<MlRecordForInfluencer>>(
       {
         body: {
           size: maxResults !== undefined ? maxResults : 100,
@@ -1933,7 +1965,7 @@ export function anomalyChartsDataProvider(mlClient: MlClient, client: IScopedClu
    */
   async function getAnomalyChartsData(options: {
     jobIds: string[];
-    influencers: EntityField[];
+    influencers: MlEntityField[];
     threshold: number;
     earliestMs: number;
     latestMs: number;

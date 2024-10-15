@@ -6,7 +6,8 @@
  */
 
 import { css } from '@emotion/react';
-import React, { FC, useCallback, useMemo } from 'react';
+import type { FC } from 'react';
+import React, { useCallback, useMemo } from 'react';
 
 import { EuiFlexGroup, EuiFlexItem, EuiPageHeader } from '@elastic/eui';
 
@@ -20,6 +21,7 @@ import {
   FROZEN_TIER_PREFERENCE,
 } from '@kbn/ml-date-picker';
 
+import moment from 'moment';
 import { useDataSource } from '../../hooks/use_data_source';
 import {
   AIOPS_FROZEN_TIER_PREFERENCE,
@@ -49,9 +51,14 @@ export const PageHeader: FC = () => {
     autoRefreshSelector: true,
   });
 
-  const updateTimeState: FullTimeRangeSelectorProps['callback'] = useCallback(
+  const updateTimeState = useCallback<NonNullable<FullTimeRangeSelectorProps['callback']>>(
     (update) => {
-      setGlobalState({ time: { from: update.start.string, to: update.end.string } });
+      setGlobalState({
+        time: {
+          from: moment(update.start.epoch).toISOString(),
+          to: moment(update.end.epoch).toISOString(),
+        },
+      });
     },
     [setGlobalState]
   );

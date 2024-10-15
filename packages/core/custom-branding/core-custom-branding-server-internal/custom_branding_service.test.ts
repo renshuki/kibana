@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { mockCoreContext } from '@kbn/core-base-server-mocks';
@@ -60,5 +61,17 @@ describe('#setup', () => {
     const customBranding = await getBrandingFor(kibanaRequest);
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(customBranding).toEqual({ logo: 'myLogo' });
+  });
+
+  it('calls fetchFn correctly when unauthenticated', async () => {
+    const service = new CustomBrandingService(coreContext);
+    const { register, getBrandingFor } = service.setup();
+    service.start();
+    const fetchFn = jest.fn();
+    fetchFn.mockImplementation(() => Promise.resolve({ logo: 'myLogo' }));
+    register('customBranding', fetchFn);
+    const kibanaRequest: jest.Mocked<KibanaRequest> = {} as unknown as jest.Mocked<KibanaRequest>;
+    await getBrandingFor(kibanaRequest, { unauthenticated: true });
+    expect(fetchFn).toHaveBeenCalledWith(kibanaRequest, true);
   });
 });

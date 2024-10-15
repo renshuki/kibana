@@ -14,13 +14,13 @@ import React from 'react';
 import type { ApplicationStart, Capabilities } from '@kbn/core/public';
 import { i18n } from '@kbn/i18n';
 
-import { getSpacesFeatureDescription } from '../../constants';
 import { ManageSpacesButton } from './manage_spaces_button';
+import { getSpacesFeatureDescription } from '../../constants';
 
 interface Props {
   id: string;
   isLoading: boolean;
-  toggleSpaceSelector: () => void;
+  onClickManageSpaceBtn: () => void;
   capabilities: Capabilities;
   navigateToApp: ApplicationStart['navigateToApp'];
 }
@@ -45,7 +45,7 @@ export const SpacesDescription: FC<Props> = (props: Props) => {
         <ManageSpacesButton
           size="s"
           style={{ width: `100%` }}
-          onClick={props.toggleSpaceSelector}
+          onClick={props.onClickManageSpaceBtn}
           capabilities={props.capabilities}
           navigateToApp={props.navigateToApp}
         />

@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, Fragment } from 'react';
+import type { FC } from 'react';
+import React, { Fragment } from 'react';
 import { EuiCallOut, EuiSpacer, EuiFlexItem } from '@elastic/eui';
 
 import { FormattedMessage } from '@kbn/i18n-react';
@@ -39,7 +40,7 @@ export const TextContent: FC<FieldDataRowProps> = ({ config }) => {
                   defaultMessage: 'No examples were obtained for this field',
                 }
               )}
-              iconType="alert"
+              iconType="warning"
             >
               <FormattedMessage
                 id="xpack.dataVisualizer.dataGrid.fieldText.fieldNotPresentDescription"

@@ -13,14 +13,20 @@ import {
   Logger,
   Plugin,
   PluginInitializerContext,
+  SECURITY_EXTENSION_ID,
 } from '@kbn/core/server';
 import { i18n } from '@kbn/i18n';
 import { License } from '@kbn/license-api-guard-plugin/server';
 import { CustomBranding } from '@kbn/core-custom-branding-common';
+import { Subscription } from 'rxjs';
 import { PLUGIN } from '../common/constants';
-import type { CustomBrandingRequestHandlerContext } from './types';
-import { Dependencies } from './types';
-import { registerRoutes } from './routes';
+import type {
+  CustomBrandingServerSetup,
+  CustomBrandingServerStart,
+  CustomBrandingServerStartDependencies,
+  CustomBrandingServerSetupDependencies,
+} from './types';
+import { registerUiSettings } from './ui_settings';
 
 const settingsKeys: Array<keyof CustomBranding> = [
   'logo',
@@ -30,9 +36,19 @@ const settingsKeys: Array<keyof CustomBranding> = [
   'pageTitle',
 ];
 
-export class CustomBrandingPlugin implements Plugin {
+export class CustomBrandingPlugin
+  implements
+    Plugin<
+      CustomBrandingServerSetup,
+      CustomBrandingServerStart,
+      CustomBrandingServerSetupDependencies,
+      CustomBrandingServerStartDependencies
+    >
+{
   private readonly license: License;
   private readonly logger: Logger;
+  private licensingSubscription?: Subscription;
+  private isValidLicense: boolean = false;
 
   constructor(initializerContext: PluginInitializerContext) {
     this.logger = initializerContext.logger.get();
@@ -45,37 +61,53 @@ export class CustomBrandingPlugin implements Plugin {
       pluginName: PLUGIN.getI18nName(i18n),
       logger: this.logger,
     });
-    const router = core.http.createRouter<CustomBrandingRequestHandlerContext>();
-    registerRoutes(router);
 
-    const fetchFn = async (request: KibanaRequest): Promise<CustomBranding> => {
+    registerUiSettings(core);
+
+    const fetchFn = async (
+      request: KibanaRequest,
+      unauthenticated: boolean
+    ): Promise<CustomBranding> => {
+      if (!this.isValidLicense) {
+        return {};
+      }
       const [coreStart] = await core.getStartServices();
-      const soClient = coreStart.savedObjects.getScopedClient(request);
+      const soClient = unauthenticated
+        ? coreStart.savedObjects.getScopedClient(request, {
+            excludedExtensions: [SECURITY_EXTENSION_ID],
+          })
+        : coreStart.savedObjects.getScopedClient(request);
       const uiSettings = coreStart.uiSettings.globalAsScopedToClient(soClient);
       return await this.getBrandingFrom(uiSettings);
     };
 
     core.customBranding.register(fetchFn);
+
     return {};
   }
 
-  public start(core: CoreStart, { licensing }: Dependencies) {
+  public start(_core: CoreStart, { licensing }: CustomBrandingServerStartDependencies) {
     this.logger.debug('customBranding: Started');
     this.license.start({
       pluginId: PLUGIN.ID,
       minimumLicenseType: PLUGIN.MINIMUM_LICENSE_REQUIRED,
       licensing,
     });
+    this.licensingSubscription = licensing.license$.subscribe((next) => {
+      this.isValidLicense = next.hasAtLeast('enterprise');
+    });
     return {};
   }
 
-  public stop() {}
+  public stop() {
+    this.licensingSubscription?.unsubscribe();
+  }
 
   private getBrandingFrom = async (uiSettingsClient: IUiSettingsClient) => {
     const branding: CustomBranding = {};
     for (let i = 0; i < settingsKeys!.length; i++) {
       const key = settingsKeys[i];
-      const fullKey = `customBranding:${key}`;
+      const fullKey = `xpackCustomBranding:${key}`;
       const value = await uiSettingsClient.get(fullKey);
       if (value) {
         branding[key] = value;

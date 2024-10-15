@@ -4,6 +4,7 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
+
 import type { SetStateAction, Dispatch } from 'react';
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 
@@ -23,11 +24,17 @@ import {
   EuiFlyoutFooter,
   EuiTextColor,
   EuiFlyout,
+  EuiToolTip,
 } from '@elastic/eui';
+import type {
+  EuiFilePickerClass,
+  EuiFilePickerProps,
+} from '@elastic/eui/src/components/form/file_picker/file_picker';
 import type {
   BulkErrorSchema,
   ImportExceptionsResponseSchema,
 } from '@kbn/securitysolution-io-ts-list-types';
+import { ENDPOINT_LIST_ID } from '@kbn/securitysolution-list-constants';
 import type { HttpSetup } from '@kbn/core-http-browser';
 import type { ToastInput, Toast, ErrorToastOptions } from '@kbn/core-notifications-browser';
 
@@ -35,6 +42,7 @@ import { useImportExceptionList } from '../../hooks/use_import_exception_list';
 
 import * as i18n from '../../translations';
 
+// eslint-disable-next-line react/display-name
 export const ImportExceptionListFlyout = React.memo(
   ({
     handleRefresh,
@@ -49,21 +57,23 @@ export const ImportExceptionListFlyout = React.memo(
     addError: (error: unknown, options: ErrorToastOptions) => Toast;
     setDisplayImportListFlyout: Dispatch<SetStateAction<boolean>>;
   }) => {
-    const filePickerRef = useRef<EuiFilePicker | null>(null);
+    const filePickerRef = useRef<EuiFilePickerClass | null>(null);
 
     const filePickerId = useGeneratedHtmlId({ prefix: 'filePicker' });
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<FileList | null>(null);
     const [overwrite, setOverwrite] = useState(false);
     const [asNewList, setAsNewList] = useState(false);
     const [alreadyExistingItem, setAlreadyExistingItem] = useState(false);
+    const [endpointListImporting, setEndpointListImporting] = useState(false);
 
     const resetForm = useCallback(() => {
       if (filePickerRef.current?.fileInput) {
         filePickerRef.current.fileInput.value = '';
         filePickerRef.current.handleChange();
       }
-      setFile(null);
+      setFiles(null);
       setAlreadyExistingItem(false);
+      setEndpointListImporting(false);
       setAsNewList(false);
       setOverwrite(false);
     }, []);
@@ -71,31 +81,30 @@ export const ImportExceptionListFlyout = React.memo(
     const ctrl = useRef(new AbortController());
 
     const handleImportExceptionList = useCallback(() => {
-      if (!importExceptionListState.loading && file) {
+      if (!importExceptionListState.loading && files) {
         ctrl.current = new AbortController();
 
-        importExceptionList({
-          file,
-          http,
-          signal: ctrl.current.signal,
-          overwrite,
-          overwriteExceptions: overwrite,
-          asNewList,
-        });
+        Array.from(files).forEach((file) =>
+          importExceptionList({
+            file,
+            http,
+            signal: ctrl.current.signal,
+            overwrite,
+            overwriteExceptions: overwrite,
+            asNewList,
+          })
+        );
       }
-    }, [asNewList, file, http, importExceptionList, importExceptionListState.loading, overwrite]);
+    }, [asNewList, files, http, importExceptionList, importExceptionListState.loading, overwrite]);
 
     const handleImportSuccess = useCallback(
       (response: ImportExceptionsResponseSchema) => {
         resetForm();
         addSuccess({
-          text: i18n.uploadSuccessMessage(file?.name ?? ''),
           title: i18n.UPLOAD_SUCCESS_TITLE,
         });
         handleRefresh();
       },
-      // looking for file.name but we don't wan't to render success every time file name changes.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       [resetForm, addSuccess, handleRefresh]
     );
 
@@ -127,6 +136,13 @@ export const ImportExceptionListFlyout = React.memo(
             importExceptionListState?.result?.errors.forEach((err) => {
               if (err.error.message.includes('already exists')) {
                 setAlreadyExistingItem(true);
+                if (
+                  err.error.message.includes(
+                    `Found that list_id: "${ENDPOINT_LIST_ID}" already exists`
+                  )
+                ) {
+                  setEndpointListImporting(true);
+                }
               }
               errorsToDisplay.push(err);
             });
@@ -142,14 +158,24 @@ export const ImportExceptionListFlyout = React.memo(
       importExceptionListState?.result,
       importExceptionListState?.result?.errors,
     ]);
-    const handleFileChange = useCallback((files: FileList | null) => {
-      setFile(files?.item(0) ?? null);
+    const handleFileChange = useCallback((inputFiles: FileList | null) => {
+      setFiles(inputFiles ?? null);
     }, []);
+
+    const importExceptionListFlyoutTitleId = useGeneratedHtmlId({
+      prefix: 'importExceptionListFlyoutTitle',
+    });
+
     return (
-      <EuiFlyout ownFocus size="s" onClose={() => setDisplayImportListFlyout(false)}>
+      <EuiFlyout
+        ownFocus
+        size="s"
+        onClose={() => setDisplayImportListFlyout(false)}
+        aria-labelledby={importExceptionListFlyoutTitleId}
+      >
         <EuiFlyoutHeader hasBorder>
           <EuiTitle size="m">
-            <h2>{i18n.IMPORT_EXCEPTION_LIST_HEADER}</h2>
+            <h2 id={importExceptionListFlyoutTitleId}>{i18n.IMPORT_EXCEPTION_LIST_HEADER}</h2>
           </EuiTitle>
         </EuiFlyoutHeader>
         <EuiFlyoutBody>
@@ -157,7 +183,7 @@ export const ImportExceptionListFlyout = React.memo(
           <EuiFilePicker
             id={filePickerId}
             multiple
-            ref={filePickerRef}
+            ref={filePickerRef as React.Ref<Omit<EuiFilePickerProps, 'stylesMemoizer'>>}
             initialPromptText={i18n.IMPORT_PROMPT}
             onChange={handleFileChange}
             display={'large'}
@@ -173,20 +199,28 @@ export const ImportExceptionListFlyout = React.memo(
                 id={'basicCheckboxId'}
                 label={i18n.IMPORT_EXCEPTION_LIST_OVERWRITE}
                 checked={overwrite}
+                data-test-subj="importExceptionListOverwriteExistingCheckbox"
                 onChange={(e) => {
                   setOverwrite(!overwrite);
                   setAsNewList(false);
                 }}
               />
-              <EuiCheckbox
-                id={'createNewListCheckbox'}
-                label={i18n.IMPORT_EXCEPTION_LIST_AS_NEW_LIST}
-                checked={asNewList}
-                onChange={(e) => {
-                  setAsNewList(!asNewList);
-                  setOverwrite(false);
-                }}
-              />
+              <EuiToolTip
+                position="bottom"
+                content={endpointListImporting ? i18n.IMPORT_EXCEPTION_ENDPOINT_LIST_WARNING : ''}
+              >
+                <EuiCheckbox
+                  id={'createNewListCheckbox'}
+                  label={i18n.IMPORT_EXCEPTION_LIST_AS_NEW_LIST}
+                  data-test-subj="importExceptionListCreateNewCheckbox"
+                  checked={asNewList}
+                  disabled={endpointListImporting}
+                  onChange={(e) => {
+                    setAsNewList(!asNewList);
+                    setOverwrite(false);
+                  }}
+                />
+              </EuiToolTip>
             </>
           )}
         </EuiFlyoutBody>
@@ -194,6 +228,7 @@ export const ImportExceptionListFlyout = React.memo(
           <EuiFlexGroup justifyContent="spaceBetween">
             <EuiFlexItem grow={false}>
               <EuiButtonEmpty
+                data-test-subj="exceptionListsImportFormCloseBTN"
                 iconType="cross"
                 onClick={() => setDisplayImportListFlyout(false)}
                 flush="left"
@@ -205,7 +240,7 @@ export const ImportExceptionListFlyout = React.memo(
               <EuiButton
                 data-test-subj="exception-lists-form-import-action"
                 onClick={handleImportExceptionList}
-                disabled={file == null || importExceptionListState.loading}
+                disabled={files == null || importExceptionListState.loading}
               >
                 {i18n.UPLOAD_BUTTON}
               </EuiButton>

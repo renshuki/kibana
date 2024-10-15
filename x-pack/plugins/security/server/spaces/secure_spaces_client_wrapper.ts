@@ -7,22 +7,19 @@
 
 import Boom from '@hapi/boom';
 
-import type { ISavedObjectsSecurityExtension } from '@kbn/core-saved-objects-server';
-import { AuditAction } from '@kbn/core-saved-objects-server';
 import type { KibanaRequest, SavedObjectsClient } from '@kbn/core/server';
+import type { LegacyUrlAliasTarget } from '@kbn/core-saved-objects-common';
+import type { ISavedObjectsSecurityExtension } from '@kbn/core-saved-objects-server';
+import type { AuditLogger, AuthorizationServiceSetup } from '@kbn/security-plugin-types-server';
 import type {
   GetAllSpacesOptions,
   GetAllSpacesPurpose,
   GetSpaceResult,
   ISpacesClient,
-  LegacyUrlAliasTarget,
   Space,
 } from '@kbn/spaces-plugin/server';
 
-import { ALL_SPACES_ID } from '../../common/constants';
-import type { AuditLogger } from '../audit';
 import { SpaceAuditAction, spaceAuditEvent } from '../audit';
-import type { AuthorizationServiceSetup } from '../authorization';
 import type { SecurityPluginSetup } from '../plugin';
 
 const PURPOSE_PRIVILEGE_MAP: Record<
@@ -83,10 +80,13 @@ export class SecureSpacesClientWrapper implements ISpacesClient {
 
     // Collect all privileges which need to be checked
     const allPrivileges = Object.entries(PURPOSE_PRIVILEGE_MAP).reduce(
-      (acc, [getSpacesPurpose, privilegeFactory]) =>
-        !includeAuthorizedPurposes && getSpacesPurpose !== purpose
-          ? acc
-          : { ...acc, [getSpacesPurpose]: privilegeFactory(this.authorization) },
+      (acc, [getSpacesPurpose, privilegeFactory]) => {
+        if (!includeAuthorizedPurposes && getSpacesPurpose !== purpose) {
+          return acc;
+        }
+        acc[getSpacesPurpose as GetAllSpacesPurpose] = privilegeFactory(this.authorization);
+        return acc;
+      },
       {} as Record<GetAllSpacesPurpose, string[]>
     );
 
@@ -119,7 +119,8 @@ export class SecureSpacesClientWrapper implements ISpacesClient {
             const requiredActions = privilegeFactory(this.authorization);
             const hasAllRequired = checkHasAllRequired(space, requiredActions);
             hasAnyAuthorization = hasAnyAuthorization || hasAllRequired;
-            return { ...acc, [purposeKey]: hasAllRequired };
+            acc[purposeKey as GetAllSpacesPurpose] = hasAllRequired;
+            return acc;
           },
           {} as Record<GetAllSpacesPurpose, boolean>
         );
@@ -278,20 +279,7 @@ export class SecureSpacesClientWrapper implements ISpacesClient {
       const finder = this.spacesClient.createSavedObjectFinder(id);
       try {
         for await (const response of finder.find()) {
-          response.saved_objects.forEach((savedObject) => {
-            const { namespaces = [] } = savedObject;
-            const isOnlySpace = namespaces.length === 1; // We can always rely on the `namespaces` field having >=1 element
-            if (namespaces.includes(ALL_SPACES_ID) && !namespaces.includes(id)) {
-              // This object exists in All Spaces and its `namespaces` field isn't going to change; there's nothing to audit
-              return;
-            }
-            securityExtension.addAuditEvent({
-              action: isOnlySpace ? AuditAction.DELETE : AuditAction.UPDATE_OBJECTS_SPACES,
-              outcome: 'unknown',
-              savedObject: { type: savedObject.type, id: savedObject.id },
-              ...(!isOnlySpace && { deleteFromSpaces: [id] }),
-            });
-          });
+          this.securityExtension?.auditObjectsForSpaceDeletion(id, response.saved_objects);
         }
       } finally {
         await finder.close();
@@ -310,46 +298,13 @@ export class SecureSpacesClientWrapper implements ISpacesClient {
   }
 
   public async disableLegacyUrlAliases(aliases: LegacyUrlAliasTarget[]) {
-    if (this.securityExtension) {
-      const [uniqueSpaces, typesAndSpaces] = aliases.reduce(
-        ([spaces, typesAndSpacesMap], { targetSpace, targetType }) => {
-          const spacesForType = typesAndSpacesMap.get(targetType) ?? new Set();
-          return [
-            spaces.add(targetSpace),
-            typesAndSpacesMap.set(targetType, spacesForType.add(targetSpace)),
-          ];
-        },
-        [new Set<string>(), new Map<string, Set<string>>()]
+    try {
+      await this.securityExtension?.authorizeDisableLegacyUrlAliases(aliases); // will throw if unauthorized
+    } catch (err) {
+      throw this.errors.decorateForbiddenError(
+        new Error(`Unable to disable aliases: ${err.message}`)
       );
-
-      let error: Error | undefined;
-      try {
-        await this.securityExtension.performAuthorization({
-          actions: new Set(['bulk_update']),
-          types: new Set(typesAndSpaces.keys()),
-          spaces: uniqueSpaces,
-          enforceMap: typesAndSpaces,
-        });
-      } catch (err) {
-        error = this.errors.decorateForbiddenError(
-          new Error(`Unable to disable aliases: ${err.message}`)
-        );
-      }
-
-      for (const alias of aliases) {
-        const id = getAliasId(alias);
-        this.securityExtension.addAuditEvent({
-          action: AuditAction.UPDATE,
-          savedObject: { type: LEGACY_URL_ALIAS_TYPE, id },
-          error,
-          ...(!error && { outcome: 'unknown' }), // If authorization was a success, the outcome is unknown because the update operation has not occurred yet
-        });
-      }
-      if (error) {
-        throw error;
-      }
     }
-
     return this.spacesClient.disableLegacyUrlAliases(aliases);
   }
 

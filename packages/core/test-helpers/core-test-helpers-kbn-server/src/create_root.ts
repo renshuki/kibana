@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { join } from 'path';
@@ -12,6 +13,7 @@ import { defaultsDeep } from 'lodash';
 import { BehaviorSubject } from 'rxjs';
 import supertest from 'supertest';
 
+import { getPackages } from '@kbn/repo-packages';
 import { ToolingLog } from '@kbn/tooling-log';
 import { REPO_ROOT } from '@kbn/repo-info';
 import {
@@ -35,6 +37,7 @@ const DEFAULTS_SETTINGS = {
     // port and aren't affected by the timing issues in test environment.
     port: 0,
     xsrf: { disableProtection: true },
+    restrictInternalApis: true,
   },
   logging: {
     root: {
@@ -71,6 +74,7 @@ export function createRootWithSettings(
         dist: false,
         ...cliArgs,
       },
+      repoPackages: getPackages(REPO_ROOT),
     },
     pkg
   );
@@ -146,6 +150,7 @@ export function createRootWithCorePlugins(
         console: { type: 'console', layout: { type: 'pattern' } },
       },
     },
+    server: { restrictInternalApis: true },
     // createRootWithSettings sets default value to "true", so undefined should be threatened as "true".
     ...(cliArgs.oss === false
       ? {
@@ -195,7 +200,7 @@ export interface TestKibanaUtils {
 
 export interface TestUtils {
   startES: () => Promise<TestElasticsearchUtils>;
-  startKibana: () => Promise<TestKibanaUtils>;
+  startKibana: (abortSignal?: AbortSignal) => Promise<TestKibanaUtils>;
 }
 
 /**
@@ -259,7 +264,7 @@ export function createTestServers({
   // Add time for KBN and adding users
   adjustTimeout(es.getStartTimeout() + 100000);
 
-  const kbnSettings = settings.kbn ?? {};
+  const { cliArgs = {}, customKibanaVersion, ...kbnSettings } = settings.kbn ?? {};
 
   return {
     startES: async () => {
@@ -282,8 +287,10 @@ export function createTestServers({
         password: kibanaServerTestUser.password,
       };
     },
-    startKibana: async () => {
-      const root = createRootWithCorePlugins(kbnSettings);
+    startKibana: async (abortSignal?: AbortSignal) => {
+      const root = createRootWithCorePlugins(kbnSettings, cliArgs, customKibanaVersion);
+
+      abortSignal?.addEventListener('abort', async () => await root.shutdown());
 
       await root.preboot();
       const coreSetup = await root.setup();

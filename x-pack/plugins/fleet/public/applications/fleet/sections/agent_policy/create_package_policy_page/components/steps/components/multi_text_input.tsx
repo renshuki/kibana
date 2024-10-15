@@ -21,32 +21,36 @@ import { FormattedMessage } from '@kbn/i18n-react';
 interface Props {
   value: string[];
   onChange: (newValue: string[]) => void;
+  fieldLabel: string;
   onBlur?: () => void;
   errors?: Array<{ message: string; index?: number }>;
   isInvalid?: boolean;
   isDisabled?: boolean;
+  'data-test-subj'?: string;
 }
 
 interface RowProps {
   index: number;
+  fieldLabel: string;
   value: string;
   onChange: (index: number, value: string) => void;
   onDelete: (index: number) => void;
   onBlur?: () => void;
   autoFocus?: boolean;
   isDisabled?: boolean;
-  showDeleteButton?: boolean;
+  isMultiRow?: boolean;
 }
 
 const Row: FunctionComponent<RowProps> = ({
   index,
   value,
+  fieldLabel,
   onChange,
   onDelete,
   onBlur,
   autoFocus,
   isDisabled,
-  showDeleteButton,
+  isMultiRow,
 }) => {
   const onDeleteHandler = useCallback(() => {
     onDelete(index);
@@ -69,9 +73,21 @@ const Row: FunctionComponent<RowProps> = ({
           autoFocus={autoFocus}
           disabled={isDisabled}
           onBlur={onBlur}
+          aria-label={
+            isMultiRow
+              ? i18n.translate('xpack.fleet.multiTextInput.ariaLabel', {
+                  defaultMessage: '"{fieldLabel}" input {index}',
+                  values: {
+                    fieldLabel,
+                    index: index + 1,
+                  },
+                })
+              : fieldLabel
+          }
+          data-test-subj={`multiTextInputRow-${index}`}
         />
       </EuiFlexItem>
-      {showDeleteButton && (
+      {isMultiRow && (
         <EuiFlexItem grow={false}>
           <EuiButtonIcon
             color="text"
@@ -79,7 +95,11 @@ const Row: FunctionComponent<RowProps> = ({
             iconType="cross"
             disabled={isDisabled}
             aria-label={i18n.translate('xpack.fleet.multiTextInput.deleteRowButton', {
-              defaultMessage: 'Delete row',
+              defaultMessage: 'Delete "{fieldLabel}" input {index}',
+              values: {
+                fieldLabel,
+                index: index + 1,
+              },
             })}
           />
         </EuiFlexItem>
@@ -93,12 +113,14 @@ function defaultValue(value: string[]) {
 }
 
 export const MultiTextInput: FunctionComponent<Props> = ({
+  fieldLabel,
   value,
   onChange,
   onBlur,
   isInvalid,
   isDisabled,
   errors,
+  'data-test-subj': dataTestSubj,
 }) => {
   const [autoFocus, setAutoFocus] = useState(false);
   const [rows, setRows] = useState(() => defaultValue(value));
@@ -139,18 +161,19 @@ export const MultiTextInput: FunctionComponent<Props> = ({
 
   return (
     <>
-      <EuiFlexGroup gutterSize="s" direction="column">
+      <EuiFlexGroup gutterSize="s" direction="column" data-test-subj={dataTestSubj}>
         {rows.map((row, idx) => (
           <EuiFlexItem key={idx}>
             <Row
               index={idx}
+              fieldLabel={fieldLabel}
               onChange={onChangeHandler}
               onDelete={onDeleteHandler}
               onBlur={onBlur}
               value={row}
               autoFocus={autoFocus}
               isDisabled={isDisabled}
-              showDeleteButton={rows.length > 1}
+              isMultiRow={rows.length > 1}
             />
           </EuiFlexItem>
         ))}

@@ -14,13 +14,17 @@ import { mockLogger } from './test_utils';
 import { asErr, asOk } from './lib/result_type';
 import { FillPoolResult } from './lib/fill_pool';
 import { EphemeralTaskLifecycle, EphemeralTaskLifecycleOpts } from './ephemeral_task_lifecycle';
-import { ConcreteTaskInstance, TaskStatus } from './task';
 import { v4 as uuidv4 } from 'uuid';
 import { asTaskPollingCycleEvent, asTaskRunEvent, TaskPersistence } from './task_events';
 import { TaskRunResult } from './task_running';
 import { TaskPoolRunResult } from './task_pool';
-import { TaskPoolMock } from './task_pool.mock';
+import { TaskPoolMock } from './task_pool/task_pool.mock';
 import { executionContextServiceMock } from '@kbn/core/server/mocks';
+import { taskManagerMock } from './mocks';
+
+jest.mock('./constants', () => ({
+  CONCURRENCY_ALLOW_LIST_BY_TASK_TYPE: ['report'],
+}));
 
 const executionContext = executionContextServiceMock.createSetupContract();
 
@@ -41,12 +45,16 @@ describe('EphemeralTaskLifecycle', () => {
       definitions: new TaskTypeDictionary(taskManagerLogger),
       executionContext,
       config: {
-        max_workers: 10,
+        discovery: {
+          active_nodes_lookback: '30s',
+          interval: 10000,
+        },
+        kibanas_per_partition: 2,
         max_attempts: 9,
         poll_interval: 6000000,
         version_conflict_threshold: 80,
-        max_poll_inactivity_cycles: 10,
         request_capacity: 1000,
+        allow_reading_invalid_state: false,
         monitored_aggregated_stats_refresh_rate: 5000,
         monitored_stats_required_freshness: 5000,
         monitored_stats_running_average_window: 50,
@@ -68,11 +76,19 @@ describe('EphemeralTaskLifecycle', () => {
         },
         unsafe: {
           exclude_task_types: [],
+          authenticate_background_task_utilization: true,
         },
         event_loop_delay: {
           monitor: true,
           warn_threshold: 5000,
         },
+        worker_utilization_running_average_window: 5,
+        metrics_reset_interval: 3000,
+        claim_strategy: 'update_by_query',
+        request_timeouts: {
+          update_by_query: 1000,
+        },
+        auto_calculate_default_ech_capacity: false,
         ...config,
       },
       elasticsearchAndSOAvailability$,
@@ -107,7 +123,7 @@ describe('EphemeralTaskLifecycle', () => {
 
       const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-      const task = mockTask();
+      const task = taskManagerMock.createTask();
       expect(ephemeralTaskLifecycle.attemptToRun(task)).toMatchObject(asErr(task));
     });
 
@@ -116,7 +132,7 @@ describe('EphemeralTaskLifecycle', () => {
 
       const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-      const task = mockTask();
+      const task = taskManagerMock.createTask();
       expect(ephemeralTaskLifecycle.attemptToRun(task)).toMatchObject(asOk(task));
     });
 
@@ -127,12 +143,12 @@ describe('EphemeralTaskLifecycle', () => {
 
       const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-      const task = mockTask();
+      const task = taskManagerMock.createTask();
       expect(ephemeralTaskLifecycle.attemptToRun(task)).toMatchObject(asOk(task));
-      const task2 = mockTask();
+      const task2 = taskManagerMock.createTask();
       expect(ephemeralTaskLifecycle.attemptToRun(task2)).toMatchObject(asOk(task2));
 
-      const rejectedTask = mockTask();
+      const rejectedTask = taskManagerMock.createTask();
       expect(ephemeralTaskLifecycle.attemptToRun(rejectedTask)).toMatchObject(asErr(rejectedTask));
     });
 
@@ -141,11 +157,11 @@ describe('EphemeralTaskLifecycle', () => {
 
       const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-      const task = mockTask({ id: `my-phemeral-task` });
+      const task = taskManagerMock.createTask({ id: `my-phemeral-task` });
       expect(ephemeralTaskLifecycle.attemptToRun(task)).toMatchObject(asOk(task));
 
       poolCapacity.mockReturnValue({
-        availableWorkers: 10,
+        availableCapacity: 10,
       });
 
       lifecycleEvent$.next(
@@ -164,20 +180,21 @@ describe('EphemeralTaskLifecycle', () => {
 
       const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-      const task = mockTask({ id: `my-phemeral-task` });
+      const task = taskManagerMock.createTask({ id: `my-phemeral-task` });
       expect(ephemeralTaskLifecycle.attemptToRun(task)).toMatchObject(asOk(task));
 
       poolCapacity.mockReturnValue({
-        availableWorkers: 10,
+        availableCapacity: 10,
       });
 
       lifecycleEvent$.next(
         asTaskRunEvent(
           uuidv4(),
           asOk({
-            task: mockTask(),
+            task: taskManagerMock.createTask(),
             result: TaskRunResult.Success,
             persistence: TaskPersistence.Ephemeral,
+            isExpired: false,
           })
         )
       );
@@ -194,13 +211,17 @@ describe('EphemeralTaskLifecycle', () => {
 
       const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-      const tasks = [mockTask(), mockTask(), mockTask()];
+      const tasks = [
+        taskManagerMock.createTask(),
+        taskManagerMock.createTask(),
+        taskManagerMock.createTask(),
+      ];
       expect(ephemeralTaskLifecycle.attemptToRun(tasks[0])).toMatchObject(asOk(tasks[0]));
       expect(ephemeralTaskLifecycle.attemptToRun(tasks[1])).toMatchObject(asOk(tasks[1]));
       expect(ephemeralTaskLifecycle.attemptToRun(tasks[2])).toMatchObject(asOk(tasks[2]));
 
       poolCapacity.mockReturnValue({
-        availableWorkers: 2,
+        availableCapacity: 2,
       });
 
       lifecycleEvent$.next(
@@ -228,8 +249,8 @@ describe('EphemeralTaskLifecycle', () => {
 
       const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-      const firstLimitedTask = mockTask({ taskType: 'report' });
-      const secondLimitedTask = mockTask({ taskType: 'report' });
+      const firstLimitedTask = taskManagerMock.createTask({ taskType: 'report' });
+      const secondLimitedTask = taskManagerMock.createTask({ taskType: 'report' });
       // both are queued
       expect(ephemeralTaskLifecycle.attemptToRun(firstLimitedTask)).toMatchObject(
         asOk(firstLimitedTask)
@@ -240,9 +261,9 @@ describe('EphemeralTaskLifecycle', () => {
 
       // pool has capacity for both
       poolCapacity.mockReturnValue({
-        availableWorkers: 10,
+        availableCapacity: 10,
       });
-      pool.getOccupiedWorkersByType.mockReturnValue(0);
+      pool.getUsedCapacityByType.mockReturnValue(0);
 
       lifecycleEvent$.next(
         asTaskPollingCycleEvent(asOk({ result: FillPoolResult.NoTasksClaimed }))
@@ -268,8 +289,8 @@ describe('EphemeralTaskLifecycle', () => {
 
       const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-      const firstLimitedTask = mockTask({ taskType: 'report' });
-      const secondLimitedTask = mockTask({ taskType: 'report' });
+      const firstLimitedTask = taskManagerMock.createTask({ taskType: 'report' });
+      const secondLimitedTask = taskManagerMock.createTask({ taskType: 'report' });
       // both are queued
       expect(ephemeralTaskLifecycle.attemptToRun(firstLimitedTask)).toMatchObject(
         asOk(firstLimitedTask)
@@ -280,10 +301,10 @@ describe('EphemeralTaskLifecycle', () => {
 
       // pool has capacity in general
       poolCapacity.mockReturnValue({
-        availableWorkers: 2,
+        availableCapacity: 2,
       });
       // but when we ask how many it has occupied by type  - wee always have one worker already occupied by that type
-      pool.getOccupiedWorkersByType.mockReturnValue(1);
+      pool.getUsedCapacityByType.mockReturnValue(1);
 
       lifecycleEvent$.next(
         asTaskPollingCycleEvent(asOk({ result: FillPoolResult.NoTasksClaimed }))
@@ -292,7 +313,7 @@ describe('EphemeralTaskLifecycle', () => {
       expect(pool.run).toHaveBeenCalledTimes(0);
 
       // now we release the worker in the pool and cause another cycle in the epheemral queue
-      pool.getOccupiedWorkersByType.mockReturnValue(0);
+      pool.getUsedCapacityByType.mockReturnValue(0);
       lifecycleEvent$.next(
         asTaskPollingCycleEvent(asOk({ result: FillPoolResult.NoTasksClaimed }))
       );
@@ -317,17 +338,21 @@ describe('EphemeralTaskLifecycle', () => {
 
     const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-    const fooTasks = [mockTask(), mockTask(), mockTask()];
+    const fooTasks = [
+      taskManagerMock.createTask(),
+      taskManagerMock.createTask(),
+      taskManagerMock.createTask(),
+    ];
     expect(ephemeralTaskLifecycle.attemptToRun(fooTasks[0])).toMatchObject(asOk(fooTasks[0]));
 
-    const firstLimitedTask = mockTask({ taskType: 'report' });
+    const firstLimitedTask = taskManagerMock.createTask({ taskType: 'report' });
     expect(ephemeralTaskLifecycle.attemptToRun(firstLimitedTask)).toMatchObject(
       asOk(firstLimitedTask)
     );
 
     expect(ephemeralTaskLifecycle.attemptToRun(fooTasks[1])).toMatchObject(asOk(fooTasks[1]));
 
-    const secondLimitedTask = mockTask({ taskType: 'report' });
+    const secondLimitedTask = taskManagerMock.createTask({ taskType: 'report' });
     expect(ephemeralTaskLifecycle.attemptToRun(secondLimitedTask)).toMatchObject(
       asOk(secondLimitedTask)
     );
@@ -336,9 +361,9 @@ describe('EphemeralTaskLifecycle', () => {
 
     // pool has capacity for all
     poolCapacity.mockReturnValue({
-      availableWorkers: 10,
+      availableCapacity: 10,
     });
-    pool.getOccupiedWorkersByType.mockReturnValue(0);
+    pool.getUsedCapacityByType.mockReturnValue(0);
 
     lifecycleEvent$.next(asTaskPollingCycleEvent(asOk({ result: FillPoolResult.NoTasksClaimed })));
 
@@ -358,48 +383,32 @@ describe('EphemeralTaskLifecycle', () => {
 
     const ephemeralTaskLifecycle = new EphemeralTaskLifecycle(opts);
 
-    const tasks = [mockTask(), mockTask(), mockTask()];
+    const tasks = [
+      taskManagerMock.createTask(),
+      taskManagerMock.createTask(),
+      taskManagerMock.createTask(),
+    ];
     expect(ephemeralTaskLifecycle.attemptToRun(tasks[0])).toMatchObject(asOk(tasks[0]));
     expect(ephemeralTaskLifecycle.attemptToRun(tasks[1])).toMatchObject(asOk(tasks[1]));
     expect(ephemeralTaskLifecycle.attemptToRun(tasks[2])).toMatchObject(asOk(tasks[2]));
 
     expect(ephemeralTaskLifecycle.queuedTasks).toBe(3);
     poolCapacity.mockReturnValue({
-      availableWorkers: 1,
+      availableCapacity: 1,
     });
     lifecycleEvent$.next(asTaskPollingCycleEvent(asOk({ result: FillPoolResult.NoTasksClaimed })));
     expect(ephemeralTaskLifecycle.queuedTasks).toBe(2);
 
     poolCapacity.mockReturnValue({
-      availableWorkers: 1,
+      availableCapacity: 1,
     });
     lifecycleEvent$.next(asTaskPollingCycleEvent(asOk({ result: FillPoolResult.NoTasksClaimed })));
     expect(ephemeralTaskLifecycle.queuedTasks).toBe(1);
 
     poolCapacity.mockReturnValue({
-      availableWorkers: 1,
+      availableCapacity: 1,
     });
     lifecycleEvent$.next(asTaskPollingCycleEvent(asOk({ result: FillPoolResult.NoTasksClaimed })));
     expect(ephemeralTaskLifecycle.queuedTasks).toBe(0);
   });
 });
-
-function mockTask(overrides: Partial<ConcreteTaskInstance> = {}): ConcreteTaskInstance {
-  return {
-    id: uuidv4(),
-    runAt: new Date(),
-    taskType: 'foo',
-    schedule: undefined,
-    attempts: 0,
-    status: TaskStatus.Idle,
-    params: { hello: 'world' },
-    state: { baby: 'Henhen' },
-    user: 'jimbo',
-    scope: ['reporting'],
-    ownerId: '',
-    startedAt: null,
-    retryAt: null,
-    scheduledAt: new Date(),
-    ...overrides,
-  };
-}

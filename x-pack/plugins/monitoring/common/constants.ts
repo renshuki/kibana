@@ -127,7 +127,14 @@ export const STANDALONE_CLUSTER_CLUSTER_UUID = '__standalone_cluster__';
 export const CCS_REMOTE_PATTERN = '*';
 export const INDEX_PATTERN = '.monitoring-*';
 export const INDEX_PATTERN_KIBANA = '.monitoring-kibana-*';
-export const INDEX_PATTERN_LOGSTASH = '.monitoring-logstash-*';
+export const INDEX_PATTERN_LOGSTASH = '*-logstash*';
+export const INDEX_PATTERN_LOGSTASH_MONITORING = '.monitoring-logstash-*';
+export const INDEX_PATTERN_LOGSTASH_STACK_MONITORING_STATE =
+  '.ds-metrics-logstash.stack_monitoring.node-*';
+export const INDEX_PATTERN_LOGSTASH_STACK_MONITORING_STATS =
+  '.ds-metrics-logstash.stack_monitoring.node_stats-*';
+export const INDEX_PATTERN_LOGSTASH_METRICS_NODE = '.ds-metrics-logstash.node-*';
+export const INDEX_PATTERN_LOGSTASH_METRICS_PLUGINS = '.ds-metrics-logstash.plugins-*';
 export const INDEX_PATTERN_BEATS = '.monitoring-beats-*';
 export const INDEX_ALERTS = '.monitoring-alerts-*';
 export const INDEX_PATTERN_ELASTICSEARCH = '.monitoring-es-*';
@@ -190,7 +197,7 @@ export const BEATS_SYSTEM_ID = 'beats';
  * The name of the Enterprise Search System ID used to publish and look up Enterprise Search stats through the Monitoring system.
  * @type {string}
  */
-export const ENTERPRISE_SEARCH_SYSTEM_ID = 'enterprise_search';
+export const ENTERPRISE_SEARCH_SYSTEM_ID = 'enterprisesearch';
 
 /**
  * The name of the Apm System ID used to publish and look up Apm stats through the Monitoring system.

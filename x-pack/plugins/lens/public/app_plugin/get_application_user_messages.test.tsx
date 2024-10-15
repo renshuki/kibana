@@ -8,13 +8,25 @@
 import React from 'react';
 
 import { CoreStart } from '@kbn/core/public';
-import { RedirectAppLinks } from '@kbn/shared-ux-link-redirect-app';
-import { mountWithIntl } from '@kbn/test-jest-helpers';
-import { shallow } from 'enzyme';
 import { Visualization } from '..';
 import { DataViewsState } from '../state_management';
 import { Datasource, UserMessage } from '../types';
-import { filterUserMessages, getApplicationUserMessages } from './get_application_user_messages';
+import {
+  UserMessageGetterProps,
+  filterAndSortUserMessages,
+  getApplicationUserMessages,
+} from './get_application_user_messages';
+import { cleanup, render, screen } from '@testing-library/react';
+import { I18nProvider } from '@kbn/i18n-react';
+import { getLongMessage } from '../user_messages_utils';
+
+jest.mock('@kbn/shared-ux-link-redirect-app', () => {
+  const original = jest.requireActual('@kbn/shared-ux-link-redirect-app');
+  return {
+    ...original,
+    RedirectAppLinks: () => <a>RedirectAppLinks</a>,
+  };
+});
 
 describe('application-level user messages', () => {
   it('should generate error if vis type is not provided', () => {
@@ -22,8 +34,8 @@ describe('application-level user messages', () => {
       getApplicationUserMessages({
         visualizationType: undefined,
 
-        visualizationMap: {},
-        visualization: { activeId: '', state: {} },
+        visualization: undefined,
+        visualizationState: { activeId: '', state: {} },
         activeDatasource: {} as Datasource,
         activeDatasourceState: null,
         dataViews: {} as DataViewsState,
@@ -34,13 +46,14 @@ describe('application-level user messages', () => {
         Object {
           "displayLocations": Array [
             Object {
-              "id": "visualization",
+              "id": "visualizationOnEmbeddable",
             },
           ],
           "fixableInEditor": true,
           "longMessage": "Visualization type not found.",
-          "severity": "warning",
+          "severity": "error",
           "shortMessage": "",
+          "uniqueId": "editor_missing_vis_type",
         },
       ]
     `);
@@ -50,8 +63,8 @@ describe('application-level user messages', () => {
     expect(
       getApplicationUserMessages({
         visualizationType: '123',
-        visualizationMap: {},
-        visualization: { activeId: 'id_for_type_that_doesnt_exist', state: {} },
+        visualization: undefined,
+        visualizationState: { activeId: 'id_for_type_that_doesnt_exist', state: {} },
 
         activeDatasource: {} as Datasource,
         activeDatasourceState: null,
@@ -70,6 +83,7 @@ describe('application-level user messages', () => {
           "longMessage": "The visualization type id_for_type_that_doesnt_exist could not be resolved.",
           "severity": "error",
           "shortMessage": "Unknown visualization type",
+          "uniqueId": "editor_unknown_vis_type",
         },
       ]
     `);
@@ -81,8 +95,8 @@ describe('application-level user messages', () => {
         activeDatasource: null,
 
         visualizationType: '123',
-        visualizationMap: { 'some-id': {} as Visualization },
-        visualization: { activeId: 'some-id', state: {} },
+        visualization: {} as Visualization,
+        visualizationState: { activeId: 'some-id', state: {} },
         activeDatasourceState: null,
         dataViews: {} as DataViewsState,
         core: {} as CoreStart,
@@ -99,6 +113,7 @@ describe('application-level user messages', () => {
           "longMessage": "Could not find datasource for the visualization",
           "severity": "error",
           "shortMessage": "Unknown datasource type",
+          "uniqueId": "editor_unknown_datasource_type",
         },
       ]
     `);
@@ -133,70 +148,51 @@ describe('application-level user messages', () => {
       return core;
     }
 
-    const irrelevantProps = {
-      dataViews: {} as DataViewsState,
-      visualizationMap: { foo: {} as Visualization },
-      visualization: { activeId: 'foo', state: {} },
+    const renderApplicationUserMessages = (propsOverrides?: Partial<UserMessageGetterProps>) => {
+      const props = {
+        visualizationType: '123',
+        activeDatasource: {
+          checkIntegrity: jest.fn(() => ['missing_pattern']),
+        } as unknown as Datasource,
+        activeDatasourceState: { isLoading: false, state: {} },
+        // user can go to management, but indexPatterns management is not accessible
+        core: createCoreStartWithPermissions({
+          navLinks: { management: true },
+          management: { kibana: { indexPatterns: false } },
+        }),
+        // irrelevantProps
+        dataViews: {} as DataViewsState,
+        visualization: {} as Visualization,
+        visualizationState: { activeId: 'foo', state: {} },
+      };
+      const firstMessage = getApplicationUserMessages({ ...props, ...propsOverrides }).at(0);
+      const rtlRender = render(
+        <I18nProvider>{firstMessage && getLongMessage(firstMessage)}</I18nProvider>
+      );
+      return rtlRender;
     };
 
     it('generates error if missing an index pattern', () => {
-      expect(
-        getApplicationUserMessages({
-          visualizationType: '123',
-          activeDatasource: {
-            checkIntegrity: jest.fn(() => ['missing_pattern']),
-          } as unknown as Datasource,
-          activeDatasourceState: { state: {} },
-          core: createCoreStartWithPermissions(),
-          ...irrelevantProps,
-        })
-      ).toMatchSnapshot();
+      renderApplicationUserMessages({
+        core: createCoreStartWithPermissions(),
+      });
+
+      expect(screen.queryByText('RedirectAppLinks')).toBeInTheDocument();
+      expect(screen.getByTestId('missing-refs-failure')).toHaveTextContent('Data view not found');
     });
 
     it('doesnt show a recreate link if user has no access', () => {
-      expect(
-        mountWithIntl(
-          <div>
-            {
-              getApplicationUserMessages({
-                visualizationType: '123',
-                activeDatasource: {
-                  checkIntegrity: jest.fn(() => ['missing_pattern']),
-                } as unknown as Datasource,
-                activeDatasourceState: { state: {} },
-                // user can go to management, but indexPatterns management is not accessible
-                core: createCoreStartWithPermissions({
-                  navLinks: { management: true },
-                  management: { kibana: { indexPatterns: false } },
-                }),
-                ...irrelevantProps,
-              })[0].longMessage
-            }
-          </div>
-        ).exists(RedirectAppLinks)
-      ).toBeFalsy();
+      renderApplicationUserMessages();
+      expect(screen.queryByText('RedirectAppLinks')).not.toBeInTheDocument();
+      cleanup();
+      renderApplicationUserMessages({
+        core: createCoreStartWithPermissions({
+          navLinks: { management: false },
+          management: { kibana: { indexPatterns: true } },
+        }),
+      });
 
-      expect(
-        shallow(
-          <div>
-            {
-              getApplicationUserMessages({
-                visualizationType: '123',
-                activeDatasource: {
-                  checkIntegrity: jest.fn(() => ['missing_pattern']),
-                } as unknown as Datasource,
-                activeDatasourceState: { state: {} },
-                // user can't go to management at all
-                core: createCoreStartWithPermissions({
-                  navLinks: { management: false },
-                  management: { kibana: { indexPatterns: true } },
-                }),
-                ...irrelevantProps,
-              })[0].longMessage
-            }
-          </div>
-        ).exists(RedirectAppLinks)
-      ).toBeFalsy();
+      expect(screen.queryByText('RedirectAppLinks')).not.toBeInTheDocument();
     });
   });
 });
@@ -207,20 +203,23 @@ describe('filtering user messages', () => {
 
   const userMessages: UserMessage[] = [
     {
+      uniqueId: 'unique_id_1',
       severity: 'error',
       fixableInEditor: true,
-      displayLocations: [{ id: 'dimensionTrigger', dimensionId: dimensionId1 }],
+      displayLocations: [{ id: 'dimensionButton', dimensionId: dimensionId1 }],
       shortMessage: 'Warning on dimension 1!',
       longMessage: '',
     },
     {
+      uniqueId: 'unique_id_2',
       severity: 'warning',
       fixableInEditor: true,
-      displayLocations: [{ id: 'dimensionTrigger', dimensionId: dimensionId2 }],
+      displayLocations: [{ id: 'dimensionButton', dimensionId: dimensionId2 }],
       shortMessage: 'Warning on dimension 2!',
       longMessage: '',
     },
     {
+      uniqueId: 'unique_id_3',
       severity: 'warning',
       fixableInEditor: true,
       displayLocations: [{ id: 'banner' }],
@@ -228,6 +227,7 @@ describe('filtering user messages', () => {
       longMessage: '',
     },
     {
+      uniqueId: 'unique_id_4',
       severity: 'error',
       fixableInEditor: true,
       displayLocations: [{ id: 'visualization' }],
@@ -235,6 +235,7 @@ describe('filtering user messages', () => {
       longMessage: '',
     },
     {
+      uniqueId: 'unique_id_5',
       severity: 'error',
       fixableInEditor: true,
       displayLocations: [{ id: 'visualizationInEditor' }],
@@ -242,6 +243,7 @@ describe('filtering user messages', () => {
       longMessage: '',
     },
     {
+      uniqueId: 'unique_id_6',
       severity: 'warning',
       fixableInEditor: true,
       displayLocations: [{ id: 'visualizationOnEmbeddable' }],
@@ -251,7 +253,7 @@ describe('filtering user messages', () => {
   ];
 
   it('filters by location', () => {
-    expect(filterUserMessages(userMessages, 'banner', {})).toMatchInlineSnapshot(`
+    expect(filterAndSortUserMessages(userMessages, 'banner', {})).toMatchInlineSnapshot(`
       Array [
         Object {
           "displayLocations": Array [
@@ -263,11 +265,12 @@ describe('filtering user messages', () => {
           "longMessage": "",
           "severity": "warning",
           "shortMessage": "Deprecation notice!",
+          "uniqueId": "unique_id_3",
         },
       ]
     `);
     expect(
-      filterUserMessages(userMessages, 'dimensionTrigger', {
+      filterAndSortUserMessages(userMessages, 'dimensionButton', {
         dimensionId: dimensionId1,
       })
     ).toMatchInlineSnapshot(`
@@ -276,18 +279,19 @@ describe('filtering user messages', () => {
           "displayLocations": Array [
             Object {
               "dimensionId": "foo",
-              "id": "dimensionTrigger",
+              "id": "dimensionButton",
             },
           ],
           "fixableInEditor": true,
           "longMessage": "",
           "severity": "error",
           "shortMessage": "Warning on dimension 1!",
+          "uniqueId": "unique_id_1",
         },
       ]
     `);
     expect(
-      filterUserMessages(userMessages, 'dimensionTrigger', {
+      filterAndSortUserMessages(userMessages, 'dimensionButton', {
         dimensionId: dimensionId2,
       })
     ).toMatchInlineSnapshot(`
@@ -296,17 +300,18 @@ describe('filtering user messages', () => {
           "displayLocations": Array [
             Object {
               "dimensionId": "baz",
-              "id": "dimensionTrigger",
+              "id": "dimensionButton",
             },
           ],
           "fixableInEditor": true,
           "longMessage": "",
           "severity": "warning",
           "shortMessage": "Warning on dimension 2!",
+          "uniqueId": "unique_id_2",
         },
       ]
     `);
-    expect(filterUserMessages(userMessages, ['visualization', 'visualizationInEditor'], {}))
+    expect(filterAndSortUserMessages(userMessages, ['visualization', 'visualizationInEditor'], {}))
       .toMatchInlineSnapshot(`
       Array [
         Object {
@@ -319,6 +324,7 @@ describe('filtering user messages', () => {
           "longMessage": "",
           "severity": "error",
           "shortMessage": "Visualization error!",
+          "uniqueId": "unique_id_4",
         },
         Object {
           "displayLocations": Array [
@@ -330,14 +336,15 @@ describe('filtering user messages', () => {
           "longMessage": "",
           "severity": "error",
           "shortMessage": "Visualization editor error!",
+          "uniqueId": "unique_id_5",
         },
       ]
     `);
   });
 
   it('filters by severity', () => {
-    const warnings = filterUserMessages(userMessages, undefined, { severity: 'warning' });
-    const errors = filterUserMessages(userMessages, undefined, { severity: 'error' });
+    const warnings = filterAndSortUserMessages(userMessages, undefined, { severity: 'warning' });
+    const errors = filterAndSortUserMessages(userMessages, undefined, { severity: 'error' });
 
     expect(warnings.length + errors.length).toBe(userMessages.length);
     expect(warnings.every((message) => message.severity === 'warning'));
@@ -346,7 +353,7 @@ describe('filtering user messages', () => {
 
   it('filters by both', () => {
     expect(
-      filterUserMessages(userMessages, ['visualization', 'visualizationOnEmbeddable'], {
+      filterAndSortUserMessages(userMessages, ['visualization', 'visualizationOnEmbeddable'], {
         severity: 'warning',
       })
     ).toMatchInlineSnapshot(`
@@ -361,7 +368,23 @@ describe('filtering user messages', () => {
           "longMessage": "",
           "severity": "warning",
           "shortMessage": "Visualization embeddable warning!",
+          "uniqueId": "unique_id_6",
         },
+      ]
+    `);
+  });
+
+  it('sorts with warnings after errors', () => {
+    expect(
+      filterAndSortUserMessages(userMessages, undefined, {}).map((message) => message.severity)
+    ).toMatchInlineSnapshot(`
+      Array [
+        "error",
+        "error",
+        "error",
+        "warning",
+        "warning",
+        "warning",
       ]
     `);
   });

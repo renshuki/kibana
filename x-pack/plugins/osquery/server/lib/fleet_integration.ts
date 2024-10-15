@@ -8,7 +8,7 @@
 import type { SavedObjectReference, SavedObjectsClient } from '@kbn/core/server';
 import { filter, map } from 'lodash';
 import type { PostPackagePolicyPostDeleteCallback } from '@kbn/fleet-plugin/server';
-import { AGENT_POLICY_SAVED_OBJECT_TYPE } from '@kbn/fleet-plugin/common';
+import { LEGACY_AGENT_POLICY_SAVED_OBJECT_TYPE } from '@kbn/fleet-plugin/common';
 import { packSavedObjectType } from '../../common/types';
 import { OSQUERY_INTEGRATION_NAME } from '../../common';
 
@@ -21,28 +21,38 @@ export const getPackagePolicyDeleteCallback =
     ]);
     await Promise.all(
       map(deletedOsqueryManagerPolicies, async (deletedOsqueryManagerPolicy) => {
-        if (deletedOsqueryManagerPolicy.policy_id) {
+        const policyIds = deletedOsqueryManagerPolicy.policy_ids?.length
+          ? deletedOsqueryManagerPolicy.policy_ids
+          : ([deletedOsqueryManagerPolicy.policy_id] as string[]);
+        if (policyIds[0] !== undefined) {
           const foundPacks = await packsClient.find({
             type: packSavedObjectType,
-            hasReference: {
-              type: AGENT_POLICY_SAVED_OBJECT_TYPE,
-              id: deletedOsqueryManagerPolicy.policy_id,
-            },
+            hasReference: policyIds.map((policyId: string) => ({
+              type: LEGACY_AGENT_POLICY_SAVED_OBJECT_TYPE,
+              id: policyId,
+            })),
             perPage: 1000,
           });
 
           await Promise.all(
             map(
               foundPacks.saved_objects,
-              (pack: { id: string; references: SavedObjectReference[] }) =>
+              (pack: {
+                id: string;
+                references: SavedObjectReference[];
+                attributes: { shards: Array<{ key: string; value: string }> };
+              }) =>
                 packsClient.update(
                   packSavedObjectType,
                   pack.id,
-                  {},
                   {
-                    references: filter(
-                      pack.references,
-                      (reference) => reference.id !== deletedOsqueryManagerPolicy.policy_id
+                    shards: filter(pack.attributes.shards, (shard) =>
+                      policyIds.includes(shard.key)
+                    ),
+                  },
+                  {
+                    references: filter(pack.references, (reference) =>
+                      policyIds.includes(reference.id)
                     ),
                   }
                 )

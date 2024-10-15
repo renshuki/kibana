@@ -5,6 +5,7 @@
  * 2.0.
  */
 
+import type { EuiComboBoxOptionOption, EuiComboBoxProps } from '@elastic/eui';
 import { EuiPanel, EuiComboBox } from '@elastic/eui';
 import styled from 'styled-components';
 import type { LegacyRef } from 'react';
@@ -52,11 +53,13 @@ export const KpiPanel = styled(EuiPanel)<{
 interface StackedBySelectProps {
   'aria-label'?: string;
   'data-test-subj'?: string;
+  dropDownoptions?: Array<EuiComboBoxOptionOption<string>>;
+  inputRef?: (inputRef: HTMLInputElement | null) => void;
   isDisabled?: boolean;
+  onSelect: (selected: string) => void;
   prepend?: string;
   selected: string;
-  inputRef?: (inputRef: HTMLInputElement | null) => void;
-  onSelect: (selected: string) => void;
+  useLensCompatibleFields?: boolean;
   width?: number;
 }
 
@@ -76,12 +79,14 @@ export const StackByComboBox = React.forwardRef(
       selected,
       inputRef,
       width = DEFAULT_WIDTH,
+      dropDownoptions,
+      useLensCompatibleFields,
     }: StackedBySelectProps,
     ref
   ) => {
-    const onChange = useCallback(
+    const onChange = useCallback<NonNullable<EuiComboBoxProps<string>['onChange']>>(
       (options) => {
-        if (options && options.length > 0) {
+        if (options && options.length && options[0].value) {
           onSelect(options[0].value);
         } else {
           onSelect('');
@@ -92,7 +97,14 @@ export const StackByComboBox = React.forwardRef(
     const selectedOptions = useMemo(() => {
       return [{ label: selected, value: selected }];
     }, [selected]);
-    const stackOptions = useStackByFields();
+
+    const getExpensiveFields = useStackByFields(useLensCompatibleFields);
+
+    const options = useMemo(
+      () => dropDownoptions ?? getExpensiveFields(),
+      [dropDownoptions, getExpensiveFields]
+    );
+
     const singleSelection = useMemo(() => {
       return { asPlainText: true };
     }, []);
@@ -105,11 +117,11 @@ export const StackByComboBox = React.forwardRef(
           isDisabled={isDisabled}
           placeholder={i18n.STACK_BY_PLACEHOLDER}
           prepend={prepend}
-          ref={ref as LegacyRef<EuiComboBox<string | number | string[] | undefined>> | undefined}
+          ref={ref as LegacyRef<EuiComboBox<string>> | undefined}
           singleSelection={singleSelection}
           isClearable={false}
           sortMatchesBy="startsWith"
-          options={stackOptions}
+          options={options}
           selectedOptions={selectedOptions}
           compressed
           onChange={onChange}

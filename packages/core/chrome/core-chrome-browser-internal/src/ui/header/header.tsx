@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import {
@@ -27,6 +28,7 @@ import type {
   ChromeBreadcrumb,
   ChromeNavControl,
   ChromeNavLink,
+  ChromeHelpMenuLink,
   ChromeRecentlyAccessedHistoryItem,
   ChromeBreadcrumbsAppendExtension,
   ChromeHelpExtension,
@@ -34,7 +36,7 @@ import type {
   ChromeUserBanner,
 } from '@kbn/core-chrome-browser';
 import { CustomBranding } from '@kbn/core-custom-branding-common';
-import { LoadingIndicator } from '../loading_indicator';
+import type { DocLinksStart } from '@kbn/core-doc-links-browser';
 import type { OnIsLockedUpdate } from './types';
 import { CollapsibleNav } from './collapsible_nav';
 import { HeaderBadge } from './header_badge';
@@ -42,10 +44,11 @@ import { HeaderBreadcrumbs } from './header_breadcrumbs';
 import { HeaderHelpMenu } from './header_help_menu';
 import { HeaderLogo } from './header_logo';
 import { HeaderNavControls } from './header_nav_controls';
-import { HeaderActionMenu } from './header_action_menu';
+import { HeaderActionMenu, useHeaderActionMenuMounter } from './header_action_menu';
 import { HeaderExtension } from './header_extension';
 import { HeaderTopBanner } from './header_top_banner';
 import { HeaderMenuButton } from './header_menu_button';
+import { ScreenReaderRouteAnnouncements, SkipToMainContent } from './screen_reader_a11y';
 
 export interface HeaderProps {
   kibanaVersion: string;
@@ -56,14 +59,15 @@ export interface HeaderProps {
   breadcrumbsAppendExtension$: Observable<ChromeBreadcrumbsAppendExtension | undefined>;
   customNavLink$: Observable<ChromeNavLink | undefined>;
   homeHref: string;
-  isVisible$: Observable<boolean>;
   kibanaDocLink: string;
+  docLinks: DocLinksStart;
   navLinks$: Observable<ChromeNavLink[]>;
   recentlyAccessed$: Observable<ChromeRecentlyAccessedHistoryItem[]>;
   forceAppSwitcherNavigation$: Observable<boolean>;
   globalHelpExtensionMenuLinks$: Observable<ChromeGlobalHelpExtensionMenuLink[]>;
   helpExtension$: Observable<ChromeHelpExtension | undefined>;
   helpSupportUrl$: Observable<string>;
+  helpMenuLinks$: Observable<ChromeHelpMenuLink[]>;
   navControlsLeft$: Observable<readonly ChromeNavControl[]>;
   navControlsCenter$: Observable<readonly ChromeNavControl[]>;
   navControlsRight$: Observable<readonly ChromeNavControl[]>;
@@ -73,11 +77,13 @@ export interface HeaderProps {
   loadingCount$: ReturnType<HttpStart['getLoadingCount$']>;
   onIsLockedUpdate: OnIsLockedUpdate;
   customBranding$: Observable<CustomBranding>;
+  isServerless: boolean;
 }
 
 export function Header({
   kibanaVersion,
   kibanaDocLink,
+  docLinks,
   application,
   basePath,
   onIsLockedUpdate,
@@ -85,21 +91,13 @@ export function Header({
   breadcrumbsAppendExtension$,
   globalHelpExtensionMenuLinks$,
   customBranding$,
+  isServerless,
   ...observables
 }: HeaderProps) {
-  const isVisible = useObservable(observables.isVisible$, false);
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [navId] = useState(htmlIdGenerator()());
   const breadcrumbsAppendExtension = useObservable(breadcrumbsAppendExtension$);
-
-  if (!isVisible) {
-    return (
-      <>
-        <LoadingIndicator loadingCount$={observables.loadingCount$} showAsBar />
-        <HeaderTopBanner headerBanner$={observables.headerBanner$} />
-      </>
-    );
-  }
+  const headerActionMenuMounter = useHeaderActionMenuMounter(application.currentActionMenu$);
 
   const toggleCollapsibleNavRef = createRef<HTMLButtonElement & { euiAnimate: () => void }>();
   const className = classnames('hide-for-sharing', 'headerGlobalNav');
@@ -108,6 +106,13 @@ export function Header({
 
   return (
     <>
+      <ScreenReaderRouteAnnouncements
+        breadcrumbs$={observables.breadcrumbs$}
+        customBranding$={customBranding$}
+        appId$={application.currentAppId$}
+      />
+      <SkipToMainContent />
+
       <HeaderTopBanner headerBanner$={observables.headerBanner$} />
       <header className={className} data-test-subj="headerGlobalNav">
         <div id="globalHeaderBars" className="header__bars">
@@ -127,7 +132,6 @@ export function Header({
                     customBranding$={customBranding$}
                   />,
                 ],
-                borders: 'none',
               },
               {
                 ...(observables.navControlsCenter$ && {
@@ -137,7 +141,6 @@ export function Header({
                     </EuiShowFor>,
                   ],
                 }),
-                borders: 'none',
               },
               {
                 items: [
@@ -151,23 +154,25 @@ export function Header({
                     <HeaderNavControls navControls$={observables.navControlsExtension$} />
                   </EuiHideFor>,
                   <HeaderHelpMenu
+                    isServerless={isServerless}
                     globalHelpExtensionMenuLinks$={globalHelpExtensionMenuLinks$}
                     helpExtension$={observables.helpExtension$}
                     helpSupportUrl$={observables.helpSupportUrl$}
+                    defaultContentLinks$={observables.helpMenuLinks$}
                     kibanaDocLink={kibanaDocLink}
+                    docLinks={docLinks}
                     kibanaVersion={kibanaVersion}
                     navigateToUrl={application.navigateToUrl}
                   />,
                   <HeaderNavControls navControls$={observables.navControlsRight$} />,
                 ],
-                borders: 'none',
               },
             ]}
           />
 
           <EuiHeader position="fixed" className="header__secondBar">
             <EuiHeaderSection grow={false}>
-              <EuiHeaderSectionItem border="right" className="header__toggleNavButtonSection">
+              <EuiHeaderSectionItem className="header__toggleNavButtonSection">
                 <CollapsibleNav
                   appId$={application.currentAppId$}
                   id={navId}
@@ -181,15 +186,12 @@ export function Header({
                   onIsLockedUpdate={onIsLockedUpdate}
                   closeNav={() => {
                     setIsNavOpen(false);
-                    if (toggleCollapsibleNavRef.current) {
-                      toggleCollapsibleNavRef.current.focus();
-                    }
                   }}
                   customNavLink$={observables.customNavLink$}
                   button={
                     <HeaderMenuButton
                       data-test-subj="toggleNavButton"
-                      aria-label={i18n.translate('core.ui.primaryNav.toggleNavAriaLabel', {
+                      aria-label={i18n.translate('core.ui.primaryNav.header.toggleNavAriaLabel', {
                         defaultMessage: 'Toggle primary navigation',
                       })}
                       onClick={() => setIsNavOpen(!isNavOpen)}
@@ -226,8 +228,8 @@ export function Header({
             <HeaderBadge badge$={observables.badge$} />
 
             <EuiHeaderSection side="right">
-              <EuiHeaderSectionItem border="none">
-                <HeaderActionMenu actionMenu$={application.currentActionMenu$} />
+              <EuiHeaderSectionItem>
+                <HeaderActionMenu mounter={headerActionMenuMounter} />
               </EuiHeaderSectionItem>
             </EuiHeaderSection>
           </EuiHeader>

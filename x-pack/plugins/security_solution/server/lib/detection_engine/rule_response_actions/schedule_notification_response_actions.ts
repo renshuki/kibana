@@ -5,80 +5,59 @@
  * 2.0.
  */
 
-import type { Ecs } from '@kbn/ecs';
-import { uniq, reduce, some, each } from 'lodash';
-import type { RuleResponseAction } from '../../../../common/detection_engine/rule_response_actions/schemas';
-import { RESPONSE_ACTION_TYPES } from '../../../../common/detection_engine/rule_response_actions/schemas';
+import { expandDottedObject } from '../../../../common/utils/expand_dotted';
+import type { EndpointAppContextService } from '../../../endpoint/endpoint_app_context_services';
 import type { SetupPlugins } from '../../../plugin_contract';
+import { ResponseActionTypesEnum } from '../../../../common/api/detection_engine/model/rule_response_actions';
+import { osqueryResponseAction } from './osquery_response_action';
+import { endpointResponseAction } from './endpoint_response_action';
+import type { ScheduleNotificationActions } from '../rule_types/types';
+import type { Alert, AlertWithAgent } from './types';
 
-interface ScheduleNotificationActions {
-  signals: unknown[];
-  responseActions: RuleResponseAction[];
+interface ScheduleNotificationResponseActionsService {
+  endpointAppContextService: EndpointAppContextService;
+  osqueryCreateActionService?: SetupPlugins['osquery']['createActionService'];
 }
 
-interface AlertsWithAgentType {
-  alerts: Ecs[];
-  agents: string[];
-  alertIds: string[];
-}
-const CONTAINS_DYNAMIC_PARAMETER_REGEX = /\{{([^}]+)\}}/g; // when there are 2 opening and 2 closing curly brackets (including brackets)
-
-export const scheduleNotificationResponseActions = (
-  { signals, responseActions }: ScheduleNotificationActions,
-  osqueryCreateAction?: SetupPlugins['osquery']['osqueryCreateAction']
-) => {
-  const filteredAlerts = (signals as Ecs[]).filter((alert) => alert.agent?.id);
-
-  const { alerts, agents, alertIds }: AlertsWithAgentType = reduce(
-    filteredAlerts,
-    (acc, alert) => {
-      const agentId = alert.agent?.id;
-      if (agentId !== undefined) {
-        return {
-          alerts: [...acc.alerts, alert],
-          agents: [...acc.agents, agentId],
-          alertIds: [...acc.alertIds, (alert as unknown as { _id: string })._id],
-        };
-      }
-      return acc;
-    },
-    { alerts: [], agents: [], alertIds: [] } as AlertsWithAgentType
-  );
-  const agentIds = uniq(agents);
-
-  each(responseActions, (responseAction) => {
-    if (responseAction.actionTypeId === RESPONSE_ACTION_TYPES.OSQUERY && osqueryCreateAction) {
-      const temporaryQueries = responseAction.params.queries?.length
-        ? responseAction.params.queries
-        : [{ query: responseAction.params.query }];
-      const containsDynamicQueries = some(temporaryQueries, (query) => {
-        return query.query ? CONTAINS_DYNAMIC_PARAMETER_REGEX.test(query.query) : false;
-      });
-      const { savedQueryId, packId, queries, ecsMapping, ...rest } = responseAction.params;
-
-      if (!containsDynamicQueries) {
-        return osqueryCreateAction({
-          ...rest,
-          queries,
-          ecs_mapping: ecsMapping,
-          saved_query_id: savedQueryId,
-          agent_ids: agentIds,
-          alert_ids: alertIds,
-        });
-      }
-      each(alerts, (alert) => {
-        return osqueryCreateAction(
-          {
-            ...rest,
-            queries,
-            ecs_mapping: ecsMapping,
-            saved_query_id: savedQueryId,
-            agent_ids: alert.agent?.id ? [alert.agent.id] : [],
-            alert_ids: [(alert as unknown as { _id: string })._id],
-          },
-          alert
-        );
-      });
+export const getScheduleNotificationResponseActionsService =
+  ({
+    osqueryCreateActionService,
+    endpointAppContextService,
+  }: ScheduleNotificationResponseActionsService) =>
+  async ({ signals, signalsCount, responseActions }: ScheduleNotificationActions) => {
+    if (!signalsCount || !responseActions?.length) {
+      return;
     }
-  });
-};
+    // expandDottedObject is needed eg in ESQL rule because it's alerts come without nested agent, host etc data but everything is dotted
+    const nestedAlerts = signals.map((signal) => expandDottedObject(signal as object)) as Alert[];
+    const alerts = nestedAlerts.filter((alert) => alert.agent?.id) as AlertWithAgent[];
+
+    if (!alerts.length) {
+      return;
+    }
+    return Promise.all(
+      responseActions.map(async (responseAction) => {
+        if (
+          responseAction.actionTypeId === ResponseActionTypesEnum['.osquery'] &&
+          osqueryCreateActionService
+        ) {
+          await osqueryResponseAction(responseAction, osqueryCreateActionService, {
+            alerts,
+          });
+        }
+        if (responseAction.actionTypeId === ResponseActionTypesEnum['.endpoint']) {
+          // We currently support only automated response actions for Elastic Defend. This will
+          // need to be updated once we introduce support for other EDR systems.
+          // For an explanation of why this is needed, see this comment here:
+          // https://github.com/elastic/kibana/issues/180774#issuecomment-2139526239
+          const alertsFromElasticDefend = alerts.filter((alert) => alert.agent.type === 'endpoint');
+
+          if (alertsFromElasticDefend.length > 0) {
+            await endpointResponseAction(responseAction, endpointAppContextService, {
+              alerts: alertsFromElasticDefend,
+            });
+          }
+        }
+      })
+    );
+  };

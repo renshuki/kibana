@@ -26,6 +26,9 @@ export function getDefaultProperties(field: Field): Properties {
   if (field.copy_to) {
     properties.copy_to = field.copy_to;
   }
+  if (field.store !== undefined) {
+    properties.store = field.store;
+  }
 
   return properties;
 }
@@ -58,7 +61,6 @@ export function keyword(field: Field): Properties {
     fieldProps.normalizer = field.normalizer;
   }
   if (field.dimension) {
-    fieldProps.time_series_dimension = field.dimension;
     delete fieldProps.ignore_above;
   }
 

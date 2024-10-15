@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { HttpSetup } from '@kbn/core/public';
@@ -37,12 +38,24 @@ export const matchedIndiciesDefault = {
   visibleIndices: [],
 };
 
+/**
+ * ConstructorArgs for DataViewEditorService
+ */
 export interface DataViewEditorServiceConstructorArgs {
+  /**
+   * Dependencies for the DataViewEditorService
+   */
   services: {
     http: HttpSetup;
     dataViews: DataViewsServicePublic;
   };
+  /**
+   * Whether service requires requireTimestampField
+   */
   requireTimestampField?: boolean;
+  /**
+   * Initial type, indexPattern, and name to populate service
+   */
   initialValues: {
     name?: string;
     type?: INDEX_PATTERN_TYPE;
@@ -129,8 +142,6 @@ export class DataViewEditorService {
   private requireTimestampField: boolean;
   private type = INDEX_PATTERN_TYPE.DEFAULT;
 
-  // state
-  private state = { ...defaultDataViewEditorState };
   private indexPattern = '';
   private allowHidden = false;
 
@@ -165,11 +176,13 @@ export class DataViewEditorService {
   private currentLoadingMatchedIndices = 0;
 
   private updateState = (newState: Partial<DataViewEditorState>) => {
-    this.state = { ...this.state, ...newState };
-    this.state$.next(this.state);
+    this.state$.next({ ...this.state$.getValue(), ...newState });
   };
 
   private getRollupIndexCaps = async () => {
+    if (this.dataViews.getRollupsEnabled() === false) {
+      return {};
+    }
     let rollupIndicesCaps: RollupIndicesCapsResponse = {};
     try {
       rollupIndicesCaps = await this.http.get<RollupIndicesCapsResponse>('/api/rollup/indices');
@@ -299,8 +312,12 @@ export class DataViewEditorService {
     getFieldsOptions: GetFieldsOptions,
     requireTimestampField: boolean
   ) => {
-    const fields = await ensureMinimumTime(this.dataViews.getFieldsForWildcard(getFieldsOptions));
-    return extractTimeFields(fields as DataViewField[], requireTimestampField);
+    try {
+      const fields = await ensureMinimumTime(this.dataViews.getFieldsForWildcard(getFieldsOptions));
+      return extractTimeFields(fields as DataViewField[], requireTimestampField);
+    } catch (e) {
+      return [];
+    }
   };
 
   private getTimestampOptionsForWildcardCached = async (
@@ -324,7 +341,8 @@ export class DataViewEditorService {
   };
 
   private loadTimestampFields = async () => {
-    if (this.state.matchedIndices.exactMatchedIndices.length === 0) {
+    const currentState = this.state$.getValue();
+    if (currentState.matchedIndices.exactMatchedIndices.length === 0) {
       this.updateState({ timestampFieldOptions: [], loadingTimestampFields: false });
       return;
     }
@@ -332,10 +350,13 @@ export class DataViewEditorService {
 
     const getFieldsOptions: GetFieldsOptions = {
       pattern: this.indexPattern,
+      allowHidden: this.allowHidden,
+      allowNoIndex: true,
     };
     if (this.type === INDEX_PATTERN_TYPE.ROLLUP) {
       getFieldsOptions.type = INDEX_PATTERN_TYPE.ROLLUP;
-      getFieldsOptions.rollupIndex = this.state.rollupIndexName || '';
+      getFieldsOptions.rollupIndex = currentState.rollupIndexName || '';
+      getFieldsOptions.allowNoIndex = true;
     }
 
     let timestampFieldOptions: TimestampOption[] = [];
@@ -362,7 +383,7 @@ export class DataViewEditorService {
     );
 
     // necessary to get new observable value if the field hasn't changed
-    this.loadIndices();
+    await this.loadIndices();
 
     // Wait until we have fetched the indices.
     // The result will then be sent to the field validator(s) (when calling await provider(););

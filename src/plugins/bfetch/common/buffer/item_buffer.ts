@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 export interface ItemBufferParams<Item> {
@@ -19,7 +20,7 @@ export interface ItemBufferParams<Item> {
    * argument which is a list of all buffered items. If `.flush()` is called
    * when buffer is empty, `.onflush` is called with empty array.
    */
-  onFlush: (items: Item[]) => void;
+  onFlush: (items: Item[]) => void | Promise<void>;
 }
 
 /**
@@ -60,11 +61,19 @@ export class ItemBuffer<Item> {
   }
 
   /**
-   * Call `.onflush` method and clear buffer.
+   * Call `.onFlush` method and clear buffer.
    */
   public flush() {
+    this.flushAsync().catch(() => {});
+  }
+
+  /**
+   * Same as `.flush()` but asynchronous, and returns a promise, which
+   * rejects if `.onFlush` throws.
+   */
+  public async flushAsync(): Promise<void> {
     let list;
     [list, this.list] = [this.list, []];
-    this.params.onFlush(list);
+    await this.params.onFlush(list);
   }
 }

@@ -13,19 +13,21 @@ import type {
   RequestHandler,
   SavedObjectsClientContract,
   CoreSetup,
-  CoreStart,
 } from '@kbn/core/server';
 import type { SpacesPluginSetup } from '@kbn/spaces-plugin/server';
 import type { SecurityPluginSetup } from '@kbn/security-plugin/server';
-
 import type { AlertingApiRequestHandlerContext } from '@kbn/alerting-plugin/server';
 import type { PluginStart as DataViewsPluginStart } from '@kbn/data-views-plugin/server';
 import type { DataViewsService } from '@kbn/data-views-plugin/common';
+import { createExecutionContext } from '@kbn/ml-route-utils';
+
 import { PLUGIN_ID } from '../../common/constants/app';
-import { mlSavedObjectServiceFactory, MLSavedObjectService } from '../saved_objects';
+import type { MLSavedObjectService } from '../saved_objects';
+import { mlSavedObjectServiceFactory } from '../saved_objects';
 import type { MlLicense } from '../../common/license';
 
-import { MlClient, getMlClient } from './ml_client';
+import type { MlClient } from './ml_client';
+import { MlAuditLogger, getMlClient } from './ml_client';
 import { getDataViewsServiceFactory } from './data_views_utils';
 
 type MLRequestHandlerContext = CustomRequestHandlerContext<{
@@ -40,6 +42,7 @@ type Handler<P = unknown, Q = unknown, B = unknown> = (handlerParams: {
   mlSavedObjectService: MLSavedObjectService;
   mlClient: MlClient;
   getDataViewsService(): Promise<DataViewsService>;
+  auditLogger: MlAuditLogger;
 }) => ReturnType<RequestHandler<P, Q, B>>;
 
 type GetMlSavedObjectClient = (request: KibanaRequest) => SavedObjectsClientContract | null;
@@ -117,7 +120,9 @@ export class RouteGuard {
       );
 
       const [coreStart] = await this._getStartServices();
-      const executionContext = await createExecutionContext(coreStart, request.route.path);
+      const executionContext = createExecutionContext(coreStart, PLUGIN_ID, request.route.path);
+
+      const auditLogger = new MlAuditLogger(coreStart.security.audit, request);
 
       return await coreStart.executionContext.withContext(executionContext, () =>
         handler({
@@ -126,26 +131,16 @@ export class RouteGuard {
           response,
           context,
           mlSavedObjectService,
-          mlClient: getMlClient(client, mlSavedObjectService),
+          mlClient: getMlClient(client, mlSavedObjectService, auditLogger),
           getDataViewsService: getDataViewsServiceFactory(
             this._getDataViews,
             savedObjectClient,
             client,
             request
           ),
+          auditLogger,
         })
       );
     };
   }
-}
-
-async function createExecutionContext(coreStart: CoreStart, id?: string) {
-  const labels = coreStart.executionContext.getAsLabels();
-  const page = labels.page as string;
-  return {
-    type: 'application',
-    name: PLUGIN_ID,
-    id: id ?? page,
-    page,
-  };
 }

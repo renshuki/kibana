@@ -11,18 +11,10 @@
   "server": {
     "classes": [],
     "functions": [],
-    "interfaces": [],
-    "enums": [],
-    "misc": [],
-    "objects": []
-  },
-  "common": {
-    "classes": [],
-    "functions": [],
     "interfaces": [
       {
         "parentPluginId": "@kbn/core-node-server-internal",
-        "id": "def-common.InternalNodeServiceStart",
+        "id": "def-server.InternalNodeServiceStart",
         "type": "Interface",
         "tags": [],
         "label": "InternalNodeServiceStart",
@@ -33,7 +25,7 @@
         "children": [
           {
             "parentPluginId": "@kbn/core-node-server-internal",
-            "id": "def-common.InternalNodeServiceStart.roles",
+            "id": "def-server.InternalNodeServiceStart.roles",
             "type": "Object",
             "tags": [],
             "label": "roles",
@@ -43,9 +35,9 @@
             "signature": [
               {
                 "pluginId": "@kbn/core-node-server",
-                "scope": "common",
+                "scope": "server",
                 "docId": "kibKbnCoreNodeServerPluginApi",
-                "section": "def-common.NodeRoles",
+                "section": "def-server.NodeRoles",
                 "text": "NodeRoles"
               }
             ],
@@ -58,7 +50,7 @@
       },
       {
         "parentPluginId": "@kbn/core-node-server-internal",
-        "id": "def-common.PrebootDeps",
+        "id": "def-server.PrebootDeps",
         "type": "Interface",
         "tags": [],
         "label": "PrebootDeps",
@@ -69,7 +61,7 @@
         "children": [
           {
             "parentPluginId": "@kbn/core-node-server-internal",
-            "id": "def-common.PrebootDeps.loggingSystem",
+            "id": "def-server.PrebootDeps.loggingSystem",
             "type": "Object",
             "tags": [],
             "label": "loggingSystem",
@@ -87,64 +79,14 @@
     ],
     "enums": [],
     "misc": [],
-    "objects": [
-      {
-        "parentPluginId": "@kbn/core-node-server-internal",
-        "id": "def-common.nodeConfig",
-        "type": "Object",
-        "tags": [],
-        "label": "nodeConfig",
-        "description": [],
-        "path": "packages/core/node/core-node-server-internal/src/node_config.ts",
-        "deprecated": false,
-        "trackAdoption": false,
-        "children": [
-          {
-            "parentPluginId": "@kbn/core-node-server-internal",
-            "id": "def-common.nodeConfig.path",
-            "type": "string",
-            "tags": [],
-            "label": "path",
-            "description": [],
-            "signature": [
-              "\"node\""
-            ],
-            "path": "packages/core/node/core-node-server-internal/src/node_config.ts",
-            "deprecated": false,
-            "trackAdoption": false
-          },
-          {
-            "parentPluginId": "@kbn/core-node-server-internal",
-            "id": "def-common.nodeConfig.schema",
-            "type": "Object",
-            "tags": [],
-            "label": "schema",
-            "description": [],
-            "signature": [
-              {
-                "pluginId": "@kbn/config-schema",
-                "scope": "common",
-                "docId": "kibKbnConfigSchemaPluginApi",
-                "section": "def-common.ObjectType",
-                "text": "ObjectType"
-              },
-              "<{ roles: ",
-              {
-                "pluginId": "@kbn/config-schema",
-                "scope": "common",
-                "docId": "kibKbnConfigSchemaPluginApi",
-                "section": "def-common.Type",
-                "text": "Type"
-              },
-              "<\"*\"[] | (\"ui\" | \"background_tasks\")[]>; }>"
-            ],
-            "path": "packages/core/node/core-node-server-internal/src/node_config.ts",
-            "deprecated": false,
-            "trackAdoption": false
-          }
-        ],
-        "initialIsOpen": false
-      }
-    ]
+    "objects": []
+  },
+  "common": {
+    "classes": [],
+    "functions": [],
+    "interfaces": [],
+    "enums": [],
+    "misc": [],
+    "objects": []
   }
 }

@@ -5,14 +5,14 @@
  * 2.0.
  */
 
-import React from 'react';
+import React, { FC, PropsWithChildren } from 'react';
 
 import { EuiAccordion, EuiIcon } from '@elastic/eui';
 
 import './summary_section.scss';
 
 const ICON_PROPS = {
-  error: { type: 'crossInACircleFilled', color: 'danger' },
+  error: { type: 'error', color: 'danger' },
   success: { type: 'checkInCircleFilled', color: 'success' },
   info: { type: 'iInCircle', color: 'default' },
 };
@@ -22,7 +22,7 @@ interface SummarySectionAccordionProps {
   status: 'success' | 'error' | 'info';
   title: string;
 }
-export const SummarySectionAccordion: React.FC<SummarySectionAccordionProps> = ({
+export const SummarySectionAccordion: FC<PropsWithChildren<SummarySectionAccordionProps>> = ({
   id,
   status,
   title,

@@ -6,6 +6,7 @@
  */
 
 import type { KibanaRequest, RequestHandlerContext } from '@kbn/core/server';
+import type { ElasticsearchClient, SavedObjectsClientContract } from '@kbn/core/server';
 
 import type { DeepReadonly } from 'utility-types';
 
@@ -15,33 +16,57 @@ import type {
   UpdatePackagePolicy,
   PackagePolicy,
   DeletePackagePoliciesResponse,
+  NewAgentPolicy,
+  AgentPolicy,
 } from '../../common/types';
 
 export type PostPackagePolicyDeleteCallback = (
-  packagePolicies: DeletePackagePoliciesResponse
+  packagePolicies: DeletePackagePoliciesResponse,
+  soClient: SavedObjectsClientContract,
+  esClient: ElasticsearchClient,
+  context?: RequestHandlerContext,
+  request?: KibanaRequest
 ) => Promise<void>;
 
 export type PostPackagePolicyPostDeleteCallback = (
-  deletedPackagePolicies: DeepReadonly<PostDeletePackagePoliciesResponse>
+  deletedPackagePolicies: DeepReadonly<PostDeletePackagePoliciesResponse>,
+  soClient: SavedObjectsClientContract,
+  esClient: ElasticsearchClient,
+  context?: RequestHandlerContext,
+  request?: KibanaRequest
 ) => Promise<void>;
 
 export type PostPackagePolicyCreateCallback = (
   newPackagePolicy: NewPackagePolicy,
-  context: RequestHandlerContext,
-  request: KibanaRequest
+  soClient: SavedObjectsClientContract,
+  esClient: ElasticsearchClient,
+  context?: RequestHandlerContext,
+  request?: KibanaRequest
 ) => Promise<NewPackagePolicy>;
 
 export type PostPackagePolicyPostCreateCallback = (
   packagePolicy: PackagePolicy,
-  context: RequestHandlerContext,
-  request: KibanaRequest
+  soClient: SavedObjectsClientContract,
+  esClient: ElasticsearchClient,
+  context?: RequestHandlerContext,
+  request?: KibanaRequest
 ) => Promise<PackagePolicy>;
 
 export type PutPackagePolicyUpdateCallback = (
   updatePackagePolicy: UpdatePackagePolicy,
-  context: RequestHandlerContext,
-  request: KibanaRequest
+  soClient: SavedObjectsClientContract,
+  esClient: ElasticsearchClient,
+  context?: RequestHandlerContext,
+  request?: KibanaRequest
 ) => Promise<UpdatePackagePolicy>;
+
+export type PostAgentPolicyCreateCallback = (
+  agentPolicy: NewAgentPolicy
+) => Promise<NewAgentPolicy>;
+
+export type PostAgentPolicyUpdateCallback = (
+  agentPolicy: Partial<AgentPolicy>
+) => Promise<Partial<AgentPolicy>>;
 
 export type ExternalCallbackCreate = ['packagePolicyCreate', PostPackagePolicyCreateCallback];
 export type ExternalCallbackPostCreate = [
@@ -56,6 +81,15 @@ export type ExternalCallbackPostDelete = [
 ];
 export type ExternalCallbackUpdate = ['packagePolicyUpdate', PutPackagePolicyUpdateCallback];
 
+export type ExternalCallbackAgentPolicyCreate = [
+  'agentPolicyCreate',
+  PostAgentPolicyCreateCallback
+];
+export type ExternalCallbackAgentPolicyUpdate = [
+  'agentPolicyUpdate',
+  PostAgentPolicyUpdateCallback
+];
+
 /**
  * Callbacks supported by the Fleet plugin
  */
@@ -64,6 +98,8 @@ export type ExternalCallback =
   | ExternalCallbackPostCreate
   | ExternalCallbackDelete
   | ExternalCallbackPostDelete
-  | ExternalCallbackUpdate;
+  | ExternalCallbackUpdate
+  | ExternalCallbackAgentPolicyCreate
+  | ExternalCallbackAgentPolicyUpdate;
 
 export type ExternalCallbacksStorage = Map<ExternalCallback[0], Set<ExternalCallback[1]>>;

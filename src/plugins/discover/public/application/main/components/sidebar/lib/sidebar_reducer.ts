@@ -1,13 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { type DataView, type DataViewField } from '@kbn/data-views-plugin/common';
-import { getDataViewFieldList } from './get_data_view_field_list';
+import type { DatatableColumn } from '@kbn/expressions-plugin/common';
+import { getDataViewFieldList, getEsqlQueryFieldList } from './get_field_list';
 
 export enum DiscoverSidebarReducerActionType {
   RESET = 'RESET',
@@ -32,14 +34,15 @@ type DiscoverSidebarReducerAction =
   | {
       type: DiscoverSidebarReducerActionType.DOCUMENTS_LOADING;
       payload: {
-        isPlainRecord: boolean;
+        isEsqlMode: boolean;
       };
     }
   | {
       type: DiscoverSidebarReducerActionType.DOCUMENTS_LOADED;
       payload: {
         fieldCounts: DiscoverSidebarReducerState['fieldCounts'];
-        isPlainRecord: boolean;
+        esqlQueryColumns?: DatatableColumn[]; // from ES|QL searches
+        isEsqlMode: boolean;
         dataView: DataView | null | undefined;
       };
     };
@@ -90,15 +93,13 @@ export function discoverSidebarReducer(
       return {
         ...state,
         fieldCounts: null,
-        allFields: action.payload.isPlainRecord ? null : state.allFields,
+        allFields: action.payload.isEsqlMode ? null : state.allFields,
         status: DiscoverSidebarReducerStatus.PROCESSING,
       };
     case DiscoverSidebarReducerActionType.DOCUMENTS_LOADED:
-      const mappedAndUnmappedFields = getDataViewFieldList(
-        action.payload.dataView,
-        action.payload.fieldCounts,
-        action.payload.isPlainRecord
-      );
+      const mappedAndUnmappedFields = action.payload.isEsqlMode
+        ? getEsqlQueryFieldList(action.payload.esqlQueryColumns)
+        : getDataViewFieldList(action.payload.dataView, action.payload.fieldCounts);
       return {
         ...state,
         dataView: action.payload.dataView,

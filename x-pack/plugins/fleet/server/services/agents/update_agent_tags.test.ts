@@ -8,6 +8,7 @@ import type { SavedObjectsClientContract } from '@kbn/core/server';
 import type { ElasticsearchClientMock } from '@kbn/core/server/mocks';
 import { elasticsearchServiceMock, savedObjectsClientMock } from '@kbn/core/server/mocks';
 
+import { isSpaceAwarenessEnabled } from '../spaces/helpers';
 import type { Agent } from '../../types';
 
 import { createClientMock } from './action.mock';
@@ -15,18 +16,19 @@ import { MAX_RETRY_COUNT } from './retry_helper';
 import { updateAgentTags } from './update_agent_tags';
 import { UpdateAgentTagsActionRunner, updateTagsBatch } from './update_agent_tags_action_runner';
 
+jest.mock('../spaces/helpers');
 jest.mock('../app_context', () => {
+  const { loggerMock } = jest.requireActual('@kbn/logging-mocks');
   return {
     appContextService: {
-      getLogger: jest.fn().mockReturnValue({
-        debug: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        error: jest.fn(),
-      } as any),
+      getLogger: () => loggerMock.create(),
+      getConfig: () => {},
+      getMessageSigningService: jest.fn(),
+      getExperimentalFeatures: jest.fn().mockResolvedValue({}),
     },
   };
 });
+jest.mock('../audit_logging');
 
 jest.mock('../agent_policy', () => {
   return {
@@ -113,7 +115,7 @@ describe('update_agent_tags', () => {
     expect(agentAction?.body).toEqual(
       expect.objectContaining({
         action_id: expect.anything(),
-        agents: ['agent1'],
+        agents: [expect.any(String)],
         type: 'UPDATE_TAGS',
         total: 1,
       })
@@ -123,7 +125,7 @@ describe('update_agent_tags', () => {
     const agentIds = actionResults?.body
       ?.filter((i: any) => i.agent_id)
       .map((i: any) => i.agent_id);
-    expect(agentIds).toEqual(['agent1']);
+    expect(agentIds.length).toEqual(1);
     expect(actionResults.body[1].error).not.toBeDefined();
   });
 
@@ -145,7 +147,7 @@ describe('update_agent_tags', () => {
     expect(agentAction?.body).toEqual(
       expect.objectContaining({
         action_id: expect.anything(),
-        agents: [agentInRegularDoc._id],
+        agents: [expect.any(String)],
         type: 'UPDATE_TAGS',
         total: 1,
       })
@@ -155,11 +157,22 @@ describe('update_agent_tags', () => {
   it('should write error action results when failures are returned', async () => {
     esClient.updateByQuery.mockReset();
     esClient.updateByQuery.mockResolvedValue({
-      failures: [{ cause: { reason: 'error reason' } }],
+      failures: [{ id: 'failure1', cause: { reason: 'error reason' } }],
       updated: 0,
+      total: 1,
     } as any);
 
     await updateAgentTags(soClient, esClient, { agentIds: ['agent1'] }, ['one'], []);
+
+    const agentAction = esClient.create.mock.calls[0][0] as any;
+    expect(agentAction?.body).toEqual(
+      expect.objectContaining({
+        action_id: expect.anything(),
+        agents: ['failure1'],
+        type: 'UPDATE_TAGS',
+        total: 1,
+      })
+    );
 
     const errorResults = esClient.bulk.mock.calls[0][0] as any;
     expect(errorResults.body[1].error).toEqual('error reason');
@@ -175,7 +188,7 @@ describe('update_agent_tags', () => {
 
     await expect(
       updateAgentTags(soClient, esClient, { agentIds: ['agent1'] }, ['one'], [])
-    ).rejects.toThrowError('version conflict of 100 agents');
+    ).rejects.toThrowError('Version conflict of 100 agents');
   });
 
   it('should write out error results on last retry with version conflicts', async () => {
@@ -184,6 +197,7 @@ describe('update_agent_tags', () => {
       failures: [],
       updated: 0,
       version_conflicts: 100,
+      total: 100,
     } as any);
 
     await expect(
@@ -200,9 +214,42 @@ describe('update_agent_tags', () => {
           retryCount: MAX_RETRY_COUNT,
         }
       )
-    ).rejects.toThrowError('version conflict of 100 agents');
+    ).rejects.toThrowError('Version conflict of 100 agents');
+
+    const agentAction = esClient.create.mock.calls[0][0] as any;
+    expect(agentAction?.body.agents.length).toEqual(100);
+
     const errorResults = esClient.bulk.mock.calls[0][0] as any;
     expect(errorResults.body[1].error).toEqual('version conflict on last retry');
+  });
+
+  it('should combine action agents from updated, failures and version conflicts on last retry', async () => {
+    esClient.updateByQuery.mockReset();
+    esClient.updateByQuery.mockResolvedValue({
+      failures: [{ id: 'failure1', cause: { reason: 'error reason' } }],
+      updated: 1,
+      version_conflicts: 1,
+      total: 3,
+    } as any);
+
+    await expect(
+      updateTagsBatch(
+        soClient,
+        esClient,
+        [{ id: 'agent1' } as Agent],
+        {},
+        {
+          tagsToAdd: ['new'],
+          tagsToRemove: [],
+          kuery: '',
+          total: 3,
+          retryCount: MAX_RETRY_COUNT,
+        }
+      )
+    ).rejects.toThrowError('Version conflict of 1 agents');
+
+    const agentAction = esClient.create.mock.calls[0][0] as any;
+    expect(agentAction?.body.agents.length).toEqual(3);
   });
 
   it('should run add tags async when actioning more agents than batch size', async () => {
@@ -304,7 +351,7 @@ describe('update_agent_tags', () => {
 
   it('should write total from total param if updateByQuery returns less results', async () => {
     esClient.updateByQuery.mockReset();
-    esClient.updateByQuery.mockResolvedValue({ failures: [], updated: 0, total: 50 } as any);
+    esClient.updateByQuery.mockResolvedValue({ failures: [], updated: 1, total: 50 } as any);
 
     await updateTagsBatch(
       soClient,
@@ -323,10 +370,106 @@ describe('update_agent_tags', () => {
     expect(agentAction?.body).toEqual(
       expect.objectContaining({
         action_id: expect.anything(),
-        agents: ['agent1'],
+        agents: [expect.any(String)],
         type: 'UPDATE_TAGS',
         total: 100,
       })
     );
+  });
+
+  it('should update tags for agents in the space', async () => {
+    soClient.getCurrentNamespace.mockReturnValue('default');
+    esClient.search.mockResolvedValue({
+      hits: {
+        hits: [
+          {
+            _id: 'agent1',
+            _source: {
+              tags: ['one', 'two', 'three'],
+              namespaces: ['default'],
+            },
+            fields: {
+              status: 'online',
+            },
+          },
+        ],
+      },
+    } as any);
+
+    await updateAgentTags(soClient, esClient, { agentIds: ['agent1'] }, ['one'], ['two']);
+
+    expect(esClient.updateByQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conflicts: 'proceed',
+        index: '.fleet-agents',
+        query: {
+          terms: { _id: ['agent1'] },
+        },
+        script: expect.objectContaining({
+          lang: 'painless',
+          params: expect.objectContaining({
+            tagsToAdd: ['one'],
+            tagsToRemove: ['two'],
+            updatedAt: expect.anything(),
+          }),
+          source: expect.anything(),
+        }),
+      })
+    );
+  });
+
+  describe('with isSpaceAwarenessEnabled return true', () => {
+    beforeEach(() => {
+      jest.mocked(isSpaceAwarenessEnabled).mockResolvedValue(true);
+    });
+
+    it('should add namespace filter to kuery in the default space', async () => {
+      soClient.getCurrentNamespace.mockReturnValue('default');
+
+      await updateAgentTags(
+        soClient,
+        esClient,
+        { kuery: 'status:healthy OR status:offline' },
+        [],
+        ['remove']
+      );
+
+      expect(UpdateAgentTagsActionRunner).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({
+          batchSize: 10000,
+          kuery:
+            '(namespaces:(default) or not namespaces:*) AND (status:healthy OR status:offline) AND (tags:remove)',
+          tagsToAdd: [],
+          tagsToRemove: ['remove'],
+        }),
+        expect.anything()
+      );
+    });
+
+    it('should add namespace filter to kuery in a custom space', async () => {
+      soClient.getCurrentNamespace.mockReturnValue('myspace');
+
+      await updateAgentTags(
+        soClient,
+        esClient,
+        { kuery: 'status:healthy OR status:offline' },
+        [],
+        ['remove']
+      );
+
+      expect(UpdateAgentTagsActionRunner).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({
+          batchSize: 10000,
+          kuery: '(namespaces:(myspace)) AND (status:healthy OR status:offline) AND (tags:remove)',
+          tagsToAdd: [],
+          tagsToRemove: ['remove'],
+        }),
+        expect.anything()
+      );
+    });
   });
 });

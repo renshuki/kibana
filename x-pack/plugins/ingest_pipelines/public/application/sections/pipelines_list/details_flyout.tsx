@@ -25,11 +25,15 @@ import {
   EuiContextMenu,
   EuiButton,
   EuiBadge,
+  EuiCodeBlock,
+  EuiToolTip,
 } from '@elastic/eui';
 
 import { Pipeline } from '../../../../common/types';
 
+import { deprecatedPipelineBadge } from './table';
 import { PipelineDetailsJsonBlock } from './details_json_block';
+import { stringifyJson } from '../../lib/utils';
 
 export interface Props {
   pipeline: Pipeline;
@@ -118,6 +122,16 @@ export const PipelineDetailsFlyout: FunctionComponent<Props> = ({
               <h2>{pipeline.name}</h2>
             </EuiTitle>
           </EuiFlexItem>
+          {pipeline.deprecated ? (
+            <EuiFlexItem grow={false}>
+              {' '}
+              <EuiToolTip content={deprecatedPipelineBadge.badgeTooltip}>
+                <EuiBadge color="warning" data-test-subj="isDeprecatedBadge">
+                  {deprecatedPipelineBadge.badge}
+                </EuiBadge>
+              </EuiToolTip>
+            </EuiFlexItem>
+          ) : null}
           {pipeline.isManaged ? (
             <EuiFlexItem grow={false}>
               {' '}
@@ -186,13 +200,33 @@ export const PipelineDetailsFlyout: FunctionComponent<Props> = ({
               </EuiDescriptionListDescription>
             </>
           )}
+
+          {/* Metadata (optional) */}
+          {pipeline._meta && (
+            <>
+              <EuiDescriptionListTitle data-test-subj="metaTitle">
+                <FormattedMessage
+                  id="xpack.ingestPipelines.list.pipelineDetails.metaDescriptionListTitle"
+                  defaultMessage="Metadata"
+                />
+              </EuiDescriptionListTitle>
+              <EuiDescriptionListDescription>
+                <EuiCodeBlock language="json">{stringifyJson(pipeline._meta, false)}</EuiCodeBlock>
+              </EuiDescriptionListDescription>
+            </>
+          )}
         </EuiDescriptionList>
       </EuiFlyoutBody>
 
       <EuiFlyoutFooter>
         <EuiFlexGroup justifyContent="spaceBetween">
           <EuiFlexItem grow={false}>
-            <EuiButtonEmpty iconType="cross" onClick={onClose} flush="left">
+            <EuiButtonEmpty
+              iconType="cross"
+              onClick={onClose}
+              flush="left"
+              data-test-subj="closeDetailsFlyout"
+            >
               {i18n.translate('xpack.ingestPipelines.list.pipelineDetails.closeButtonLabel', {
                 defaultMessage: 'Close',
               })}

@@ -5,12 +5,13 @@
  * 2.0.
  */
 
-import React, { memo, FC } from 'react';
+import type { FC, PropsWithChildren } from 'react';
+import React, { memo } from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { EuiDescribedFormGroup, EuiFormRow } from '@elastic/eui';
 
-export const Description: FC = memo(({ children }) => {
+export const Description: FC<PropsWithChildren<unknown>> = memo(({ children }) => {
   const title = i18n.translate('xpack.ml.newJob.wizard.pickFieldsStep.influencers.title', {
     defaultMessage: 'Influencers',
   });
@@ -20,7 +21,7 @@ export const Description: FC = memo(({ children }) => {
       description={
         <FormattedMessage
           id="xpack.ml.newJob.wizard.pickFieldsStep.influencers.description"
-          defaultMessage="Categorical fields that have influence on the results. Who/what might you 'blame' for an anomaly? 1-3 influencers are recommended."
+          defaultMessage="Categorical fields that influence the results. Who/what might you 'blame' for an anomaly? 1-3 influencers are recommended."
         />
       }
     >

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 /* eslint-disable @kbn/eslint/require-license-header */
@@ -41,6 +42,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+const Fs = require('fs');
 const Path = require('path');
 
 const { addHook } = require('pirates');
@@ -105,7 +107,18 @@ function install(options = undefined) {
     environment: 'node',
     // @ts-expect-error bad source-map-support types
     retrieveSourceMap(path) {
-      const map = cache.getSourceMap(path);
+      if (!Path.isAbsolute(path)) {
+        return null;
+      }
+
+      let source;
+      try {
+        source = Fs.readFileSync(path, 'utf8');
+      } catch {
+        return null;
+      }
+
+      const map = cache.getSourceMap(cache.getKey(path, source));
       return map ? { map, url: null } : null;
     },
   });

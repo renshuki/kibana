@@ -1,15 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
 import { act } from 'react-dom/test-utils';
 
-import { EuiLoadingElastic } from '@elastic/eui';
+import { EuiLoadingElastic, EuiLoadingSpinner } from '@elastic/eui';
 import { mountWithIntl } from '@kbn/test-jest-helpers';
 import { NoDataViewsPrompt } from '@kbn/shared-ux-prompt-no-data-views';
 import { NoDataConfigPage } from '@kbn/shared-ux-page-no-data-config';
@@ -46,7 +47,7 @@ describe('Kibana No Data Page', () => {
     const services = getKibanaNoDataPageServicesMock(config);
     const component = mountWithIntl(
       <KibanaNoDataPageProvider {...services}>
-        <KibanaNoDataPage {...{ noDataConfig, onDataViewCreated }} />
+        <KibanaNoDataPage {...{ noDataConfig, onDataViewCreated, showPlainSpinner: false }} />
       </KibanaNoDataPageProvider>
     );
 
@@ -61,7 +62,11 @@ describe('Kibana No Data Page', () => {
     const services = getKibanaNoDataPageServicesMock({ ...config, hasESData: true });
     const component = mountWithIntl(
       <KibanaNoDataPageProvider {...services}>
-        <KibanaNoDataPage noDataConfig={noDataConfig} onDataViewCreated={onDataViewCreated} />
+        <KibanaNoDataPage
+          noDataConfig={noDataConfig}
+          onDataViewCreated={onDataViewCreated}
+          showPlainSpinner={false}
+        />
       </KibanaNoDataPageProvider>
     );
 
@@ -86,7 +91,11 @@ describe('Kibana No Data Page', () => {
 
     const component = mountWithIntl(
       <KibanaNoDataPageProvider {...services}>
-        <KibanaNoDataPage noDataConfig={noDataConfig} onDataViewCreated={onDataViewCreated} />
+        <KibanaNoDataPage
+          noDataConfig={noDataConfig}
+          onDataViewCreated={onDataViewCreated}
+          showPlainSpinner={false}
+        />
       </KibanaNoDataPageProvider>
     );
 
@@ -95,5 +104,16 @@ describe('Kibana No Data Page', () => {
     expect(component.find(EuiLoadingElastic).length).toBe(1);
     expect(component.find(NoDataViewsPrompt).length).toBe(0);
     expect(component.find(NoDataConfigPage).length).toBe(0);
+  });
+
+  test('shows EuiLoadingSpinner vs EuiLoadingElastic for custom branding', () => {
+    const services = getKibanaNoDataPageServicesMock(config);
+    const component = mountWithIntl(
+      <KibanaNoDataPageProvider {...services}>
+        <KibanaNoDataPage {...{ noDataConfig, onDataViewCreated, showPlainSpinner: true }} />
+      </KibanaNoDataPageProvider>
+    );
+    expect(component.find(EuiLoadingSpinner).length).toBe(1);
+    expect(component.find(EuiLoadingElastic).length).toBe(0);
   });
 });

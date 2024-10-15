@@ -13,6 +13,7 @@
 
 import { mount, ReactWrapper } from 'enzyme';
 import React from 'react';
+
 // import { act } from 'react-dom/test-utils';
 import { App } from './app';
 import { sharedWorkpads, WorkpadNames, tick } from '../test';
@@ -34,17 +35,14 @@ import { openSettings, selectMenuItem } from '../test/interactions';
 // Mock the renderers
 jest.mock('../supported_renderers');
 
+// @ts-ignore Importing this to mock
+import * as Portal from '@elastic/eui/lib/components/portal/portal';
+
 // Mock the EuiPortal - `insertAdjacentElement is not supported in
 // `jsdom` 12.  We're just going to render a `div` with the children
 // so the `enzyme` tests will be accurate.
-jest.mock('@elastic/eui/lib/components/portal/portal', () => {
-  // Local constants are not supported in Jest mocks-- they must be
-  // imported within the mock.
-  // eslint-disable-next-line @typescript-eslint/no-shadow
-  const React = jest.requireActual('react');
-  return {
-    EuiPortal: (props: any) => <div>{props.children}</div>,
-  };
+jest.spyOn(Portal, 'EuiPortal').mockImplementation((props: any) => {
+  return <div className="mockedEuiPortal">{props.children}</div>;
 });
 
 const getWrapper: (name?: WorkpadNames) => ReactWrapper = (name = 'hello') => {
@@ -59,8 +57,7 @@ const getWrapper: (name?: WorkpadNames) => ReactWrapper = (name = 'hello') => {
   return mount(<App {...{ stage, workpad }} />);
 };
 
-// FLAKY: https://github.com/elastic/kibana/issues/95899
-describe.skip('<App />', () => {
+describe('<App />', () => {
   test('App renders properly', () => {
     expect(getWrapper().html()).toMatchSnapshot();
   });
@@ -104,7 +101,7 @@ describe.skip('<App />', () => {
   test('autohide footer functions on mouseEnter + Leave', async () => {
     const wrapper = getWrapper();
     await openSettings(wrapper);
-    await selectMenuItem(wrapper, 1);
+    await selectMenuItem(wrapper, 2);
 
     expect(footer(wrapper).prop('isHidden')).toEqual(false);
     expect(footer(wrapper).prop('isAutohide')).toEqual(false);
@@ -123,7 +120,7 @@ describe.skip('<App />', () => {
 
     // Open the menu and activate toolbar hiding.
     await openSettings(wrapper);
-    await selectMenuItem(wrapper, 1);
+    await selectMenuItem(wrapper, 2);
 
     toolbarCheck(wrapper).simulate('click');
     await tick(20);

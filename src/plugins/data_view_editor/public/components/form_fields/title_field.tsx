@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { ChangeEvent, useState, useMemo } from 'react';
@@ -22,6 +23,7 @@ import { canAppendWildcard } from '../../lib';
 import { schema } from '../form_schema';
 import { RollupIndicesCapsResponse, IndexPatternConfig, MatchedIndicesSet } from '../../types';
 import { matchedIndiciesDefault } from '../../data_view_editor_service';
+import { TitleDocsPopover } from './title_docs_popover';
 
 interface TitleFieldProps {
   isRollup: boolean;
@@ -169,7 +171,7 @@ export const TitleField = ({
           <EuiFormRow
             label={field.label}
             labelAppend={field.labelAppend}
-            helpText={typeof field.helpText === 'function' ? field.helpText() : field.helpText}
+            helpText={field.helpText}
             error={errorMessage}
             isInvalid={isInvalid}
             fullWidth
@@ -194,6 +196,9 @@ export const TitleField = ({
               isLoading={field.isValidating}
               fullWidth
               data-test-subj="createIndexPatternTitleInput"
+              append={<TitleDocsPopover />}
+              placeholder="example-*"
+              data-is-validating={field.isValidating ? '1' : '0'}
             />
           </EuiFormRow>
         );

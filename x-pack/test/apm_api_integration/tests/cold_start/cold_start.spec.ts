@@ -5,7 +5,7 @@
  * 2.0.
  */
 import expect from '@kbn/expect';
-import { first, last } from 'lodash';
+import { first, last, uniq } from 'lodash';
 import moment from 'moment';
 import {
   APIReturnType,
@@ -22,7 +22,7 @@ type ColdStartRate =
 export default function ApiTest({ getService }: FtrProviderContext) {
   const registry = getService('registry');
   const apmApiClient = getService('apmApiClient');
-  const synthtraceEsClient = getService('synthtraceEsClient');
+  const apmSynthtraceEsClient = getService('apmSynthtraceEsClient');
 
   const { serviceName } = dataConfig;
   const start = new Date('2021-01-01T00:00:00.000Z').getTime();
@@ -66,6 +66,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
     }
   );
 
+  // FLAKY: https://github.com/elastic/kibana/issues/177113
   registry.when('Cold start rate when data is generated', { config: 'basic', archives: [] }, () => {
     describe('without comparison', () => {
       let body: ColdStartRate;
@@ -73,7 +74,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
 
       before(async () => {
         await generateData({
-          synthtraceEsClient,
+          apmSynthtraceEsClient,
           start,
           end,
           coldStartRate: 10,
@@ -84,7 +85,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
         status = response.status;
       });
 
-      after(() => synthtraceEsClient.clean());
+      after(() => apmSynthtraceEsClient.clean());
 
       it('returns correct HTTP status', () => {
         expect(status).to.be(200);
@@ -120,14 +121,14 @@ export default function ApiTest({ getService }: FtrProviderContext) {
         const comparisonEndDate = moment(start).add(3, 'minutes');
 
         await generateData({
-          synthtraceEsClient,
+          apmSynthtraceEsClient,
           start: startDate.valueOf(),
           end: endDate.valueOf(),
           coldStartRate: 10,
           warmStartRate: 30,
         });
         await generateData({
-          synthtraceEsClient,
+          apmSynthtraceEsClient,
           start: comparisonStartDate.getTime(),
           end: comparisonEndDate.valueOf(),
           coldStartRate: 20,
@@ -145,7 +146,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
         status = response.status;
       });
 
-      after(() => synthtraceEsClient.clean());
+      after(() => apmSynthtraceEsClient.clean());
 
       it('returns correct HTTP status', () => {
         expect(status).to.be(200);
@@ -180,15 +181,18 @@ export default function ApiTest({ getService }: FtrProviderContext) {
       });
 
       it('returns an array of transaction cold start rates', () => {
-        expect(body.currentPeriod.transactionColdstartRate).to.have.length(3);
-        expect(body.currentPeriod.transactionColdstartRate.every(({ y }) => y === 0.25)).to.be(
-          true
+        const currentValuesUnique = uniq(
+          body.currentPeriod.transactionColdstartRate.map(({ y }) => y)
+        );
+        const prevValuesUnique = uniq(
+          body.previousPeriod.transactionColdstartRate.map(({ y }) => y)
         );
 
+        expect(currentValuesUnique).to.eql([0.25]);
+        expect(body.currentPeriod.transactionColdstartRate).to.have.length(3);
+
+        expect(prevValuesUnique).to.eql([0.5]);
         expect(body.previousPeriod.transactionColdstartRate).to.have.length(3);
-        expect(body.previousPeriod.transactionColdstartRate.every(({ y }) => y === 0.5)).to.be(
-          true
-        );
       });
 
       it('has same average value for both periods', () => {

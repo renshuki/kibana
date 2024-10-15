@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Vis } from './vis';
@@ -23,10 +24,10 @@ jest.mock('./services', () => {
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { BaseVisType } = require('./vis_types/base_vis_type');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires,@kbn/imports/uniform_imports
-  const { SearchSource } = require('../../data/common/search/search_source');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires,@kbn/imports/uniform_imports
-  const stubIndexPattern = require('../../data/common/stubs');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { SearchSource } = require('@kbn/data-plugin/common/search/search_source');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const stubIndexPattern = require('@kbn/data-plugin/common/stubs');
   const visType = new BaseVisType({
     name: 'pie',
     title: 'pie',

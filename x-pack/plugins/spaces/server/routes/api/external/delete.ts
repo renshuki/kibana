@@ -11,43 +11,55 @@ import { schema } from '@kbn/config-schema';
 import { SavedObjectsErrorHelpers } from '@kbn/core/server';
 
 import type { ExternalRouteDeps } from '.';
+import { API_VERSIONS } from '../../../../common';
 import { wrapError } from '../../../lib/errors';
 import { createLicensedRouteHandler } from '../../lib';
 
 export function initDeleteSpacesApi(deps: ExternalRouteDeps) {
-  const { externalRouter, log, getSpacesService } = deps;
+  const { router, log, getSpacesService } = deps;
 
-  externalRouter.delete(
-    {
+  router.versioned
+    .delete({
       path: '/api/spaces/space/{id}',
-      validate: {
-        params: schema.object({
-          id: schema.string(),
-        }),
+      access: 'public',
+      description: `Delete a space`,
+      options: {
+        tags: ['oas-tag:spaces'],
       },
-    },
-    createLicensedRouteHandler(async (context, request, response) => {
-      const spacesClient = getSpacesService().createSpacesClient(request);
-
-      const id = request.params.id;
-
-      try {
-        await spacesClient.delete(id);
-      } catch (error) {
-        if (SavedObjectsErrorHelpers.isNotFoundError(error)) {
-          return response.notFound();
-        } else if (SavedObjectsErrorHelpers.isEsCannotExecuteScriptError(error)) {
-          log.error(
-            `Failed to delete space '${id}', cannot execute script in Elasticsearch query: ${error.message}`
-          );
-          return response.customError(
-            wrapError(Boom.badRequest('Cannot execute script in Elasticsearch query'))
-          );
-        }
-        return response.customError(wrapError(error));
-      }
-
-      return response.noContent();
     })
-  );
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: {
+            params: schema.object({
+              id: schema.string(),
+            }),
+          },
+        },
+      },
+      createLicensedRouteHandler(async (context, request, response) => {
+        const spacesClient = getSpacesService().createSpacesClient(request);
+
+        const id = request.params.id;
+
+        try {
+          await spacesClient.delete(id);
+        } catch (error) {
+          if (SavedObjectsErrorHelpers.isNotFoundError(error)) {
+            return response.notFound();
+          } else if (SavedObjectsErrorHelpers.isEsCannotExecuteScriptError(error)) {
+            log.error(
+              `Failed to delete space '${id}', cannot execute script in Elasticsearch query: ${error.message}`
+            );
+            return response.customError(
+              wrapError(Boom.badRequest('Cannot execute script in Elasticsearch query'))
+            );
+          }
+          return response.customError(wrapError(error));
+        }
+
+        return response.noContent();
+      })
+    );
 }

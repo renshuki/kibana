@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, Fragment } from 'react';
+import type { FC } from 'react';
+import React, { Fragment } from 'react';
 import { i18n } from '@kbn/i18n';
 import { EuiAccordion, EuiFlexGroup, EuiFlexItem, EuiSpacer } from '@elastic/eui';
 import { CalendarsSelection } from './components/calendars';
@@ -43,11 +44,15 @@ export const AdditionalSection: FC<Props> = ({ additionalExpanded, setAdditional
             </EuiFlexItem>
           </EuiFlexGroup>
 
+          <EuiSpacer />
+
           <EuiFlexGroup gutterSize="xl" style={{ marginLeft: '0px', marginRight: '0px' }}>
             <EuiFlexItem>
               <CalendarsSelection />
             </EuiFlexItem>
-            <EuiFlexItem />
+            <EuiFlexItem>
+              <CalendarsSelection isDst={true} />
+            </EuiFlexItem>
           </EuiFlexGroup>
         </section>
       </EuiAccordion>

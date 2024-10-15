@@ -6,14 +6,16 @@
  */
 
 import { FlyoutOptionsUrlState } from '@kbn/infra-plugin/public/containers/logs/log_flyout';
-import { LogPositionUrlState } from '@kbn/infra-plugin/public/containers/logs/log_position';
 import querystring from 'querystring';
 import { encode } from '@kbn/rison';
+import type { PositionStateInUrl } from '@kbn/infra-plugin/public/observability_logs/log_stream_position_state/src/url_state_storage_service';
+import { FilterStateInUrl } from '@kbn/infra-plugin/public/observability_logs/log_stream_query_state';
 import { FtrProviderContext } from '../ftr_provider_context';
 
 export interface TabsParams {
   stream: {
-    logPosition?: Partial<LogPositionUrlState>;
+    logPosition?: Partial<PositionStateInUrl>;
+    logFilter?: Partial<FilterStateInUrl>;
     flyoutOptions?: Partial<FlyoutOptionsUrlState>;
   };
   settings: never;
@@ -36,7 +38,7 @@ export function InfraLogsPageProvider({ getPageObjects, getService }: FtrProvide
         const parsedParams: Record<string, string> = {};
 
         for (const key in params) {
-          if (params.hasOwnProperty(key)) {
+          if (Object.hasOwn(params, key)) {
             const value = params[key];
             parsedParams[key] = encode(value);
           }

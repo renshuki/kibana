@@ -6,26 +6,22 @@
  */
 
 import React from 'react';
-import { I18nProvider } from '@kbn/i18n-react';
-import { FormattedMessage } from '@kbn/i18n-react';
-import { EuiFlexGroup, EuiFlexItem, EuiText, EuiIcon, EuiEmptyPrompt } from '@elastic/eui';
 import {
   ExpressionRendererEvent,
   ReactExpressionRendererProps,
   ReactExpressionRendererType,
 } from '@kbn/expressions-plugin/public';
 import type { KibanaExecutionContext } from '@kbn/core/public';
-import { ExecutionContextSearch } from '@kbn/data-plugin/public';
+import type { ExecutionContextSearch } from '@kbn/es-query';
 import { DefaultInspectorAdapters, RenderMode } from '@kbn/expressions-plugin/common';
 import classNames from 'classnames';
 import { getOriginalRequestErrorMessages } from '../editor_frame_service/error_helper';
 import { LensInspector } from '../lens_inspector_service';
-import { UserMessage } from '../types';
+import { AddUserMessages } from '../types';
 
 export interface ExpressionWrapperProps {
   ExpressionRenderer: ReactExpressionRendererType;
   expression: string | null;
-  errors: UserMessage[];
   variables?: Record<string, unknown>;
   interactive?: boolean;
   searchContext: ExecutionContextSearch;
@@ -44,62 +40,12 @@ export interface ExpressionWrapperProps {
   getCompatibleCellValueActions?: ReactExpressionRendererProps['getCompatibleCellValueActions'];
   style?: React.CSSProperties;
   className?: string;
-  canEdit: boolean;
-  onRuntimeError: (message?: string) => void;
+  addUserMessages: AddUserMessages;
+  onRuntimeError: (error: Error) => void;
   executionContext?: KibanaExecutionContext;
   lensInspector: LensInspector;
   noPadding?: boolean;
-}
-
-interface VisualizationErrorProps {
-  errors: ExpressionWrapperProps['errors'];
-  canEdit: boolean;
-}
-
-export function VisualizationErrorPanel({ errors, canEdit }: VisualizationErrorProps) {
-  const showMore = errors.length > 1;
-  const canFixInLens = canEdit && errors.some(({ fixableInEditor }) => fixableInEditor);
-  return (
-    <div className="lnsEmbeddedError">
-      <EuiEmptyPrompt
-        iconType="alert"
-        iconColor="danger"
-        data-test-subj="embeddable-lens-failure"
-        body={
-          <>
-            {errors.length ? (
-              <>
-                <p>{errors[0].longMessage}</p>
-                {showMore && !canFixInLens ? (
-                  <p>
-                    <FormattedMessage
-                      id="xpack.lens.embeddable.moreErrors"
-                      defaultMessage="Edit in Lens editor to see more errors"
-                    />
-                  </p>
-                ) : null}
-                {canFixInLens ? (
-                  <p>
-                    <FormattedMessage
-                      id="xpack.lens.embeddable.fixErrors"
-                      defaultMessage="Edit in Lens editor to fix the error"
-                    />
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <p>
-                <FormattedMessage
-                  id="xpack.lens.embeddable.failure"
-                  defaultMessage="Visualization couldn't be displayed"
-                />
-              </p>
-            )}
-          </>
-        }
-      />
-    </div>
-  );
+  abortController?: AbortController;
 }
 
 export function ExpressionWrapper({
@@ -120,60 +66,50 @@ export function ExpressionWrapper({
   getCompatibleCellValueActions,
   style,
   className,
-  errors,
-  canEdit,
   onRuntimeError,
+  addUserMessages,
   executionContext,
   lensInspector,
   noPadding,
+  abortController,
 }: ExpressionWrapperProps) {
+  if (!expression) return null;
   return (
-    <I18nProvider>
-      {errors.length || expression === null || expression === '' ? (
-        <VisualizationErrorPanel errors={errors} canEdit={canEdit} />
-      ) : (
-        <div className={classNames('lnsExpressionRenderer', className)} style={style}>
-          <ExpressionRendererComponent
-            className="lnsExpressionRenderer__component"
-            padding={noPadding ? undefined : 's'}
-            variables={variables}
-            expression={expression}
-            interactive={interactive}
-            searchContext={searchContext}
-            searchSessionId={searchSessionId}
-            onData$={onData$}
-            onRender$={onRender$}
-            inspectorAdapters={lensInspector.adapters}
-            renderMode={renderMode}
-            syncColors={syncColors}
-            syncTooltips={syncTooltips}
-            syncCursor={syncCursor}
-            executionContext={executionContext}
-            renderError={(errorMessage, error) => {
-              const messages = getOriginalRequestErrorMessages(error);
-              onRuntimeError(messages[0] ?? errorMessage);
+    <div className={classNames('lnsExpressionRenderer', className)} style={style}>
+      <ExpressionRendererComponent
+        className="lnsExpressionRenderer__component"
+        padding={noPadding ? undefined : 's'}
+        variables={variables}
+        allowCache={true}
+        expression={expression}
+        interactive={interactive}
+        searchContext={searchContext}
+        searchSessionId={searchSessionId}
+        // @ts-expect-error upgrade typescript v4.9.5
+        onData$={onData$}
+        onRender$={onRender$}
+        inspectorAdapters={lensInspector.adapters}
+        renderMode={renderMode}
+        syncColors={syncColors}
+        syncTooltips={syncTooltips}
+        syncCursor={syncCursor}
+        executionContext={executionContext}
+        abortController={abortController}
+        renderError={(errorMessage, error) => {
+          const messages = getOriginalRequestErrorMessages(error || null);
+          addUserMessages(messages);
+          if (error?.original) {
+            onRuntimeError(error.original);
+          } else {
+            onRuntimeError(new Error(errorMessage ? errorMessage : ''));
+          }
 
-              return (
-                <div data-test-subj="expression-renderer-error">
-                  <EuiFlexGroup direction="column" alignItems="center" justifyContent="center">
-                    <EuiFlexItem>
-                      <EuiIcon type="alert" color="danger" />
-                    </EuiFlexItem>
-                    <EuiFlexItem>
-                      {messages.map((message) => (
-                        <EuiText size="s">{message}</EuiText>
-                      ))}
-                    </EuiFlexItem>
-                  </EuiFlexGroup>
-                </div>
-              );
-            }}
-            onEvent={handleEvent}
-            hasCompatibleActions={hasCompatibleActions}
-            getCompatibleCellValueActions={getCompatibleCellValueActions}
-          />
-        </div>
-      )}
-    </I18nProvider>
+          return <></>; // the embeddable will take care of displaying the messages
+        }}
+        onEvent={handleEvent}
+        hasCompatibleActions={hasCompatibleActions}
+        getCompatibleCellValueActions={getCompatibleCellValueActions}
+      />
+    </div>
   );
 }

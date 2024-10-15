@@ -14,7 +14,7 @@ import { RouteDependencies } from '../../types';
 import { pipelineSchema } from './shared';
 
 const bodySchema = schema.object({
-  name: schema.string(),
+  name: schema.string({ maxLength: 1000 }),
   ...pipelineSchema,
 });
 
@@ -34,7 +34,7 @@ export const registerCreateRoute = ({
       const pipeline = req.body as Pipeline;
 
       // eslint-disable-next-line @typescript-eslint/naming-convention
-      const { name, description, processors, version, on_failure } = pipeline;
+      const { name, description, processors, version, on_failure, _meta } = pipeline;
 
       try {
         // Check that a pipeline with the same name doesn't already exist
@@ -46,7 +46,7 @@ export const registerCreateRoute = ({
           return res.conflict({
             body: new Error(
               i18n.translate('xpack.ingestPipelines.createRoute.duplicatePipelineIdErrorMessage', {
-                defaultMessage: "There is already a pipeline with name '{name}'.",
+                defaultMessage: "There is already a pipeline with name ''{name}''.",
                 values: {
                   name,
                 },
@@ -66,6 +66,7 @@ export const registerCreateRoute = ({
             processors,
             version,
             on_failure,
+            _meta,
           },
         });
 

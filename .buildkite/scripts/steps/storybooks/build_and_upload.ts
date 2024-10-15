@@ -1,29 +1,31 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { getKibanaDir } from '#pipeline-utils';
 
 // TODO - how to generate this dynamically?
 const STORYBOOKS = [
   'apm',
   'canvas',
   'cases',
-  'ci_composite',
-  'cloud_chat',
+  'cell_actions',
   'coloring',
   'chart_icons',
-  'controls',
+  'content_management_examples',
   'custom_integrations',
   'dashboard_enhanced',
   'dashboard',
   'data',
+  'logs_explorer',
   'embeddable',
   'expression_error',
   'expression_image',
@@ -32,20 +34,27 @@ const STORYBOOKS = [
   'expression_reveal_image',
   'expression_shape',
   'expression_tagcloud',
+  'management',
   'fleet',
+  'grouping',
   'home',
   'infra',
   'kibana_react',
   'lists',
   'observability',
+  'observability_ai_assistant',
+  'observability_shared',
   'presentation',
   'security_solution',
+  'security_solution_packages',
+  'serverless',
   'shared_ux',
   'triggers_actions_ui',
-  'ui_actions',
   'ui_actions_enhanced',
   'language_documentation_popover',
   'unified_search',
+  'random_sampling',
+  'esql_editor',
 ];
 
 const GITHUB_CONTEXT = 'Build and Publish Storybooks';
@@ -84,14 +93,12 @@ const upload = () => {
     console.log('--- Generating Storybooks HTML');
 
     process.chdir(path.join('.', 'built_assets', 'storybook'));
-    fs.renameSync('ci_composite', 'composite');
 
     const storybooks = execSync(`ls -1d */`)
       .toString()
       .trim()
       .split('\n')
-      .map((filePath) => filePath.replace('/', ''))
-      .filter((filePath) => filePath !== 'composite');
+      .map((filePath) => filePath.replace('/', ''));
 
     const listHtml = storybooks
       .map((storybook) => `<li><a href="${STORYBOOK_BASE_URL}/${storybook}">${storybook}</a></li>`)
@@ -101,8 +108,6 @@ const upload = () => {
       <html>
         <body>
           <h1>Storybooks</h1>
-          <p><a href="${STORYBOOK_BASE_URL}/composite">Composite Storybook</a></p>
-          <h2>All</h2>
           <ul>
             ${listHtml}
           </ul>
@@ -113,7 +118,12 @@ const upload = () => {
     fs.writeFileSync('index.html', html);
 
     console.log('--- Uploading Storybooks');
+    const activateScript = path.relative(
+      process.cwd(),
+      path.join(getKibanaDir(), '.buildkite', 'scripts', 'common', 'activate_service_account.sh')
+    );
     exec(`
+      ${activateScript} gs://ci-artifacts.kibana.dev
       gsutil -q -m cp -r -z js,css,html,json,map,txt,svg '*' 'gs://${STORYBOOK_BUCKET}/${STORYBOOK_DIRECTORY}/${process.env.BUILDKITE_COMMIT}/'
       gsutil -h "Cache-Control:no-cache, max-age=0, no-transform" cp -z html 'index.html' 'gs://${STORYBOOK_BUCKET}/${STORYBOOK_DIRECTORY}/latest/'
     `);

@@ -4,7 +4,7 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-import { safeDump, safeLoad } from 'js-yaml';
+import { dump, load } from 'js-yaml';
 
 import { ElasticsearchAssetType } from '../../../../types';
 import type { RegistryDataStream } from '../../../../types';
@@ -69,29 +69,84 @@ function mutatePipelineContentWithNewProcessor(jsonPipelineContent: any, process
   jsonPipelineContent.processors.push(processor);
 }
 
-export function addCustomPipelineProcessor(pipeline: PipelineInstall): PipelineInstall {
-  if (!pipeline.customIngestPipelineNameForInstallation) {
+export function addCustomPipelineAndLocalRoutingRulesProcessor(
+  pipeline: PipelineInstall
+): PipelineInstall {
+  if (!pipeline.shouldInstallCustomPipelines || !pipeline.dataStream) {
     return pipeline;
   }
 
-  const customPipelineProcessor = {
-    pipeline: {
-      name: pipeline.customIngestPipelineNameForInstallation,
-      ignore_missing_pipeline: true,
+  const localRoutingRules =
+    pipeline.dataStream?.routing_rules?.find(
+      (rule) => rule.source_dataset === pipeline.dataStream?.dataset
+    )?.rules ?? [];
+
+  const customPipelineProcessors = [
+    {
+      pipeline: {
+        name: 'global@custom',
+        ignore_missing_pipeline: true,
+        description: '[Fleet] Global pipeline for all data streams',
+      },
     },
-  };
+    {
+      pipeline: {
+        name: `${pipeline.dataStream.type}@custom`,
+        ignore_missing_pipeline: true,
+        description: `[Fleet] Pipeline for all data streams of type \`${pipeline.dataStream.type}\``,
+      },
+    },
+    ...(pipeline.dataStream.package
+      ? [
+          {
+            pipeline: {
+              // This pipeline name gets the `.integration` suffix to avoid conflicts with the pipeline name for the dataset below
+              name: `${pipeline.dataStream.type}-${pipeline.dataStream.package}.integration@custom`,
+              ignore_missing_pipeline: true,
+              description: `[Fleet] Pipeline for all data streams of type \`${pipeline.dataStream.type}\` defined by the \`${pipeline.dataStream.package}\` integration`,
+            },
+          },
+        ]
+      : []),
+    {
+      pipeline: {
+        name: `${pipeline.dataStream.type}-${pipeline.dataStream.dataset}@custom`,
+        ignore_missing_pipeline: true,
+        description: `[Fleet] Pipeline for the \`${pipeline.dataStream.dataset}\` dataset`,
+      },
+    },
+  ];
+
+  const rerouteProcessors = localRoutingRules.map((routingRule) => ({
+    reroute: {
+      tag: pipeline.dataStream?.dataset,
+      dataset: routingRule.target_dataset,
+      namespace: routingRule.namespace,
+      if: routingRule.if,
+    },
+  }));
 
   if (pipeline.extension === 'yml') {
-    const parsedPipelineContent = safeLoad(pipeline.contentForInstallation);
-    mutatePipelineContentWithNewProcessor(parsedPipelineContent, customPipelineProcessor);
+    const parsedPipelineContent = load(pipeline.contentForInstallation);
+    customPipelineProcessors.forEach((processor) =>
+      mutatePipelineContentWithNewProcessor(parsedPipelineContent, processor)
+    );
+    rerouteProcessors.forEach((processor) =>
+      mutatePipelineContentWithNewProcessor(parsedPipelineContent, processor)
+    );
     return {
       ...pipeline,
-      contentForInstallation: `---\n${safeDump(parsedPipelineContent)}`,
+      contentForInstallation: `---\n${dump(parsedPipelineContent)}`,
     };
   }
 
   const parsedPipelineContent = JSON.parse(pipeline.contentForInstallation);
-  mutatePipelineContentWithNewProcessor(parsedPipelineContent, customPipelineProcessor);
+  customPipelineProcessors.forEach((processor) =>
+    mutatePipelineContentWithNewProcessor(parsedPipelineContent, processor)
+  );
+  rerouteProcessors.forEach((processor) =>
+    mutatePipelineContentWithNewProcessor(parsedPipelineContent, processor)
+  );
 
   return {
     ...pipeline,

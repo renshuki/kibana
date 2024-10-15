@@ -1,19 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import cuid from 'cuid';
-import * as cborx from 'cbor-x';
+import { createId } from '@paralleldrive/cuid2';
+import { encode, decode } from '@kbn/cbor';
 import { errors as esErrors } from '@elastic/elasticsearch';
 import type { ElasticsearchClient, Logger } from '@kbn/core/server';
 import { ByteSizeValue } from '@kbn/config-schema';
 import { defaults } from 'lodash';
 import { Duplex, Writable, Readable } from 'stream';
 
+import { GetResponse } from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+import { inspect } from 'util';
+import { wrapErrorAndReThrow } from '../../../../file_client/utils';
 import type { FileChunkDocument } from '../mappings';
 
 type Callback = (error?: Error) => void;
@@ -61,7 +65,8 @@ export class ContentStream extends Duplex {
     private id: undefined | string,
     private readonly index: string,
     private readonly logger: Logger,
-    parameters: ContentStreamParameters = {}
+    parameters: ContentStreamParameters = {},
+    private readonly indexIsAlias: boolean = false
   ) {
     super();
     this.parameters = defaults(parameters, {
@@ -84,19 +89,48 @@ export class ContentStream extends Duplex {
     return this.maxChunkSize;
   }
 
+  private async getChunkRealIndex(id: string): Promise<string> {
+    const chunkDocMeta = await this.client.search({
+      index: this.index,
+      body: {
+        size: 1,
+        query: {
+          term: {
+            _id: id,
+          },
+        },
+        _source: false, // suppress the document content
+      },
+    });
+
+    const docIndex = chunkDocMeta.hits.hits?.[0]?._index;
+
+    if (!docIndex) {
+      const err = new Error(
+        `Unable to determine index for file chunk id [${id}] in index (alias) [${this.index}]`
+      );
+
+      this.logger.error(err);
+      throw err;
+    }
+
+    return docIndex;
+  }
+
   private async readChunk(): Promise<[data: null | Buffer, last?: boolean]> {
     if (!this.id) {
       throw new Error('No document ID provided. Cannot read chunk.');
     }
     const id = this.getChunkId(this.chunksRead);
+    const chunkIndex = this.indexIsAlias ? await this.getChunkRealIndex(id) : this.index;
 
-    this.logger.debug(`Reading chunk #${this.chunksRead}.`);
+    this.logger.debug(`Reading chunk #${this.chunksRead} from index [${chunkIndex}]`);
 
     try {
       const stream = await this.client.get(
         {
           id,
-          index: this.index,
+          index: chunkIndex,
           _source_includes: ['data', 'last'],
         },
         {
@@ -110,9 +144,21 @@ export class ContentStream extends Duplex {
         chunks.push(chunk);
       }
       const buffer = Buffer.concat(chunks);
-      const source: undefined | FileChunkDocument = buffer.byteLength
-        ? cborx.decode(Buffer.concat(chunks))?._source
+      const decodedChunkDoc: GetResponse<FileChunkDocument> | undefined = buffer.byteLength
+        ? (decode(buffer) as GetResponse<FileChunkDocument>)
         : undefined;
+
+      // Because `asStream` was used in retrieving the document, errors are also not be processed
+      // and thus are returned "as is", so we check to see if an ES error occurred while attempting
+      // to retrieve the chunk.
+      if (decodedChunkDoc && ('error' in decodedChunkDoc || !decodedChunkDoc.found)) {
+        const err = new Error(`Failed to retrieve chunk id [${id}] from index [${chunkIndex}]`);
+        this.logger.error(err);
+        this.logger.error(inspect(decodedChunkDoc, { depth: 5 }));
+        throw err;
+      }
+
+      const source: undefined | FileChunkDocument = decodedChunkDoc?._source;
 
       const dataBuffer = source?.data as unknown as Buffer;
       return [dataBuffer?.byteLength ? dataBuffer : null, source?.last];
@@ -180,7 +226,7 @@ export class ContentStream extends Duplex {
 
   private getId(): string {
     if (!this.id) {
-      this.id = cuid();
+      this.id = createId();
     }
     return this.id;
   }
@@ -194,27 +240,29 @@ export class ContentStream extends Duplex {
   }
 
   private async indexChunk({ bid, data, id, index }: IndexRequestParams, last?: true) {
-    await this.client.index(
-      {
-        id,
-        index,
-        document: cborx.encode(
-          last
-            ? {
-                data,
-                bid,
-                last,
-              }
-            : { data, bid }
-        ),
-      },
-      {
-        headers: {
-          'content-type': 'application/cbor',
-          accept: 'application/json',
+    await this.client
+      .index(
+        {
+          id,
+          index,
+          op_type: 'create',
+          document: encode({
+            data,
+            bid,
+            // Mark it as last?
+            ...(last ? { last } : {}),
+            // Add `@timestamp` for Index Alias/DS?
+            ...(this.indexIsAlias ? { '@timestamp': new Date().toISOString() } : {}),
+          }),
         },
-      }
-    );
+        {
+          headers: {
+            'content-type': 'application/cbor',
+            accept: 'application/json',
+          },
+        }
+      )
+      .catch(wrapErrorAndReThrow.withMessagePrefix('ContentStream.indexChunk(): '));
   }
 
   /**
@@ -224,6 +272,7 @@ export class ContentStream extends Duplex {
    * of holding, at most, 2 full chunks in memory.
    */
   private indexRequestBuffer: undefined | IndexRequestParams;
+
   private async writeChunk(data: Buffer) {
     const chunkId = this.getChunkId(this.chunksWritten);
 
@@ -361,10 +410,19 @@ export interface ContentStreamArgs {
    */
   logger: Logger;
   parameters?: ContentStreamParameters;
+  /** indicates the index provided is an alias (changes how the content is retrieved internally) */
+  indexIsAlias?: boolean;
 }
 
-function getContentStream({ client, id, index, logger, parameters }: ContentStreamArgs) {
-  return new ContentStream(client, id, index, logger, parameters);
+function getContentStream({
+  client,
+  id,
+  index,
+  logger,
+  parameters,
+  indexIsAlias = false,
+}: ContentStreamArgs) {
+  return new ContentStream(client, id, index, logger, parameters, indexIsAlias);
 }
 
 export type WritableContentStream = Writable &

@@ -1,31 +1,31 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { parse } from 'query-string';
 import type { IScopedClusterClient } from '@kbn/core-elasticsearch-server';
 import type { RouteDependencies } from '../../..';
-interface SettingsToRetrieve {
-  indices: boolean;
-  fields: boolean;
-  templates: boolean;
-  dataStreams: boolean;
-}
+import { autoCompleteEntitiesValidationConfig, type SettingsToRetrieve } from './validation_config';
 
 const MAX_RESPONSE_SIZE = 10 * 1024 * 1024; // 10MB
 // Limit the response size to 10MB, because the response can be very large and sending it to the client
 // can cause the browser to hang.
 
 const getMappings = async (settings: SettingsToRetrieve, esClient: IScopedClusterClient) => {
-  if (settings.fields) {
-    const mappings = await esClient.asInternalUser.indices.getMapping(undefined, {
-      maxResponseSize: MAX_RESPONSE_SIZE,
-      maxCompressedResponseSize: MAX_RESPONSE_SIZE,
-    });
+  if (settings.fields && settings.fieldsIndices) {
+    const mappings = await esClient.asCurrentUser.indices.getMapping(
+      {
+        index: settings.fieldsIndices,
+      },
+      {
+        maxResponseSize: MAX_RESPONSE_SIZE,
+        maxCompressedResponseSize: MAX_RESPONSE_SIZE,
+      }
+    );
     return mappings;
   }
   // If the user doesn't want autocomplete suggestions, then clear any that exist.
@@ -34,7 +34,7 @@ const getMappings = async (settings: SettingsToRetrieve, esClient: IScopedCluste
 
 const getAliases = async (settings: SettingsToRetrieve, esClient: IScopedClusterClient) => {
   if (settings.indices) {
-    const aliases = await esClient.asInternalUser.indices.getAlias();
+    const aliases = await esClient.asCurrentUser.indices.getAlias();
     return aliases;
   }
   // If the user doesn't want autocomplete suggestions, then clear any that exist.
@@ -43,7 +43,7 @@ const getAliases = async (settings: SettingsToRetrieve, esClient: IScopedCluster
 
 const getDataStreams = async (settings: SettingsToRetrieve, esClient: IScopedClusterClient) => {
   if (settings.dataStreams) {
-    const dataStreams = await esClient.asInternalUser.indices.getDataStream();
+    const dataStreams = await esClient.asCurrentUser.indices.getDataStream();
     return dataStreams;
   }
   // If the user doesn't want autocomplete suggestions, then clear any that exist.
@@ -52,7 +52,7 @@ const getDataStreams = async (settings: SettingsToRetrieve, esClient: IScopedClu
 
 const getLegacyTemplates = async (settings: SettingsToRetrieve, esClient: IScopedClusterClient) => {
   if (settings.templates) {
-    const legacyTemplates = await esClient.asInternalUser.indices.getTemplate();
+    const legacyTemplates = await esClient.asCurrentUser.indices.getTemplate();
     return legacyTemplates;
   }
   // If the user doesn't want autocomplete suggestions, then clear any that exist.
@@ -61,7 +61,7 @@ const getLegacyTemplates = async (settings: SettingsToRetrieve, esClient: IScope
 
 const getIndexTemplates = async (settings: SettingsToRetrieve, esClient: IScopedClusterClient) => {
   if (settings.templates) {
-    const indexTemplates = await esClient.asInternalUser.indices.getIndexTemplate();
+    const indexTemplates = await esClient.asCurrentUser.indices.getIndexTemplate();
     return indexTemplates;
   }
   // If the user doesn't want autocomplete suggestions, then clear any that exist.
@@ -73,7 +73,7 @@ const getComponentTemplates = async (
   esClient: IScopedClusterClient
 ) => {
   if (settings.templates) {
-    const componentTemplates = await esClient.asInternalUser.cluster.getComponentTemplate();
+    const componentTemplates = await esClient.asCurrentUser.cluster.getComponentTemplate();
     return componentTemplates;
   }
   // If the user doesn't want autocomplete suggestions, then clear any that exist.
@@ -87,20 +87,11 @@ export const registerAutocompleteEntitiesRoute = (deps: RouteDependencies) => {
       options: {
         tags: ['access:console'],
       },
-      validate: false,
+      validate: autoCompleteEntitiesValidationConfig,
     },
     async (context, request, response) => {
       const esClient = (await context.core).elasticsearch.client;
-      const settings = parse(request.url.search, {
-        parseBooleans: true,
-      }) as unknown as SettingsToRetrieve;
-
-      // If no settings are specified, then return 400.
-      if (Object.keys(settings).length === 0) {
-        return response.badRequest({
-          body: 'Request must contain at least one of the following parameters: indices, fields, templates, dataStreams',
-        });
-      }
+      const settings = request.query;
 
       // Wait for all requests to complete, in case one of them fails return the successfull ones
       const results = await Promise.allSettled([

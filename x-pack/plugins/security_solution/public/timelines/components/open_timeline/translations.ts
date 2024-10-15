@@ -73,13 +73,6 @@ export const EXPORT_SELECTED = i18n.translate(
   }
 );
 
-export const FAVORITE_SELECTED = i18n.translate(
-  'xpack.securitySolution.open.timeline.favoriteSelectedButton',
-  {
-    defaultMessage: 'Favorite selected',
-  }
-);
-
 export const FAVORITES = i18n.translate('xpack.securitySolution.open.timeline.favoritesTooltip', {
   defaultMessage: 'Favorites',
 });
@@ -119,7 +112,14 @@ export const ONLY_FAVORITES = i18n.translate(
 export const CREATE_RULE_FROM_TIMELINE = i18n.translate(
   'xpack.securitySolution.open.timeline.createRuleFromTimelineTooltip',
   {
-    defaultMessage: 'Create rule from timeline',
+    defaultMessage: 'Create query rule from timeline',
+  }
+);
+
+export const CREATE_RULE_FROM_TIMELINE_CORRELATION = i18n.translate(
+  'xpack.securitySolution.open.timeline.createRuleFromTimelineEqlTooltip',
+  {
+    defaultMessage: 'Create EQL rule from timeline',
   }
 );
 
@@ -148,13 +148,6 @@ export const OPEN_AS_DUPLICATE_TEMPLATE = i18n.translate(
   'xpack.securitySolution.open.timeline.openAsDuplicateTemplateTooltip',
   {
     defaultMessage: 'Duplicate template',
-  }
-);
-
-export const OPEN_TIMELINE = i18n.translate(
-  'xpack.securitySolution.open.timeline.openTimelineButton',
-  {
-    defaultMessage: 'Open Timeline…',
   }
 );
 

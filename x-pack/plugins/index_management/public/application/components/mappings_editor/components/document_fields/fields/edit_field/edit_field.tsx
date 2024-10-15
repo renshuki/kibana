@@ -18,9 +18,14 @@ import {
   EuiFlexItem,
   EuiSpacer,
   EuiCallOut,
+  EuiText,
+  EuiToolTip,
+  EuiIcon,
+  EuiTextColor,
 } from '@elastic/eui';
 import SemVer from 'semver/classes/semver';
 
+import { useFormIsModified } from '@kbn/es-ui-shared-plugin/static/forms/hook_form_lib';
 import { documentationService } from '../../../../../../services/documentation';
 import { Form, FormHook, FormDataProvider } from '../../../../shared_imports';
 import { TYPE_DEFINITION } from '../../../../constants';
@@ -47,10 +52,10 @@ export interface Props {
   kibanaVersion: SemVer;
 }
 
-// The default FormWrapper is the <EuiForm />, which wrapps the form with
+// The default FormWrapper is the <EuiForm />, which wraps the form with
 // a <div>. We can't have a div as first child of the Flyout as it breaks
-// the height calculaction and does not render the footer position correctly.
-const FormWrapper: React.FC = ({ children }) => <>{children}</>;
+// the height calculation and does not render the footer position correctly.
+const FormWrapper: React.FC<{ children?: React.ReactNode }> = ({ children }) => <>{children}</>;
 
 export const EditField = React.memo(
   ({ form, field, allFields, exitEdit, updateField, kibanaVersion }: Props) => {
@@ -64,6 +69,8 @@ export const EditField = React.memo(
 
     const { isMultiField } = field;
 
+    const isFormModified = useFormIsModified({ form });
+
     return (
       <Form form={form} FormWrapper={FormWrapper}>
         <EuiFlyoutHeader>
@@ -76,13 +83,13 @@ export const EditField = React.memo(
                   <h2 data-test-subj="flyoutTitle">
                     {isMultiField
                       ? i18n.translate('xpack.idxMgmt.mappingsEditor.editMultiFieldTitle', {
-                          defaultMessage: "Edit multi-field '{fieldName}'",
+                          defaultMessage: "Edit multi-field ''{fieldName}''",
                           values: {
                             fieldName: limitStringLength(field.source.name),
                           },
                         })
                       : i18n.translate('xpack.idxMgmt.mappingsEditor.editFieldTitle', {
-                          defaultMessage: "Edit field '{fieldName}'",
+                          defaultMessage: "Edit field ''{fieldName}''",
                           values: {
                             fieldName: limitStringLength(field.source.name),
                           },
@@ -103,8 +110,8 @@ export const EditField = React.memo(
                   return null;
                 }
 
-                const typeDefinition = TYPE_DEFINITION[type[0].value as MainType];
-                const subTypeDefinition = TYPE_DEFINITION[subType?.[0].value as SubType];
+                const typeDefinition = TYPE_DEFINITION[type?.[0]?.value as MainType];
+                const subTypeDefinition = TYPE_DEFINITION[subType?.[0]?.value as SubType];
 
                 return (
                   <EuiFlexItem grow={false}>
@@ -146,7 +153,10 @@ export const EditField = React.memo(
 
           <FormDataProvider pathsToWatch={['type', 'subType']}>
             {({ type, subType }) => {
-              const ParametersForm = getParametersFormForType(type?.[0].value, subType?.[0].value);
+              const ParametersForm = getParametersFormForType(
+                type?.[0]?.value,
+                subType?.[0]?.value
+              );
 
               if (!ParametersForm) {
                 return null;
@@ -186,7 +196,39 @@ export const EditField = React.memo(
             </>
           )}
 
-          <EuiFlexGroup justifyContent="flexEnd">
+          <EuiFlexGroup justifyContent="flexEnd" alignItems="center">
+            {isFormModified && (
+              <>
+                <EuiFlexItem>
+                  <EuiText size="s">
+                    <p>
+                      <EuiToolTip
+                        content={i18n.translate(
+                          'xpack.idxMgmt.mappingsEditor.editFieldFlyout.formCompletionTooltip',
+                          {
+                            defaultMessage:
+                              "Default settings are applied to the settings that you haven't changed.",
+                          }
+                        )}
+                        position="top"
+                      >
+                        <span>
+                          <EuiTextColor color="subdued">
+                            {i18n.translate(
+                              'xpack.idxMgmt.mappingsEditor.editFieldFlyout.formCompletionGuide',
+                              {
+                                defaultMessage: 'Review all settings before updating ',
+                              }
+                            )}
+                          </EuiTextColor>
+                          <EuiIcon type="questionInCircle" />
+                        </span>
+                      </EuiToolTip>
+                    </p>
+                  </EuiText>
+                </EuiFlexItem>
+              </>
+            )}
             <EuiFlexItem grow={false}>
               <EuiButtonEmpty onClick={exitEdit}>
                 {i18n.translate('xpack.idxMgmt.mappingsEditor.editFieldCancelButtonLabel', {
@@ -199,7 +241,7 @@ export const EditField = React.memo(
                 fill
                 onClick={submitForm}
                 type="submit"
-                disabled={form.isSubmitted && !form.isValid}
+                disabled={(form.isSubmitted && !form.isValid) || !isFormModified}
                 data-test-subj="editFieldUpdateButton"
               >
                 {i18n.translate('xpack.idxMgmt.mappingsEditor.editFieldUpdateButtonLabel', {

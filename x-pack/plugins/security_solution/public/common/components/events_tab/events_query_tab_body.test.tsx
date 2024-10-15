@@ -7,7 +7,7 @@
 
 import { render } from '@testing-library/react';
 import React from 'react';
-import { TableId } from '../../../../common/types';
+import { TableId, dataTableActions } from '@kbn/securitysolution-data-table';
 import { HostsType } from '../../../explore/hosts/store/model';
 import { TestProviders } from '../../mock';
 import type { EventsQueryTabBodyComponentProps } from './events_query_tab_body';
@@ -15,7 +15,7 @@ import { EventsQueryTabBody, ALERTS_EVENTS_HISTOGRAM_ID } from './events_query_t
 import { useGlobalFullScreen } from '../../containers/use_full_screen';
 import { licenseService } from '../../hooks/use_license';
 import { mockHistory } from '../../mock/router';
-import { dataTableActions } from '../../store/data_table';
+import { DEFAULT_EVENTS_STACK_BY_VALUE } from './histogram_configurations';
 
 const mockGetDefaultControlColumn = jest.fn();
 jest.mock('../../../timelines/components/timeline/body/control_columns', () => ({
@@ -46,6 +46,9 @@ jest.mock('../../lib/kibana', () => {
     }),
   };
 });
+
+jest.mock('../visualization_actions/actions');
+jest.mock('../visualization_actions/lens_embeddable');
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -142,7 +145,7 @@ describe('EventsQueryTabBody', () => {
     );
 
     expect(result.getByTestId('header-section-supplements').querySelector('select')?.value).toEqual(
-      'event.action'
+      DEFAULT_EVENTS_STACK_BY_VALUE
     );
   });
 

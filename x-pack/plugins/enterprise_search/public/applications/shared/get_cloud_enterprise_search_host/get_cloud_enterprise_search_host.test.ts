@@ -5,32 +5,64 @@
  * 2.0.
  */
 
+import { CloudSetup } from '@kbn/cloud-plugin/public';
+
 import { getCloudEnterpriseSearchHost } from './get_cloud_enterprise_search_host';
 
 const defaultPortCloud = {
   cloudId:
     'gcp-cluster:dXMtY2VudHJhbDEuZ2NwLmNsb3VkLmVzLmlvJDhhMDI4M2FmMDQxZjE5NWY3NzI5YmMwNGM2NmEwZmNlJDBjZDVjZDU2OGVlYmU1M2M4OWViN2NhZTViYWM4YjM3',
+  deploymentId: 'gcp-cluster',
   isCloudEnabled: true,
+  cloudHost: 'us-central1.gcp.cloud.es.io',
+  cloudDefaultPort: '443',
   registerCloudService: jest.fn(),
-};
+  onboarding: {},
+  isServerlessEnabled: false,
+  serverless: {
+    projectId: undefined,
+  },
+  fetchElasticsearchConfig: jest.fn(),
+} as CloudSetup;
 // 9243
 const customPortCloud = {
   cloudId:
     'custom-port:dXMtY2VudHJhbDEuZ2NwLmNsb3VkLmVzLmlvOjkyNDMkYWMzMWViYjkwMjQxNzczMTU3MDQzYzM0ZmQyNmZkNDYkYTRjMDYyMzBlNDhjOGZjZTdiZTg4YTA3NGEzYmIzZTA=',
+  deploymentId: 'custom-port',
   isCloudEnabled: true,
+  cloudHost: 'us-central1.gcp.cloud.es.io',
+  cloudDefaultPort: '9243',
   registerCloudService: jest.fn(),
-};
+  onboarding: {},
+  isServerlessEnabled: false,
+  serverless: {
+    projectId: undefined,
+  },
+  fetchElasticsearchConfig: jest.fn(),
+} as CloudSetup;
 const missingDeploymentIdCloud = {
   cloudId:
     'dXMtY2VudHJhbDEuZ2NwLmNsb3VkLmVzLmlvOjkyNDMkYWMzMWViYjkwMjQxNzczMTU3MDQzYzM0ZmQyNmZkNDYkYTRjMDYyMzBlNDhjOGZjZTdiZTg4YTA3NGEzYmIzZTA=',
   isCloudEnabled: true,
   registerCloudService: jest.fn(),
-};
+  onboarding: {},
+  isServerlessEnabled: false,
+  serverless: {
+    projectId: undefined,
+  },
+  fetchElasticsearchConfig: jest.fn(),
+} as CloudSetup;
 const noCloud = {
   cloudId: undefined,
   isCloudEnabled: false,
   registerCloudService: jest.fn(),
-};
+  onboarding: {},
+  isServerlessEnabled: false,
+  serverless: {
+    projectId: undefined,
+  },
+  fetchElasticsearchConfig: jest.fn(),
+} as CloudSetup;
 
 describe('getCloudEnterpriseSearchHost', () => {
   it('uses the default port', () => {

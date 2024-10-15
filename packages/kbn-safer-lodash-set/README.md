@@ -7,7 +7,7 @@ Lodash v4.x.
 ## Example Usage
 
 ```js
-const { set } = require('@elastic/safer-loadsh-set');
+const { set } = require('@kbn/safer-lodash-set');
 
 const object = { a: [{ b: { c: 3 } }] };
 
@@ -78,7 +78,7 @@ set(child, 'foo', 3);
 // object and the `parent` object has not been modified:
 console.log(child.foo); // 3
 console.log(parent.foo); // 1
-console.log(Object.prototype.hasOwnProperty.call(child, 'foo')); // true
+console.log(Object.hasOwn(child, 'foo')); // true
 ```
 
 ### The `path` must not access function prototypes

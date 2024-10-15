@@ -6,7 +6,7 @@
  */
 
 import React, { memo, useCallback, useState, useEffect } from 'react';
-import { EuiFieldSearch, EuiFormControlLayout } from '@elastic/eui';
+import { EuiFieldSearch } from '@elastic/eui';
 import { useTestIdGenerator } from '../../../hooks/use_test_id_generator';
 import { FILTER_NAMES } from '../translations';
 import { useActionHistoryUrlParams } from './use_action_history_url_params';
@@ -15,41 +15,48 @@ export const ActionsLogUsersFilter = memo(
   ({
     isFlyout,
     onChangeUsersFilter,
+    'data-test-subj': dataTestSubj,
   }: {
     isFlyout: boolean;
     onChangeUsersFilter: (selectedUserIds: string[]) => void;
+    'data-test-subj'?: string;
   }) => {
-    const getTestId = useTestIdGenerator('response-actions-list');
+    const getTestId = useTestIdGenerator(dataTestSubj);
     const { users: usersFromUrlParams, setUrlUsersFilters } = useActionHistoryUrlParams();
     const [searchValue, setSearchValue] = useState('');
 
     const onChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { value } = e.target;
         setSearchValue(e.target.value);
+
+        if (!value) {
+          onChangeUsersFilter([]);
+          if (!isFlyout) {
+            setUrlUsersFilters('');
+          }
+        }
       },
-      [setSearchValue]
+      [setSearchValue, isFlyout, setUrlUsersFilters, onChangeUsersFilter]
     );
 
-    const onSearch = useCallback(() => {
-      const userIds = searchValue.split(',').reduce<string[]>((acc, curr) => {
-        if (curr.trim() !== '') {
-          acc.push(curr.trim());
-        }
-        return acc;
-      }, []);
-      onChangeUsersFilter(userIds);
-      if (!isFlyout) {
-        setUrlUsersFilters(userIds.join(','));
-      }
-    }, [isFlyout, onChangeUsersFilter, searchValue, setUrlUsersFilters]);
+    const onSearch = useCallback(
+      (onSearchValue: string) => {
+        if (!onSearchValue) return;
 
-    const onClear = useCallback(() => {
-      setSearchValue('');
-      onChangeUsersFilter([]);
-      if (!isFlyout) {
-        setUrlUsersFilters('');
-      }
-    }, [isFlyout, onChangeUsersFilter, setUrlUsersFilters, setSearchValue]);
+        const userIds = searchValue.split(',').reduce<string[]>((acc, curr) => {
+          if (curr.trim() !== '') {
+            acc.push(curr.trim());
+          }
+          return acc;
+        }, []);
+        onChangeUsersFilter(userIds);
+        if (!isFlyout) {
+          setUrlUsersFilters(userIds.join(','));
+        }
+      },
+      [isFlyout, onChangeUsersFilter, searchValue, setUrlUsersFilters]
+    );
 
     // on load with users in urlParams, set the search value
     useEffect(() => {
@@ -61,17 +68,15 @@ export const ActionsLogUsersFilter = memo(
     }, []);
 
     return (
-      <EuiFormControlLayout clear={{ onClick: onClear }} fullWidth>
-        <EuiFieldSearch
-          data-test-subj={getTestId('users-filter-search')}
-          isClearable
-          fullWidth
-          placeholder={FILTER_NAMES.users}
-          onChange={onChange}
-          onSearch={onSearch}
-          value={searchValue}
-        />
-      </EuiFormControlLayout>
+      <EuiFieldSearch
+        data-test-subj={getTestId('users-filter-search')}
+        isClearable
+        fullWidth
+        placeholder={FILTER_NAMES.users}
+        onChange={onChange}
+        onSearch={onSearch}
+        value={searchValue}
+      />
     );
   }
 );

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Readable } from 'stream';
@@ -49,6 +50,15 @@ export interface ImportSavedObjectsOptions {
   namespace?: string;
   /** If true, will create new copies of import objects, each with a random `id` and undefined `originId`. */
   createNewCopies: boolean;
+  /**
+   * If true, Kibana will apply various adjustments to the data that's being imported to maintain compatibility between
+   * different Kibana versions (e.g. generate legacy URL aliases for all imported objects that have to change IDs).
+   */
+  compatibilityMode?: boolean;
+  /**
+   * If provided, Kibana will apply the given option to the `managed` property.
+   */
+  managed?: boolean;
 }
 
 /**
@@ -67,6 +77,8 @@ export async function importSavedObjectsFromStream({
   importHooks,
   namespace,
   refresh,
+  compatibilityMode,
+  managed,
 }: ImportSavedObjectsOptions): Promise<SavedObjectsImportResponse> {
   let errorAccumulator: SavedObjectsImportFailure[] = [];
   const supportedTypes = typeRegistry.getImportableAndExportableTypes().map((type) => type.name);
@@ -76,6 +88,7 @@ export async function importSavedObjectsFromStream({
     readStream,
     objectLimit,
     supportedTypes,
+    managed,
   });
   errorAccumulator = [...errorAccumulator, ...collectSavedObjectsResult.errors];
   // Map of all IDs for objects that we are attempting to import, and any references that are not included in the read stream;
@@ -147,12 +160,14 @@ export async function importSavedObjectsFromStream({
     overwrite,
     namespace,
     refresh,
+    compatibilityMode,
+    managed,
   };
   const createSavedObjectsResult = await createSavedObjects(createSavedObjectsParams);
   errorAccumulator = [...errorAccumulator, ...createSavedObjectsResult.errors];
 
   const successResults = createSavedObjectsResult.createdObjects.map((createdObject) => {
-    const { type, id, destinationId, originId } = createdObject;
+    const { type, id, destinationId, originId, managed: createdObjectManaged } = createdObject;
     const getTitle = typeRegistry.getType(type)?.management?.getTitle;
     const meta = {
       title: getTitle ? getTitle(createdObject) : createdObject.attributes.title,
@@ -163,6 +178,7 @@ export async function importSavedObjectsFromStream({
       type,
       id,
       meta,
+      managed: createdObjectManaged ?? managed,
       ...(attemptedOverwrite && { overwrite: true }),
       ...(destinationId && { destinationId }),
       ...(destinationId && !originId && !createNewCopies && { createNewCopy: true }),

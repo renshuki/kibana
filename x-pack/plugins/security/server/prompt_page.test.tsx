@@ -25,10 +25,11 @@ describe('PromptPage', () => {
 
     const body = renderToStaticMarkup(
       <PromptPage
-        buildNumber={100500}
+        staticAssets={mockCoreSetup.http.staticAssets}
         basePath={mockCoreSetup.http.basePath}
         title="Some Title"
         body={<div>Some Body</div>}
+        customBranding={{}}
         actions={[<span>Action#1</span>, <span>Action#2</span>]}
       />
     );
@@ -44,11 +45,12 @@ describe('PromptPage', () => {
 
     const body = renderToStaticMarkup(
       <PromptPage
-        buildNumber={100500}
+        staticAssets={mockCoreSetup.http.staticAssets}
         basePath={mockCoreSetup.http.basePath}
         scriptPaths={['/some/script1.js', '/some/script2.js']}
         title="Some Title"
         body={<div>Some Body</div>}
+        customBranding={{}}
         actions={[<span>Action#1</span>, <span>Action#2</span>]}
       />
     );

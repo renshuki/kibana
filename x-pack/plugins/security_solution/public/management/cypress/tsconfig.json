@@ -1,7 +1,7 @@
 {
   "extends": "../../../../../../tsconfig.base.json",
   "include": [
-    "**/*"
+    "**/*",
   ],
   "exclude": [
     "target/**/*"
@@ -11,7 +11,6 @@
     "types": [
       "cypress",
       "node",
-      "cypress-react-selector"
     ],
   },
   "kbn_references": [
@@ -24,6 +23,16 @@
     },
     "@kbn/security-plugin",
     "@kbn/securitysolution-list-constants",
-    "@kbn/fleet-plugin"
+    "@kbn/fleet-plugin",
+    "@kbn/securitysolution-io-ts-list-types",
+    "@kbn/cypress-config",
+    "@kbn/test-subj-selector",
+    "@kbn/cases-plugin",
+    "@kbn/test",
+    "@kbn/repo-info",
+    "@kbn/tooling-log",
+    "@kbn/security-solution-serverless",
+    "@kbn/dev-utils",
+    "@kbn/spaces-plugin",
   ]
 }

@@ -5,57 +5,75 @@
  * 2.0.
  */
 
-import type { ElasticsearchClient } from '@kbn/core/server';
+import type { SavedObjectsClientContract } from '@kbn/core/server';
+import _ from 'lodash';
 
-import { AGENT_POLICY_INDEX } from '../../common';
-import { ES_SEARCH_LIMIT } from '../../common/constants';
-import { appContextService } from '../services';
+import { OUTPUT_SAVED_OBJECT_TYPE, SO_SEARCH_LIMIT } from '../../common';
+import type { OutputSOAttributes, AgentPolicy } from '../types';
+import { getAgentPolicySavedObjectType } from '../services/agent_policy';
 
 export interface AgentPoliciesUsage {
   count: number;
   output_types: string[];
+  count_with_global_data_tags: number;
+  avg_number_global_data_tags_per_policy?: number;
 }
 
-const DEFAULT_AGENT_POLICIES_USAGE = {
-  count: 0,
-  output_types: [],
-};
-
 export const getAgentPoliciesUsage = async (
-  esClient: ElasticsearchClient,
-  abortController: AbortController
+  soClient: SavedObjectsClientContract
 ): Promise<AgentPoliciesUsage> => {
-  try {
-    const res = await esClient.search(
-      {
-        index: AGENT_POLICY_INDEX,
-        size: ES_SEARCH_LIMIT,
-        track_total_hits: true,
-        rest_total_hits_as_int: true,
-      },
-      { signal: abortController.signal }
-    );
+  const { saved_objects: outputs } = await soClient.find<OutputSOAttributes>({
+    type: OUTPUT_SAVED_OBJECT_TYPE,
+    page: 1,
+    perPage: SO_SEARCH_LIMIT,
+  });
 
-    const agentPolicies = res.hits.hits;
+  const defaultOutputId = outputs.find((output) => output.attributes.is_default)?.id || '';
 
-    const outputTypes = new Set<string>();
-    agentPolicies.forEach((item) => {
-      const source = (item._source as any) ?? {};
-      Object.keys(source.data.outputs).forEach((output) => {
-        outputTypes.add(source.data.outputs[output].type);
-      });
+  const outputsById = _.keyBy(outputs, 'id');
+
+  const agentPolicySavedObjectType = await getAgentPolicySavedObjectType();
+  const { saved_objects: agentPolicies, total: totalAgentPolicies } =
+    await soClient.find<AgentPolicy>({
+      type: agentPolicySavedObjectType,
+      page: 1,
+      perPage: SO_SEARCH_LIMIT,
     });
 
-    return {
-      count: res.hits.total as number,
-      output_types: Array.from(outputTypes),
-    };
-  } catch (error) {
-    if (error.statusCode === 404) {
-      appContextService.getLogger().debug('Index .fleet-policies does not exist yet.');
-    } else {
-      throw error;
-    }
-    return DEFAULT_AGENT_POLICIES_USAGE;
-  }
+  const uniqueOutputIds = new Set<string>();
+  agentPolicies.forEach((agentPolicy) => {
+    uniqueOutputIds.add(agentPolicy.attributes.monitoring_output_id || defaultOutputId);
+    uniqueOutputIds.add(agentPolicy.attributes.data_output_id || defaultOutputId);
+  });
+
+  const uniqueOutputTypes = new Set(
+    Array.from(uniqueOutputIds)
+      .map((outputId) => {
+        return outputsById[outputId]?.attributes.type;
+      })
+      .filter((outputType) => outputType)
+  );
+
+  const [policiesWithGlobalDataTag, totalNumberOfGlobalDataTagFields] = agentPolicies.reduce(
+    ([policiesNumber, fieldsNumber], agentPolicy) => {
+      if (agentPolicy.attributes.global_data_tags?.length ?? 0 > 0) {
+        return [
+          policiesNumber + 1,
+          fieldsNumber + (agentPolicy.attributes.global_data_tags?.length ?? 0),
+        ];
+      }
+      return [policiesNumber, fieldsNumber];
+    },
+    [0, 0]
+  );
+
+  return {
+    count: totalAgentPolicies,
+    output_types: Array.from(uniqueOutputTypes),
+    count_with_global_data_tags: policiesWithGlobalDataTag,
+    avg_number_global_data_tags_per_policy:
+      policiesWithGlobalDataTag > 0
+        ? Math.round(totalNumberOfGlobalDataTagFields / policiesWithGlobalDataTag)
+        : undefined,
+  };
 };

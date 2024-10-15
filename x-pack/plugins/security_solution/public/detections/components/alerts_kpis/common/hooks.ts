@@ -5,13 +5,19 @@
  * 2.0.
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import type { EuiComboBoxOptionOption } from '@elastic/eui';
-import type { BrowserField } from '@kbn/timelines-plugin/common';
+import type { IFieldSubTypeNested } from '@kbn/es-query';
+import type { FieldSpec } from '@kbn/data-plugin/common';
+
+import { i18n } from '@kbn/i18n';
+import { useAppToasts } from '../../../../common/hooks/use_app_toasts';
 import type { GlobalTimeArgs } from '../../../../common/containers/use_global_time';
-import { getScopeFromPath, useSourcererDataView } from '../../../../common/containers/sourcerer';
+import { useSourcererDataView } from '../../../../sourcerer/containers';
+import { getScopeFromPath } from '../../../../sourcerer/containers/sourcerer_paths';
 import { getAllFieldsByName } from '../../../../common/containers/source';
+import { isLensSupportedType } from '../../../../common/utils/lens';
 
 export interface UseInspectButtonParams extends Pick<GlobalTimeArgs, 'setQuery' | 'deleteQuery'> {
   response: string;
@@ -19,6 +25,7 @@ export interface UseInspectButtonParams extends Pick<GlobalTimeArgs, 'setQuery' 
   refetch: (() => void) | null;
   uniqueQueryId: string;
   loading: boolean;
+  searchSessionId?: string;
 }
 
 /**
@@ -33,6 +40,7 @@ export const useInspectButton = ({
   uniqueQueryId,
   deleteQuery,
   loading,
+  searchSessionId,
 }: UseInspectButtonParams) => {
   useEffect(() => {
     if (refetch != null && setQuery != null) {
@@ -44,6 +52,7 @@ export const useInspectButton = ({
         },
         loading,
         refetch,
+        searchSessionId,
       });
     }
 
@@ -52,31 +61,59 @@ export const useInspectButton = ({
         deleteQuery({ id: uniqueQueryId });
       }
     };
-  }, [setQuery, loading, response, request, refetch, uniqueQueryId, deleteQuery]);
+  }, [setQuery, loading, response, request, refetch, uniqueQueryId, deleteQuery, searchSessionId]);
 };
 
-export function getAggregatableFields(fields: {
-  [fieldName: string]: Partial<BrowserField>;
-}): EuiComboBoxOptionOption[] {
+export function isDataViewFieldSubtypeNested(field: Partial<FieldSpec>) {
+  const subTypeNested = field?.subType as IFieldSubTypeNested;
+  return !!subTypeNested?.nested?.path;
+}
+
+export interface GetAggregatableFields {
+  [fieldName: string]: Partial<FieldSpec>;
+}
+
+export function getAggregatableFields(
+  fields: GetAggregatableFields,
+  useLensCompatibleFields?: boolean
+): Array<EuiComboBoxOptionOption<string>> {
   const result = [];
   for (const [key, field] of Object.entries(fields)) {
-    if (field.aggregatable === true) {
-      result.push({ label: key, value: key });
+    if (useLensCompatibleFields) {
+      if (
+        !!field.aggregatable &&
+        isLensSupportedType(field.type) &&
+        !isDataViewFieldSubtypeNested(field)
+      ) {
+        result.push({ label: key, value: key });
+      }
+    } else {
+      if (field.aggregatable === true) {
+        result.push({ label: key, value: key });
+      }
     }
   }
   return result;
 }
 
-export const useStackByFields = () => {
+export const useStackByFields = (useLensCompatibleFields?: boolean) => {
   const { pathname } = useLocation();
-
+  const { addError } = useAppToasts();
   const { browserFields } = useSourcererDataView(getScopeFromPath(pathname));
-  const allFields = useMemo(() => getAllFieldsByName(browserFields), [browserFields]);
-  const [stackByFieldOptions, setStackByFieldOptions] = useState(() =>
-    getAggregatableFields(allFields)
-  );
-  useEffect(() => {
-    setStackByFieldOptions(getAggregatableFields(allFields));
-  }, [allFields]);
-  return useMemo(() => stackByFieldOptions, [stackByFieldOptions]);
+
+  return useCallback(() => {
+    try {
+      return getAggregatableFields(getAllFieldsByName(browserFields), useLensCompatibleFields);
+    } catch (err) {
+      addError(err, {
+        title: i18n.translate('xpack.securitySolution.useStackByFields.error.title', {
+          defaultMessage: 'Error fetching fields',
+        }),
+        toastMessage: i18n.translate('xpack.securitySolution.useStackByFields.error.toastMessage', {
+          defaultMessage: 'This error indicates an exceedingly large number of fields in an index',
+        }),
+      });
+      return [];
+    }
+  }, [addError, browserFields, useLensCompatibleFields]);
 };

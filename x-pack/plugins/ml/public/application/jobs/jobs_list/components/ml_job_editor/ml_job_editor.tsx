@@ -5,26 +5,25 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
-import { XJsonMode } from '@kbn/ace';
-
-import { EuiCodeEditor, XJson } from '@kbn/es-ui-shared-plugin/public';
-import type { EuiCodeEditorProps } from '@kbn/es-ui-shared-plugin/public';
+import type { FC } from 'react';
+import React from 'react';
+import { monaco, XJsonLang } from '@kbn/monaco';
+import { CodeEditor, type CodeEditorProps } from '@kbn/code-editor';
+import { XJson } from '@kbn/es-ui-shared-plugin/public';
 
 const { expandLiteralStrings } = XJson;
 
-export const ML_EDITOR_MODE = { TEXT: 'text', JSON: 'json', XJSON: new XJsonMode() };
+export const ML_EDITOR_MODE = { TEXT: 'text', JSON: 'json', XJSON: XJsonLang.ID };
 
 interface MlJobEditorProps {
   value: string;
   height?: string;
   width?: string;
-  mode?: typeof ML_EDITOR_MODE[keyof typeof ML_EDITOR_MODE];
+  mode?: (typeof ML_EDITOR_MODE)[keyof typeof ML_EDITOR_MODE];
   readOnly?: boolean;
-  syntaxChecking?: boolean;
-  theme?: string;
-  onChange?: EuiCodeEditorProps['onChange'];
+  onChange?: CodeEditorProps['onChange'];
   'data-test-subj'?: string;
+  schema?: object;
 }
 export const MLJobEditor: FC<MlJobEditorProps> = ({
   value,
@@ -32,10 +31,9 @@ export const MLJobEditor: FC<MlJobEditorProps> = ({
   width = '100%',
   mode = ML_EDITOR_MODE.JSON,
   readOnly = false,
-  syntaxChecking = true,
-  theme = 'textmate',
   onChange = () => {},
   'data-test-subj': dataTestSubj,
+  schema,
 }) => {
   if (mode === ML_EDITOR_MODE.XJSON) {
     try {
@@ -47,23 +45,32 @@ export const MLJobEditor: FC<MlJobEditorProps> = ({
   }
 
   return (
-    <EuiCodeEditor
+    <CodeEditor
+      languageId={mode}
+      options={{ readOnly }}
       value={value}
       width={width}
       height={height}
-      mode={mode}
-      readOnly={readOnly}
-      wrapEnabled={true}
-      showPrintMargin={false}
-      theme={theme}
-      editorProps={{ $blockScrolling: true }}
-      setOptions={{
-        useWorker: syntaxChecking,
-        tabSize: 2,
-        useSoftTabs: true,
-      }}
       onChange={onChange}
       data-test-subj={dataTestSubj}
+      editorDidMount={(editor: monaco.editor.IStandaloneCodeEditor) => {
+        const editorModelUri: string = editor.getModel()?.uri.toString()!;
+        if (schema) {
+          monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+            validate: true,
+            enableSchemaRequest: false,
+            schemaValidation: 'error',
+            schemas: [
+              ...(monaco.languages.json.jsonDefaults.diagnosticsOptions.schemas ?? []),
+              {
+                uri: editorModelUri,
+                fileMatch: [editorModelUri],
+                schema,
+              },
+            ],
+          });
+        }
+      }}
     />
   );
 };

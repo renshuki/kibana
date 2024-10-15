@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { Component, ReactElement } from 'react';
+import React, { Component } from 'react';
 import {
   EuiButton,
   EuiCopy,
@@ -20,7 +21,6 @@ import {
   EuiRadioGroup,
   EuiSwitch,
   EuiSwitchEvent,
-  EuiToolTip,
 } from '@elastic/eui';
 
 import { format as formatUrl, parse as parseUrl } from 'url';
@@ -29,6 +29,7 @@ import { FormattedMessage, I18nProvider } from '@kbn/i18n-react';
 import { i18n } from '@kbn/i18n';
 import type { Capabilities } from '@kbn/core/public';
 
+import type { LocatorPublic } from '../../common';
 import { UrlParamExtension } from '../types';
 import {
   AnonymousAccessServiceContract,
@@ -43,6 +44,10 @@ export interface UrlPanelContentProps {
   objectType: string;
   shareableUrl?: string;
   shareableUrlForSavedObject?: string;
+  shareableUrlLocatorParams?: {
+    locator: LocatorPublic<any>;
+    params: any;
+  };
   urlParamExtensions?: UrlParamExtension[];
   anonymousAccess?: AnonymousAccessServiceContract;
   showPublicUrlSwitch?: (anonymousUserCapabilities: Capabilities) => boolean;
@@ -71,6 +76,7 @@ interface State {
   urlParams?: UrlParams;
   anonymousAccessParameters: AnonymousAccessState['accessURLParameters'];
   showPublicUrlSwitch: boolean;
+  showWarningButton: boolean;
 }
 
 export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
@@ -89,6 +95,7 @@ export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
       url: '',
       anonymousAccessParameters: null,
       showPublicUrlSwitch: false,
+      showWarningButton: Boolean(this.props.snapshotShareWarning),
     };
   }
 
@@ -144,6 +151,7 @@ export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
   public render() {
     const shortUrlSwitch = this.renderShortUrlSwitch();
     const publicUrlSwitch = this.renderPublicUrlSwitch();
+    const copyButton = this.renderCopyButton();
 
     const urlRow = (!!shortUrlSwitch || !!publicUrlSwitch) && (
       <EuiFormRow
@@ -157,33 +165,6 @@ export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
       </EuiFormRow>
     );
 
-    const showWarningButton =
-      this.props.snapshotShareWarning &&
-      this.state.exportUrlAs === ExportUrlAsType.EXPORT_URL_AS_SNAPSHOT;
-
-    const copyButton = (copy: () => void) => (
-      <EuiButton
-        fill
-        fullWidth
-        onClick={copy}
-        disabled={this.state.isCreatingShortUrl || this.state.url === ''}
-        data-share-url={this.state.url}
-        data-test-subj="copyShareUrlButton"
-        size="s"
-        iconType={showWarningButton ? 'alert' : undefined}
-        color={showWarningButton ? 'warning' : 'primary'}
-      >
-        {this.props.isEmbedded ? (
-          <FormattedMessage
-            id="share.urlPanel.copyIframeCodeButtonLabel"
-            defaultMessage="Copy iFrame code"
-          />
-        ) : (
-          <FormattedMessage id="share.urlPanel.copyLinkButtonLabel" defaultMessage="Copy link" />
-        )}
-      </EuiButton>
-    );
-
     return (
       <I18nProvider>
         <EuiForm className="kbnShareContextMenu__finalPanel" data-test-subj="shareUrlForm">
@@ -193,23 +174,7 @@ export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
 
           <EuiSpacer size="m" />
 
-          <EuiCopy textToCopy={this.state.url || ''} anchorClassName="eui-displayBlock">
-            {(copy: () => void) => (
-              <>
-                {showWarningButton ? (
-                  <EuiToolTip
-                    position="bottom"
-                    content={this.props.snapshotShareWarning}
-                    display="block"
-                  >
-                    {copyButton(copy)}
-                  </EuiToolTip>
-                ) : (
-                  copyButton(copy)
-                )}
-              </>
-            )}
-          </EuiCopy>
+          {copyButton}
         </EuiForm>
       </I18nProvider>
     );
@@ -356,6 +321,9 @@ export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
   private handleExportUrlAs = (optionId: string) => {
     this.setState(
       {
+        showWarningButton:
+          Boolean(this.props.snapshotShareWarning) &&
+          (optionId as ExportUrlAsType) === ExportUrlAsType.EXPORT_URL_AS_SNAPSHOT,
         exportUrlAs: optionId as ExportUrlAsType,
       },
       this.setUrl
@@ -389,16 +357,23 @@ export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
     });
 
     try {
-      const snapshotUrl = this.getSnapshotUrl();
-      const shortUrl = await this.props.urlService.shortUrls
-        .get(null)
-        .createFromLongUrl(snapshotUrl);
+      const { shareableUrlLocatorParams } = this.props;
+      if (shareableUrlLocatorParams) {
+        const shortUrls = this.props.urlService.shortUrls.get(null);
+        const shortUrl = await shortUrls.createWithLocator(shareableUrlLocatorParams);
+        this.shortUrlCache = await shortUrl.locator.getUrl(shortUrl.params, { absolute: true });
+      } else {
+        const snapshotUrl = this.getSnapshotUrl();
+        const shortUrl = await this.props.urlService.shortUrls
+          .get(null)
+          .createFromLongUrl(snapshotUrl);
+        this.shortUrlCache = shortUrl.url;
+      }
 
       if (!this.mounted) {
         return;
       }
 
-      this.shortUrlCache = shortUrl.url;
       this.setState(
         {
           isCreatingShortUrl: false,
@@ -427,6 +402,37 @@ export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
       );
     }
   };
+
+  private renderCopyButton = () => (
+    <EuiCopy
+      beforeMessage={this.state.showWarningButton ? this.props.snapshotShareWarning : undefined}
+      textToCopy={this.state.url || ''}
+      anchorClassName="eui-displayBlock"
+    >
+      {(copy) => (
+        <EuiButton
+          fill
+          fullWidth
+          onClick={copy}
+          disabled={this.state.isCreatingShortUrl || this.state.url === ''}
+          data-share-url={this.state.url}
+          data-test-subj="copyShareUrlButton"
+          size="s"
+          iconType={this.state.showWarningButton ? 'warning' : undefined}
+          color={this.state.showWarningButton ? 'warning' : 'primary'}
+        >
+          {this.props.isEmbedded ? (
+            <FormattedMessage
+              id="share.urlPanel.copyIframeCodeButtonLabel"
+              defaultMessage="Copy iFrame code"
+            />
+          ) : (
+            <FormattedMessage id="share.urlPanel.copyLinkButtonLabel" defaultMessage="Copy link" />
+          )}
+        </EuiButton>
+      )}
+    </EuiCopy>
+  );
 
   private renderExportUrlAsOptions = () => {
     const snapshotLabel = (
@@ -481,7 +487,7 @@ export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
     const generateLinkAsHelp = this.isNotSaved() ? (
       <FormattedMessage
         id="share.urlPanel.canNotShareAsSavedObjectHelpText"
-        defaultMessage="Can't share as saved object until the {objectType} has been saved."
+        defaultMessage="To share as a saved object, save the {objectType}."
         values={{ objectType: this.props.objectType }}
       />
     ) : undefined;
@@ -576,7 +582,7 @@ export class UrlPanelContent extends Component<UrlPanelContentProps, State> {
     );
   };
 
-  private renderUrlParamExtensions = (): ReactElement | void => {
+  private renderUrlParamExtensions = (): React.ReactNode => {
     if (!this.props.urlParamExtensions) {
       return;
     }

@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useState } from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import {
@@ -19,16 +19,13 @@ import {
   EuiFlexItem,
   EuiLink,
   EuiCallOut,
+  EuiSpacer,
+  EuiSelect,
 } from '@elastic/eui';
 
 import styled from 'styled-components';
 
-import type {
-  AgentPolicy,
-  PackageInfo,
-  NewPackagePolicy,
-  RegistryVarsEntry,
-} from '../../../../../types';
+import type { PackageInfo, NewPackagePolicy, RegistryVarsEntry } from '../../../../../types';
 import { Loading } from '../../../../../components';
 import { useStartServices } from '../../../../../hooks';
 
@@ -36,6 +33,7 @@ import { isAdvancedVar } from '../../services';
 import type { PackagePolicyValidationResults } from '../../services';
 
 import { PackagePolicyInputVarField } from './components';
+import { useOutputs } from './components/hooks';
 
 // on smaller screens, fields should be displayed in one column
 const FormGroupResponsiveFields = styled(EuiDescribedFormGroup)`
@@ -47,17 +45,17 @@ const FormGroupResponsiveFields = styled(EuiDescribedFormGroup)`
 `;
 
 export const StepDefinePackagePolicy: React.FunctionComponent<{
-  agentPolicy?: AgentPolicy;
+  namespacePlaceholder?: string;
   packageInfo: PackageInfo;
   packagePolicy: NewPackagePolicy;
   updatePackagePolicy: (fields: Partial<NewPackagePolicy>) => void;
-  validationResults: PackagePolicyValidationResults;
+  validationResults: PackagePolicyValidationResults | undefined;
   submitAttempted: boolean;
   isEditPage?: boolean;
   noAdvancedToggle?: boolean;
 }> = memo(
   ({
-    agentPolicy,
+    namespacePlaceholder,
     packageInfo,
     packagePolicy,
     updatePackagePolicy,
@@ -85,41 +83,41 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
       });
     }
 
-    // Update package policy's package and agent policy info
-    useEffect(() => {
-      //  TODO move this to parent hook
-      // If agent policy has changed, update package policy's agent policy ID and namespace
-      if (agentPolicy && packagePolicy.policy_id !== agentPolicy.id) {
-        updatePackagePolicy({
-          policy_id: agentPolicy.id,
-          namespace: agentPolicy.namespace,
-        });
-      }
-    }, [packagePolicy, agentPolicy, packageInfo, updatePackagePolicy]);
+    // Outputs
+    const {
+      isLoading: isOutputsLoading,
+      canUseOutputPerIntegration,
+      allowedOutputs,
+    } = useOutputs(packageInfo.name);
 
+    // Managed policy
     const isManaged = packagePolicy.is_managed;
 
     return validationResults ? (
       <>
         {isManaged && (
-          <EuiCallOut
-            title={
-              <FormattedMessage
-                id="xpack.fleet.createPackagePolicy.stepConfigure.managedReadonly"
-                defaultMessage="This is a managed package policy. You cannot modify it here."
-              />
-            }
-            iconType="lock"
-          />
+          <>
+            <EuiCallOut
+              title={
+                <FormattedMessage
+                  id="xpack.fleet.createPackagePolicy.stepConfigure.managedReadonly"
+                  defaultMessage="This is a managed package policy. You cannot modify it here."
+                />
+              }
+              iconType="lock"
+            />
+            <EuiSpacer size="m" />
+          </>
         )}
         <FormGroupResponsiveFields
+          fullWidth
           title={
-            <h4>
+            <h3>
               <FormattedMessage
                 id="xpack.fleet.createPackagePolicy.stepConfigure.integrationSettingsSectionTitle"
                 defaultMessage="Integration settings"
               />
-            </h4>
+            </h3>
           }
           description={
             <FormattedMessage
@@ -132,6 +130,7 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
             {/* Name */}
             <EuiFlexItem>
               <EuiFormRow
+                fullWidth
                 isInvalid={!!validationResults.name}
                 error={validationResults.name}
                 label={
@@ -142,6 +141,7 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
                 }
               >
                 <EuiFieldText
+                  fullWidth
                   readOnly={isManaged}
                   value={packagePolicy.name}
                   onChange={(e) =>
@@ -157,6 +157,7 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
             {/* Description */}
             <EuiFlexItem>
               <EuiFormRow
+                fullWidth
                 label={
                   <FormattedMessage
                     id="xpack.fleet.createPackagePolicy.stepConfigure.packagePolicyDescriptionInputLabel"
@@ -175,6 +176,7 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
                 error={validationResults.description}
               >
                 <EuiFieldText
+                  fullWidth
                   readOnly={isManaged}
                   value={packagePolicy.description}
                   onChange={(e) =>
@@ -209,8 +211,9 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
                         },
                       });
                     }}
-                    errors={validationResults.vars![varName]}
+                    errors={validationResults?.vars?.[varName] ?? []}
                     forceShowErrors={submitAttempted}
+                    isEditPage={isEditPage}
                   />
                 </EuiFlexItem>
               );
@@ -252,6 +255,7 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
             {isShowingAdvanced ? (
               <EuiFlexItem>
                 <EuiFlexGroup direction="column" gutterSize="m">
+                  {/* Namespace  */}
                   <EuiFlexItem>
                     <EuiFormRow
                       isInvalid={!!validationResults.namespace}
@@ -271,7 +275,7 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
                         ) : (
                           <FormattedMessage
                             id="xpack.fleet.createPackagePolicy.stepConfigure.packagePolicyNamespaceHelpLabel"
-                            defaultMessage="Change the default namespace inherited from the selected Agent policy. This setting changes the name of the integration's data stream. {learnMore}."
+                            defaultMessage="Change the default namespace inherited from the parent agent policy. This setting changes the name of the integration's data stream. {learnMore}."
                             values={{
                               learnMore: (
                                 <EuiLink
@@ -290,7 +294,9 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
                       }
                     >
                       <EuiComboBox
+                        data-test-subj="packagePolicyNamespaceInput"
                         noSuggestions
+                        placeholder={namespacePlaceholder}
                         isDisabled={isEditPage && packageInfo.type === 'input'}
                         singleSelection={true}
                         selectedOptions={
@@ -309,6 +315,49 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
                       />
                     </EuiFormRow>
                   </EuiFlexItem>
+
+                  {/* Output */}
+                  {canUseOutputPerIntegration && (
+                    <EuiFlexItem>
+                      <EuiFormRow
+                        label={
+                          <FormattedMessage
+                            id="xpack.fleet.createPackagePolicy.stepConfigure.packagePolicyOutputInputLabel"
+                            defaultMessage="Output"
+                          />
+                        }
+                        helpText={
+                          <FormattedMessage
+                            id="xpack.fleet.createPackagePolicy.stepConfigure.packagePolicyOutputHelpLabel"
+                            defaultMessage="Change the default output inherited from the parent agent policy. This setting changes where the integration's data is sent."
+                          />
+                        }
+                      >
+                        <EuiSelect
+                          data-test-subj="packagePolicyOutputInput"
+                          isLoading={isOutputsLoading}
+                          options={[
+                            {
+                              value: '',
+                              text: '',
+                            },
+                            ...allowedOutputs.map((output) => ({
+                              value: output.id,
+                              text: output.name,
+                            })),
+                          ]}
+                          value={packagePolicy.output_id || ''}
+                          onChange={(e) => {
+                            updatePackagePolicy({
+                              output_id: e.target.value.trim() || null,
+                            });
+                          }}
+                        />
+                      </EuiFormRow>
+                    </EuiFlexItem>
+                  )}
+
+                  {/* Data retention settings info */}
                   <EuiFlexItem>
                     <EuiFormRow
                       label={
@@ -358,8 +407,9 @@ export const StepDefinePackagePolicy: React.FunctionComponent<{
                               },
                             });
                           }}
-                          errors={validationResults.vars![varName]}
+                          errors={validationResults?.vars?.[varName] ?? []}
                           forceShowErrors={submitAttempted}
+                          isEditPage={isEditPage}
                         />
                       </EuiFlexItem>
                     );

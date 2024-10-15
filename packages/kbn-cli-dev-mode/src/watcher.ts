@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import * as Rx from 'rxjs';
@@ -15,19 +16,17 @@ import { makeMatcher } from '@kbn/picomatcher';
 
 import { Log } from './log';
 
-const packageMatcher = makeMatcher(['**/*', '!**/.*']);
+const packageMatcher = makeMatcher([
+  '**/*',
+  '!**/.*',
+  '!x-pack/plugins/screenshotting/chromium/**',
+  '!x-pack/plugins/canvas/shareable_runtime/**',
+]);
 
 /**
  * Any code that is outside of a package must match this in order to trigger a restart
  */
-const nonPackageMatcher = makeMatcher([
-  'config/**/*.yml',
-  'src/**',
-  '!src/{dev,fixtures}/**',
-  'x-pack/plugins/**',
-  '!x-pack/plugins/screenshotting/chromium/**',
-  '!x-pack/plugins/canvas/shareable_runtime/**',
-]);
+const nonPackageMatcher = makeMatcher(['config/**/*.yml']);
 
 export interface Options {
   enabled: boolean;
@@ -77,13 +76,14 @@ export class Watcher {
 
           // ignore changes in any devOnly package, these can't power the server so we can ignore them
           if (pkg?.devOnly) {
-            return;
+            return pkg.id === '@kbn/babel-register';
           }
 
           const result = this.classifier.classify(event.path);
           if (result.type === 'common package' || result.type === 'server package') {
             return packageMatcher(result.repoRel) && fire(result.repoRel);
           }
+
           if (result.type === 'non-package') {
             return nonPackageMatcher(result.repoRel) && fire(result.repoRel);
           }
@@ -95,7 +95,7 @@ export class Watcher {
         ignore: [
           '**/{node_modules,target,public,coverage,__*__}/**',
           '**/*.{test,spec,story,stories}.*',
-          '**/*.{md,sh,txt}',
+          '**/*.{http,md,sh,txt}',
           '**/debug.log',
         ],
       }

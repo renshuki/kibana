@@ -1,14 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Agent as HttpAgent, type AgentOptions } from 'http';
 import { Agent as HttpsAgent } from 'https';
+import CacheableLookup from 'cacheable-lookup';
 import type { ConnectionOptions, HttpAgentOptions } from '@elastic/elasticsearch';
+import type { Logger } from '@kbn/logging';
+import type { ElasticsearchClientsMetrics } from '@kbn/core-metrics-server';
+import { getAgentsSocketsStats } from './get_agents_sockets_stats';
 
 const HTTPS = 'https:';
 
@@ -19,8 +24,22 @@ export interface AgentFactoryProvider {
   getAgentFactory(agentOptions?: HttpAgentOptions): AgentFactory;
 }
 
-export interface AgentStore {
-  getAgents(): Set<NetworkAgent>;
+export interface AgentManagerOptions {
+  /**
+   * The maximum number of seconds to retain the DNS lookup resolutions.
+   * Set to 0 to disable the cache (default Node.js behavior)
+   */
+  dnsCacheTtlInSeconds: number;
+}
+
+/**
+ * Exposes the APIs to fetch stats of the existing agents.
+ */
+export interface AgentStatsProvider {
+  /**
+   * Returns the {@link ElasticsearchClientsMetrics}, to understand the load on the Elasticsearch HTTP agents.
+   */
+  getAgentsStats(): ElasticsearchClientsMetrics;
 }
 
 /**
@@ -34,11 +53,21 @@ export interface AgentStore {
  * exposes methods that can modify the underlying pools, effectively impacting the connections of other Clients.
  * @internal
  **/
-export class AgentManager implements AgentFactoryProvider, AgentStore {
-  private agents: Set<HttpAgent>;
+export class AgentManager implements AgentFactoryProvider, AgentStatsProvider {
+  private readonly agents: Set<HttpAgent>;
+  private readonly cacheableLookup?: CacheableLookup;
 
-  constructor() {
+  constructor(private readonly logger: Logger, options: AgentManagerOptions) {
     this.agents = new Set();
+    // Use DNS caching to avoid too many repetitive (and CPU-blocking) dns.lookup calls
+    if (options.dnsCacheTtlInSeconds > 0) {
+      this.logger.info(
+        `Caching ES host DNS resolutions for up to ${options.dnsCacheTtlInSeconds}s. If this causes problems, change the setting "elasticsearch.dnsCacheTtl: ${options.dnsCacheTtlInSeconds}s".`
+      );
+      this.cacheableLookup = new CacheableLookup({
+        maxTtl: options.dnsCacheTtlInSeconds,
+      });
+    }
   }
 
   public getAgentFactory(agentOptions?: AgentOptions): AgentFactory {
@@ -54,6 +83,7 @@ export class AgentManager implements AgentFactoryProvider, AgentStore {
           httpsAgent = new HttpsAgent(config);
           this.agents.add(httpsAgent);
           dereferenceOnDestroy(this.agents, httpsAgent);
+          this.cacheableLookup?.install(httpsAgent);
         }
 
         return httpsAgent;
@@ -63,14 +93,23 @@ export class AgentManager implements AgentFactoryProvider, AgentStore {
         httpAgent = new HttpAgent(agentOptions);
         this.agents.add(httpAgent);
         dereferenceOnDestroy(this.agents, httpAgent);
+        this.cacheableLookup?.install(httpAgent);
       }
 
       return httpAgent;
     };
   }
 
-  public getAgents(): Set<NetworkAgent> {
-    return this.agents;
+  public getAgentsStats(): ElasticsearchClientsMetrics {
+    const stats = getAgentsSocketsStats(this.agents);
+
+    if (stats.totalQueuedRequests > 0) {
+      this.logger.warn(
+        `There are ${stats.totalQueuedRequests} queued requests. If this number is constantly high, consider scaling Kibana horizontally or increasing "elasticsearch.maxSockets" in the config.`
+      );
+    }
+
+    return stats;
   }
 }
 

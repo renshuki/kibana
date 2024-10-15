@@ -17,7 +17,32 @@ export const getEndpointSecurityPolicyManager: () => Omit<Role, 'name'> = () => 
         ...noResponseActionsRole.kibana[0],
         feature: {
           ...noResponseActionsRole.kibana[0].feature,
-          siem: ['minimal_all'],
+          siem: [
+            'minimal_all',
+
+            'policy_management_all',
+
+            'trusted_applications_all',
+            'event_filters_all',
+            'host_isolation_exceptions_all',
+            'blocklist_all',
+          ],
+        },
+      },
+    ],
+  };
+};
+
+export const getEndpointSecurityPolicyManagementReadRole: () => Omit<Role, 'name'> = () => {
+  const noResponseActionsRole = getNoResponseActionsRole();
+  return {
+    ...noResponseActionsRole,
+    kibana: [
+      {
+        ...noResponseActionsRole.kibana[0],
+        feature: {
+          ...noResponseActionsRole.kibana[0].feature,
+          siem: ['minimal_all', 'policy_management_read'],
         },
       },
     ],

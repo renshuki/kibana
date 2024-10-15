@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { IUiSettingsClient, CoreSetup } from '@kbn/core/public';
@@ -69,15 +70,20 @@ describe('FieldSuggestions', () => {
       expect(http.fetch).not.toHaveBeenCalled();
     });
 
-    it('should return an empty array if the field type is not a string or boolean', async () => {
-      const [field] = stubFields.filter(({ type }) => type !== 'string' && type !== 'boolean');
-      const suggestions = await getValueSuggestions({
-        indexPattern: stubIndexPattern,
-        field,
-        query: '',
-      });
-
-      expect(suggestions).toEqual([]);
+    it('should return an empty array if the field type is not a string, boolean, or IP', async () => {
+      const fields = stubFields.filter(
+        ({ type }) => type !== 'string' && type !== 'boolean' && type !== 'ip'
+      );
+      await Promise.all(
+        fields.map(async (field) => {
+          const suggestions = await getValueSuggestions({
+            indexPattern: stubIndexPattern,
+            field,
+            query: '',
+          });
+          expect(suggestions).toEqual([]);
+        })
+      );
       expect(http.fetch).not.toHaveBeenCalled();
     });
 
@@ -93,10 +99,23 @@ describe('FieldSuggestions', () => {
       expect(http.fetch).not.toHaveBeenCalled();
     });
 
-    it('should otherwise request suggestions', async () => {
+    it('should request suggestions for strings', async () => {
       const [field] = stubFields.filter(
         ({ type, aggregatable }) => type === 'string' && aggregatable
       );
+
+      await getValueSuggestions({
+        indexPattern: stubIndexPattern,
+        field,
+        query: '',
+        useTimeRange: false,
+      });
+
+      expect(http.fetch).toHaveBeenCalled();
+    });
+
+    it('should request suggestions for ips', async () => {
+      const [field] = stubFields.filter(({ type, aggregatable }) => type === 'ip' && aggregatable);
 
       await getValueSuggestions({
         indexPattern: stubIndexPattern,

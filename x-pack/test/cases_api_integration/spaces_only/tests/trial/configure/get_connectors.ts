@@ -9,8 +9,9 @@ import expect from '@kbn/expect';
 import { FtrProviderContext } from '../../../../common/ftr_provider_context';
 
 import { ObjectRemover as ActionsRemover } from '../../../../../alerting_api_integration/common/lib';
-import { getAuthWithSuperUser, getActionsSpace } from '../../../../common/lib/utils';
 import {
+  getAuthWithSuperUser,
+  getActionsSpace,
   getServiceNowConnector,
   getServiceNowSIRConnector,
   getEmailConnector,
@@ -20,7 +21,7 @@ import {
   getJiraConnector,
   createConnector,
   getResilientConnector,
-} from '../../../../common/lib/connectors';
+} from '../../../../common/lib/api';
 
 // eslint-disable-next-line import/no-default-export
 export default ({ getService }: FtrProviderContext): void => {
@@ -115,6 +116,7 @@ export default ({ getService }: FtrProviderContext): void => {
             updateIncidentUrl: 'http://some.non.existent.com/{{{external.system.id}}}',
           },
           isPreconfigured: false,
+          isSystemAction: false,
           isDeprecated: false,
           isMissingSecrets: false,
           referencedByCount: 0,
@@ -128,6 +130,7 @@ export default ({ getService }: FtrProviderContext): void => {
             projectKey: 'pkey',
           },
           isPreconfigured: false,
+          isSystemAction: false,
           isDeprecated: false,
           isMissingSecrets: false,
           referencedByCount: 0,
@@ -140,6 +143,7 @@ export default ({ getService }: FtrProviderContext): void => {
           actionTypeId: '.servicenow',
           id: 'preconfigured-servicenow',
           isPreconfigured: true,
+          isSystemAction: false,
           isDeprecated: false,
           name: 'preconfigured-servicenow',
           referencedByCount: 0,
@@ -153,6 +157,7 @@ export default ({ getService }: FtrProviderContext): void => {
             orgId: 'pkey',
           },
           isPreconfigured: false,
+          isSystemAction: false,
           isDeprecated: false,
           isMissingSecrets: false,
           referencedByCount: 0,
@@ -170,6 +175,7 @@ export default ({ getService }: FtrProviderContext): void => {
             userIdentifierValue: null,
           },
           isPreconfigured: false,
+          isSystemAction: false,
           isDeprecated: false,
           isMissingSecrets: false,
           referencedByCount: 0,
@@ -187,6 +193,7 @@ export default ({ getService }: FtrProviderContext): void => {
             jwtKeyId: 'def',
           },
           isPreconfigured: false,
+          isSystemAction: false,
           isDeprecated: false,
           isMissingSecrets: false,
           referencedByCount: 0,
@@ -204,6 +211,7 @@ export default ({ getService }: FtrProviderContext): void => {
             userIdentifierValue: null,
           },
           isPreconfigured: false,
+          isSystemAction: false,
           isDeprecated: false,
           isMissingSecrets: false,
           referencedByCount: 0,
@@ -269,6 +277,7 @@ export default ({ getService }: FtrProviderContext): void => {
           actionTypeId: '.servicenow',
           id: 'preconfigured-servicenow',
           isPreconfigured: true,
+          isSystemAction: false,
           isDeprecated: false,
           name: 'preconfigured-servicenow',
           referencedByCount: 0,

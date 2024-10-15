@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import d3 from 'd3';
@@ -23,7 +24,7 @@ import { getFormatService } from '../../services';
 class D3MappableObject {
   constructor(data) {
     for (const key in data) {
-      if (data.hasOwnProperty(key)) {
+      if (Object.hasOwn(data, key)) {
         this[key] = data[key];
       }
     }
@@ -136,8 +137,6 @@ export class Data {
         type = 'series';
       } else if (obj.slices) {
         type = 'slices';
-      } else if (obj.geoJson) {
-        type = 'geoJson';
       }
     });
 
@@ -224,27 +223,6 @@ export class Data {
     }
 
     return visData;
-  }
-
-  /**
-   * get min and max for all cols, rows of data
-   *
-   * @method getMaxMin
-   * @return {Object}
-   */
-  getGeoExtents() {
-    const visData = this.getVisData();
-
-    return _.reduce(
-      _.map(visData, 'geoJson.properties'),
-      function (minMax, props) {
-        return {
-          min: Math.min(props.min, minMax.min),
-          max: Math.max(props.max, minMax.max),
-        };
-      },
-      { min: Infinity, max: -Infinity }
-    );
   }
 
   /**

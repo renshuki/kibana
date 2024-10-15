@@ -12,9 +12,12 @@ import { ILicenseState, verifyApiAccess } from '../../lib';
 import { BASE_ACTION_API_PATH } from '../../../common';
 import { ActionsRequestHandlerContext } from '../../types';
 import { trackLegacyRouteUsage } from '../../lib/track_legacy_route_usage';
+import { connectorResponseSchemaV1 } from '../../../common/routes/connector/response';
 
 const paramSchema = schema.object({
-  id: schema.string(),
+  id: schema.string({
+    meta: { description: 'An identifier for the connector.' },
+  }),
 });
 
 export const getActionRoute = (
@@ -25,8 +28,22 @@ export const getActionRoute = (
   router.get(
     {
       path: `${BASE_ACTION_API_PATH}/action/{id}`,
+      options: {
+        access: 'public',
+        summary: `Get connector information`,
+        deprecated: true,
+        tags: ['oas-tag:connectors'],
+      },
       validate: {
-        params: paramSchema,
+        request: {
+          params: paramSchema,
+        },
+        response: {
+          200: {
+            description: 'Indicates a successful call.',
+            body: () => connectorResponseSchemaV1,
+          },
+        },
       },
     },
     router.handleLegacyErrors(async function (context, req, res) {

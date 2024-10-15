@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { identity } from 'lodash';
@@ -166,6 +167,22 @@ describe('getAggsFormats', () => {
     const format = getAggFormat(mapping, getFormat);
 
     expect(format.convert(new MultiFieldKey({ key: terms }))).toBe('source - geo.src - geo.dest');
+    expect(getFormat).toHaveBeenCalledTimes(terms.length);
+  });
+
+  test('not fails for non multiField Key values', () => {
+    const terms = ['source', 'geo.src', 'geo.dest'];
+    const mapping = {
+      id: 'multi_terms',
+      params: {
+        paramsPerField: [{ id: 'terms' }, { id: 'terms' }, { id: 'terms' }],
+        separator: ' - ',
+      },
+    };
+
+    const format = getAggFormat(mapping, getFormat);
+
+    expect(format.convert('text')).toBe('');
     expect(getFormat).toHaveBeenCalledTimes(terms.length);
   });
 });

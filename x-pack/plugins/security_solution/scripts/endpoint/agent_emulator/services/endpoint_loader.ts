@@ -5,15 +5,14 @@
  * 2.0.
  */
 
-/* eslint-disable max-classes-per-file */
-
 import type { Client } from '@elastic/elasticsearch';
 import type { KbnClient } from '@kbn/test';
 import pMap from 'p-map';
 import type { CreatePackagePolicyResponse } from '@kbn/fleet-plugin/common';
 import type { ToolingLog } from '@kbn/tooling-log';
-import type seedrandom from 'seedrandom';
 import { kibanaPackageJson } from '@kbn/repo-info';
+import { isServerlessKibanaFlavor } from '../../../../common/endpoint/utils/kibana_status';
+import { fetchFleetLatestAvailableAgentVersion } from '../../../../common/endpoint/utils/fetch_fleet_version';
 import { indexAlerts } from '../../../../common/endpoint/data_loaders/index_alerts';
 import { EndpointDocGenerator } from '../../../../common/endpoint/generate_data';
 import { fetchEndpointMetadataList } from '../../common/endpoint_metadata_services';
@@ -22,22 +21,10 @@ import { setupFleetForEndpoint } from '../../../../common/endpoint/data_loaders/
 import { enableFleetServerIfNecessary } from '../../../../common/endpoint/data_loaders/index_fleet_server';
 import { METADATA_DATASTREAM } from '../../../../common/endpoint/constants';
 import { EndpointMetadataGenerator } from '../../../../common/endpoint/data_generators/endpoint_metadata_generator';
-import { getEndpointPackageInfo } from '../../../../common/endpoint/index_data';
+import { getEndpointPackageInfo } from '../../../../common/endpoint/utils/package';
 import { ENDPOINT_ALERTS_INDEX, ENDPOINT_EVENTS_INDEX } from '../../common/constants';
 
 let WAS_FLEET_SETUP_DONE = false;
-
-const CurrentKibanaVersionDocGenerator = class extends EndpointDocGenerator {
-  constructor(seedValue: string | seedrandom.prng) {
-    const MetadataGenerator = class extends EndpointMetadataGenerator {
-      protected randomVersion(): string {
-        return kibanaPackageJson.version;
-      }
-    };
-
-    super(seedValue, MetadataGenerator);
-  }
-};
 
 export const loadEndpointsIfNoneExist = async (
   esClient: Client,
@@ -92,15 +79,22 @@ export const loadEndpoints = async ({
   log,
   onProgress,
   count = 2,
-  DocGeneratorClass = CurrentKibanaVersionDocGenerator,
+  DocGeneratorClass,
 }: LoadEndpointsOptions): Promise<void> => {
   if (log) {
     log.verbose(`loadEndpoints(): Loading ${count} endpoints...`);
   }
 
+  const isServerless = await isServerlessKibanaFlavor(kbnClient);
+  let version = kibanaPackageJson.version;
+
+  if (isServerless) {
+    version = await fetchFleetLatestAvailableAgentVersion(kbnClient);
+  }
+
   if (!WAS_FLEET_SETUP_DONE) {
     await setupFleetForEndpoint(kbnClient);
-    await enableFleetServerIfNecessary(esClient);
+    await enableFleetServerIfNecessary(esClient, isServerless, kbnClient, log);
     // eslint-disable-next-line require-atomic-updates
     WAS_FLEET_SETUP_DONE = true;
   }
@@ -127,10 +121,16 @@ export const loadEndpoints = async ({
     }
   };
 
+  const CurrentKibanaVersionDocGenerator = EndpointDocGenerator.custom({
+    CustomMetadataGenerator: EndpointMetadataGenerator.custom({
+      version,
+    }),
+  });
+
   await pMap(
     Array.from({ length: count }),
     async () => {
-      const endpointGenerator = new DocGeneratorClass();
+      const endpointGenerator = new (DocGeneratorClass ?? CurrentKibanaVersionDocGenerator)();
 
       await indexEndpointHostDocs({
         numDocs: 1,

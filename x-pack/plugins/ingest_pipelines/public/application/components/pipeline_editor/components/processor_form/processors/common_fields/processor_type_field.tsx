@@ -7,14 +7,16 @@
 
 import { EuiComboBox, EuiComboBoxOptionOption, EuiFormRow } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
-import React, { FunctionComponent, ReactNode } from 'react';
+import React, { FunctionComponent, ReactNode, useMemo } from 'react';
 import { flow } from 'fp-ts/lib/function';
 import { map } from 'fp-ts/lib/Array';
+import { map as _map, groupBy as _groupBy } from 'lodash';
 
 import {
   FieldValidateResponse,
   VALIDATION_TYPES,
 } from '@kbn/es-ui-shared-plugin/static/forms/hook_form_lib';
+import { ILicense } from '../../../../../../../types';
 import {
   FIELD_TYPES,
   FieldConfig,
@@ -25,11 +27,13 @@ import {
 
 import { getProcessorDescriptor, mapProcessorTypeToDescriptor } from '../../../shared';
 
-const extractProcessorTypesAndLabels = flow(
+export const extractProcessorDetails = flow(
   Object.entries,
-  map(([type, { label }]) => ({
+  map(([type, { label, forLicenseAtLeast, category }]) => ({
     label,
     value: type,
+    category,
+    ...(forLicenseAtLeast ? { forLicenseAtLeast } : {}),
   })),
   (arr) => arr.sort((a, b) => a.label.localeCompare(b.label))
 );
@@ -39,9 +43,31 @@ interface ProcessorTypeAndLabel {
   label: string;
 }
 
-const processorTypesAndLabels: ProcessorTypeAndLabel[] = extractProcessorTypesAndLabels(
-  mapProcessorTypeToDescriptor
-);
+type ProcessorWithCategory = ProcessorTypeAndLabel & {
+  category: string;
+};
+
+export const getProcessorTypesAndLabels = (license: ILicense | null) => {
+  return (
+    extractProcessorDetails(mapProcessorTypeToDescriptor)
+      // Filter out any processors that are not available for the current license type
+      .filter((option) => {
+        return option.forLicenseAtLeast ? license?.hasAtLeast(option.forLicenseAtLeast) : true;
+      })
+      // Pick properties we need to build the categories
+      .map(({ value, label, category }) => ({ label, value, category }))
+  );
+};
+
+export const groupProcessorsByCategory = (filteredProcessors: ProcessorWithCategory[]) => {
+  return _map(_groupBy(filteredProcessors, 'category'), (options, optionLabel) => ({
+    label: optionLabel,
+    options: _map(options, ({ label, value }) => ({
+      label,
+      value,
+    })),
+  }));
+};
 
 interface Props {
   initialType?: string;
@@ -68,20 +94,28 @@ const typeConfig: FieldConfig<string> = {
 
 export const ProcessorTypeField: FunctionComponent<Props> = ({ initialType }) => {
   const {
-    services: { documentation },
+    services: { documentation, license },
   } = useKibana();
   const esDocUrl = documentation.getEsDocsBasePath();
+  // Some processors are only available for certain license types
+  const processorOptions = useMemo(() => {
+    // Get all processors
+    const processors = getProcessorTypesAndLabels(license);
+    // Group them by category so that they can be properly rendered by the EuiComboBox
+    return groupProcessorsByCategory(processors);
+  }, [license]);
+
   return (
     <UseField<string> config={typeConfig} defaultValue={initialType} path="type">
       {(typeField) => {
         let selectedOptions: ProcessorTypeAndLabel[];
-        let description: string | ReactNode = '';
+        let description: ReactNode | ((esDocUrl: string) => ReactNode) = '';
 
         if (typeField.value?.length) {
           const type = typeField.value;
           const processorDescriptor = getProcessorDescriptor(type);
           if (processorDescriptor) {
-            description = processorDescriptor.typeDescription || '';
+            description = processorDescriptor.typeDescription ?? '';
             selectedOptions = [{ label: processorDescriptor.label, value: type }];
           } else {
             // If there is no label for this processor type, just use the type as the label
@@ -125,10 +159,10 @@ export const ProcessorTypeField: FunctionComponent<Props> = ({ initialType }) =>
               placeholder={i18n.translate(
                 'xpack.ingestPipelines.pipelineEditor.typeField.typeFieldComboboxPlaceholder',
                 {
-                  defaultMessage: 'Type and then hit "ENTER"',
+                  defaultMessage: 'Start typing or select a processor',
                 }
               )}
-              options={processorTypesAndLabels}
+              options={processorOptions}
               selectedOptions={selectedOptions}
               onCreateOption={onCreateComboOption}
               onChange={(options: Array<EuiComboBoxOptionOption<string>>) => {

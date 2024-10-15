@@ -5,8 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, useState, useEffect, useCallback, useContext } from 'react';
-import { FormattedMessage } from '@kbn/i18n-react';
+import type { FC } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 
 import { i18n } from '@kbn/i18n';
 import {
@@ -23,22 +23,20 @@ import {
   EuiModalBody,
 } from '@elastic/eui';
 
-import { SavedObjectFinderUi } from '@kbn/saved-objects-plugin/public';
+import { FormattedMessage } from '@kbn/i18n-react';
+import { SavedObjectFinder } from '@kbn/saved-objects-finder-plugin/public';
+import { extractErrorMessage } from '@kbn/ml-error-utils';
+
 import { JobCreatorContext } from '../../../job_creator_context';
-import { AdvancedJobCreator } from '../../../../../common/job_creator';
+import type { AdvancedJobCreator } from '../../../../../common/job_creator';
 import { resetAdvancedJob } from '../../../../../common/job_creator/util/general';
-import {
+import type {
   CombinedJob,
   Datafeed,
 } from '../../../../../../../../../common/types/anomaly_detection_jobs';
-import { extractErrorMessage } from '../../../../../../../../../common/util/errors';
 import type { DatafeedValidationResponse } from '../../../../../../../../../common/types/job_validation';
 
-import {
-  useMlKibana,
-  useMlApiContext,
-  useNavigateToPath,
-} from '../../../../../../../contexts/kibana';
+import { useMlKibana, useMlApi, useNavigateToPath } from '../../../../../../../contexts/kibana';
 
 const fixedPageSize: number = 8;
 
@@ -54,13 +52,13 @@ interface Props {
 export const ChangeDataViewModal: FC<Props> = ({ onClose }) => {
   const {
     services: {
-      savedObjects,
-      uiSettings,
       data: { dataViews },
+      contentManagement,
+      uiSettings,
     },
   } = useMlKibana();
   const navigateToPath = useNavigateToPath();
-  const { validateDatafeedPreview } = useMlApiContext();
+  const { validateDatafeedPreview } = useMlApi();
 
   const { jobCreator: jc } = useContext(JobCreatorContext);
   const jobCreator = jc as AdvancedJobCreator;
@@ -122,6 +120,7 @@ export const ChangeDataViewModal: FC<Props> = ({ onClose }) => {
     const newIndices = newDataViewTitle.split(',');
     jobCreator.indices = newIndices;
     resetAdvancedJob(jobCreator, navigateToPath);
+    // exclude mlJobService from deps
   }, [jobCreator, newDataViewTitle, navigateToPath]);
 
   return (
@@ -129,12 +128,10 @@ export const ChangeDataViewModal: FC<Props> = ({ onClose }) => {
       <EuiModal onClose={onClose} data-test-subj="mlJobMgmtImportJobsFlyout">
         <EuiModalHeader>
           <EuiModalHeaderTitle>
-            <h1>
-              <FormattedMessage
-                id="xpack.ml.newJob.wizard.datafeedStep.dataView.step0.title"
-                defaultMessage="Change data view"
-              />
-            </h1>
+            <FormattedMessage
+              id="xpack.ml.newJob.wizard.datafeedStep.dataView.step0.title"
+              defaultMessage="Change data view"
+            />
           </EuiModalHeaderTitle>
         </EuiModalHeader>
 
@@ -148,7 +145,7 @@ export const ChangeDataViewModal: FC<Props> = ({ onClose }) => {
 
               <EuiSpacer size="s" />
 
-              <SavedObjectFinderUi
+              <SavedObjectFinder
                 key="searchSavedObjectFinder"
                 onChoose={onDataViewSelected}
                 showFilter
@@ -168,12 +165,10 @@ export const ChangeDataViewModal: FC<Props> = ({ onClose }) => {
                         defaultMessage: 'Data view',
                       }
                     ),
-                    defaultSearchField: 'name',
                   },
                 ]}
                 fixedPageSize={fixedPageSize}
-                uiSettings={uiSettings}
-                savedObjects={savedObjects}
+                services={{ contentClient: contentManagement.client, uiSettings }}
               />
             </>
           )}

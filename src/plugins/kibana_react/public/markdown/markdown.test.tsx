@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -32,7 +33,7 @@ test('should render links with parentheses correctly', () => {
   );
 });
 
-test('should add `noreferrer` and `nooopener` to unknown links in new tabs', () => {
+test('should add `noreferrer` and `nooopener` to all links in new tabs', () => {
   const component = shallow(
     <Markdown
       openLinksInNewTab={true}
@@ -40,13 +41,6 @@ test('should add `noreferrer` and `nooopener` to unknown links in new tabs', () 
     />
   );
   expect(component.render().find('a').prop('rel')).toBe('noopener noreferrer');
-});
-
-test('should only add `nooopener` to known links in new tabs', () => {
-  const component = shallow(
-    <Markdown openLinksInNewTab={true} markdown="[link](https://www.elastic.co/cool/path" />
-  );
-  expect(component.render().find('a').prop('rel')).toBe('noopener');
 });
 
 describe('props', () => {
@@ -58,19 +52,19 @@ describe('props', () => {
   });
 
   test('openLinksInNewTab', () => {
-    const component = shallow(<Markdown markdown={markdown} openLinksInNewTab={true} />);
+    const component = shallow(<Markdown openLinksInNewTab={true} markdown={markdown} />);
     expect(component).toMatchSnapshot();
   });
 
   test('whiteListedRules', () => {
     const component = shallow(
-      <Markdown markdown={markdown} whiteListedRules={['backticks', 'emphasis']} />
+      <Markdown whiteListedRules={['backticks', 'emphasis']} markdown={markdown} />
     );
     expect(component).toMatchSnapshot();
   });
 
   test('should update markdown when openLinksInNewTab prop change', () => {
-    const component = shallow(<Markdown markdown={markdown} openLinksInNewTab={false} />);
+    const component = shallow(<Markdown openLinksInNewTab={false} markdown={markdown} />);
     expect(component.render().find('a').prop('target')).not.toBe('_blank');
     component.setProps({ openLinksInNewTab: true });
     expect(component.render().find('a').prop('target')).toBe('_blank');
@@ -79,7 +73,7 @@ describe('props', () => {
   test('should update markdown when whiteListedRules prop change', () => {
     const md = '*emphasis* `backticks`';
     const component = shallow(
-      <Markdown markdown={md} whiteListedRules={['emphasis', 'backticks']} />
+      <Markdown whiteListedRules={['emphasis', 'backticks']} markdown={md} />
     );
     expect(component.render().find('em')).toHaveLength(1);
     expect(component.render().find('code')).toHaveLength(1);

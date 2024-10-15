@@ -7,7 +7,8 @@
 
 import { cloneDeep } from 'lodash/fp';
 
-import { DataProviderType, EXISTS_OPERATOR, IS_OPERATOR } from './data_providers/data_provider';
+import { EXISTS_OPERATOR, IS_OPERATOR } from './data_providers/data_provider';
+import { DataProviderTypeEnum } from '../../../../common/api/timeline';
 import { mockDataProviders } from './data_providers/mock/mock_data_providers';
 
 import {
@@ -16,7 +17,7 @@ import {
   buildIsOneOfQueryMatch,
   buildIsQueryMatch,
   handleIsOperator,
-  isStringOrNumberArray,
+  isPrimitiveArray,
   showGlobalFilters,
 } from './helpers';
 
@@ -33,7 +34,7 @@ describe('Build KQL Query', () => {
 
   test('Build KQL query with one template data provider', () => {
     const dataProviders = cloneDeep(mockDataProviders.slice(0, 1));
-    dataProviders[0].type = DataProviderType.template;
+    dataProviders[0].type = DataProviderTypeEnum.template;
     const kqlQuery = buildGlobalQuery(dataProviders, mockBrowserFields);
     expect(cleanUpKqlQuery(kqlQuery)).toEqual('name :*');
   });
@@ -133,14 +134,14 @@ describe('Build KQL Query', () => {
 
   test('Build KQL query with two data provider (first is template)', () => {
     const dataProviders = cloneDeep(mockDataProviders.slice(0, 2));
-    dataProviders[0].type = DataProviderType.template;
+    dataProviders[0].type = DataProviderTypeEnum.template;
     const kqlQuery = buildGlobalQuery(dataProviders, mockBrowserFields);
     expect(cleanUpKqlQuery(kqlQuery)).toEqual('(name :*) or (name : "Provider 2")');
   });
 
   test('Build KQL query with two data provider (second is template)', () => {
     const dataProviders = cloneDeep(mockDataProviders.slice(0, 2));
-    dataProviders[1].type = DataProviderType.template;
+    dataProviders[1].type = DataProviderTypeEnum.template;
     const kqlQuery = buildGlobalQuery(dataProviders, mockBrowserFields);
     expect(cleanUpKqlQuery(kqlQuery)).toEqual('(name : "Provider 1") or (name :*)');
   });
@@ -274,27 +275,27 @@ describe('Build KQL Query', () => {
 
 describe('isStringOrNumberArray', () => {
   test('it returns false when value is not an array', () => {
-    expect(isStringOrNumberArray('just a string')).toBe(false);
+    expect(isPrimitiveArray('just a string')).toBe(false);
   });
 
   test('it returns false when value is an array of mixed types', () => {
-    expect(isStringOrNumberArray(['mixed', 123, 'types'])).toBe(false);
+    expect(isPrimitiveArray(['mixed', 123, 'types'])).toBe(false);
   });
   test('it returns false when value is an array of bad types', () => {
     const badValues = [undefined, null, {}] as unknown as string[];
-    expect(isStringOrNumberArray(badValues)).toBe(false);
+    expect(isPrimitiveArray(badValues)).toBe(false);
   });
 
   test('it returns true when value is an empty array', () => {
-    expect(isStringOrNumberArray([])).toBe(true);
+    expect(isPrimitiveArray([])).toBe(true);
   });
 
   test('it returns true when value is an array of all strings', () => {
-    expect(isStringOrNumberArray(['all', 'string', 'values'])).toBe(true);
+    expect(isPrimitiveArray(['all', 'string', 'values'])).toBe(true);
   });
 
   test('it returns true when value is an array of all numbers', () => {
-    expect(isStringOrNumberArray([123, 456, 789])).toBe(true);
+    expect(isPrimitiveArray([123, 456, 789])).toBe(true);
   });
 
   describe('queryHandlerFunctions', () => {

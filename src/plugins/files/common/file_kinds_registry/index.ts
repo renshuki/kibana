@@ -1,41 +1,45 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { createGetterSetter } from '@kbn/kibana-utils-plugin/common';
 import assert from 'assert';
-import { FileKind } from '..';
+import { createGetterSetter } from '@kbn/kibana-utils-plugin/common';
+import type { FileKindBase } from '@kbn/shared-ux-file-types';
+import type { FileKind } from '../types';
 
-export interface FileKindsRegistry {
+export interface FileKindsRegistry<FK extends FileKindBase = FileKind> {
   /**
    * Register a new file kind.
    */
-  register(fileKind: FileKind): void;
+  register(fileKind: FK): void;
 
   /**
    * Gets a {@link FileKind} or throws.
    */
-  get(id: string): FileKind;
+  get(id: string): FK;
 
   /**
    * Return all registered {@link FileKind}s.
    */
-  getAll(): FileKind[];
+  getAll(): FK[];
 }
 
 /**
  * @internal
  */
-export class FileKindsRegistryImpl implements FileKindsRegistry {
-  constructor(private readonly onRegister?: (fileKind: FileKind) => void) {}
+export class FileKindsRegistryImpl<FK extends FileKindBase = FileKind>
+  implements FileKindsRegistry<FK>
+{
+  constructor(private readonly onRegister?: (fileKind: FK) => void) {}
 
-  private readonly fileKinds = new Map<string, FileKind>();
+  private readonly fileKinds = new Map<string, FK>();
 
-  register(fileKind: FileKind) {
+  register(fileKind: FK) {
     if (this.fileKinds.get(fileKind.id)) {
       throw new Error(`File kind "${fileKind.id}" already registered.`);
     }
@@ -50,13 +54,13 @@ export class FileKindsRegistryImpl implements FileKindsRegistry {
     this.onRegister?.(fileKind);
   }
 
-  get(id: string): FileKind {
+  get(id: string): FK {
     const fileKind = this.fileKinds.get(id);
     assert(fileKind, `File kind with id "${id}" not found.`);
     return fileKind;
   }
 
-  getAll(): FileKind[] {
+  getAll(): FK[] {
     return Array.from(this.fileKinds.values());
   }
 }

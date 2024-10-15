@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { REPO_ROOT } from '@kbn/repo-info';
@@ -50,7 +51,7 @@ it('test extractImportReference', () => {
 
 it('test extractImportReference with a package', () => {
   const results = extractImportReferences(
-    `(param: string) => import("Users/foo/node_modules/${packageA.manifest.id}/target_types").Bar`,
+    `(param: string) => import("Users/foo/node_modules/${packageA.id}/target_types").Bar`,
     plugins,
     log
   );
@@ -58,9 +59,9 @@ it('test extractImportReference with a package', () => {
   expect(results[0]).toBe('(param: string) => ');
   expect(results[1]).toEqual({
     text: 'Bar',
-    docId: getPluginApiDocId(packageA.manifest.id),
+    docId: getPluginApiDocId(packageA.id),
     section: 'def-common.Bar',
-    pluginId: packageA.manifest.id,
+    pluginId: packageA.id,
     scope: ApiScope.COMMON,
   });
 });

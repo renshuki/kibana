@@ -1,12 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { Package } from './package';
+import type { PLUGIN_CATEGORY } from './plugin_category_info';
 
 /**
  * Simple parsed representation of a package.json file, validated
@@ -33,8 +35,8 @@ export interface ParsedPackageJson {
 }
 
 export type KibanaPackageType =
-  | 'plugin-browser'
-  | 'plugin-server'
+  | 'core'
+  | 'plugin'
   | 'shared-browser'
   | 'shared-server'
   | 'shared-common'
@@ -79,23 +81,36 @@ interface PackageManifestBaseFields {
      */
     noParse?: string[];
   };
+  /**
+   * A breif description of the package and what it provides
+   */
+  description?: string;
+  /**
+   * Creates sections in the documentations based on the exports of the folders listed here.
+   * If you need this you should probably split up your package, which is why this is deprecated.
+   * @deprecated
+   */
+  serviceFolders?: string[];
 }
 
 export interface PluginPackageManifest extends PackageManifestBaseFields {
-  type: 'plugin-browser' | 'plugin-server';
+  type: 'plugin';
   /**
-   * Details about the plugin which is contained within this package.
+   * Details about the plugin in this package
    */
   plugin: {
     id: string;
+    browser: boolean;
+    server: boolean;
     configPath?: string | string[];
     requiredPlugins?: string[];
     optionalPlugins?: string[];
     requiredBundles?: string[];
-    description?: string;
+    runtimePluginDependencies?: string[];
     enabledOnAnonymousPages?: boolean;
-    serviceFolders?: string[];
     type?: 'preboot';
+    extraPublicDirs?: string[];
+    [PLUGIN_CATEGORY]?: PluginCategoryInfo;
   };
 }
 
@@ -112,7 +127,7 @@ export interface SharedBrowserPackageManifest extends PackageManifestBaseFields 
 }
 
 export interface BasePackageManifest extends PackageManifestBaseFields {
-  type: 'shared-server' | 'functional-tests' | 'test-helper' | 'shared-scss';
+  type: 'shared-server' | 'functional-tests' | 'test-helper' | 'shared-scss' | 'core';
 }
 
 export type KibanaPackageManifest =
@@ -149,6 +164,14 @@ export interface PluginSelector {
    * Absolute paths to parent directories of plugin packages which will always be included, regardless of the other settings
    */
   limitParentDirs?: readonly string[];
+  /**
+   * When set to true, only select plugins which have server-side components
+   */
+  server?: boolean;
+  /**
+   * When set to true, only select plugins which have browser-side components
+   */
+  browser?: boolean;
 }
 
 export interface KbnImportReq {
@@ -166,7 +189,7 @@ export interface KbnImportReq {
   full: string;
 }
 
-export interface PluginTypeInfo {
+export interface PluginCategoryInfo {
   /** is this an oss plugin? */
   oss: boolean;
   /** is this an example plugin? */

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import _ from 'lodash';
@@ -193,62 +194,6 @@ describe('Vislib Data Class Test Suite', function () {
         expect(data.flatten()).toHaveLength(len);
       };
     }
-  });
-
-  describe('geohashGrid methods', function () {
-    let data;
-    const geohashGridData = {
-      hits: 3954,
-      rows: [
-        {
-          title: 'Top 5 _type: apache',
-          label: 'Top 5 _type: apache',
-          geoJson: {
-            type: 'FeatureCollection',
-            features: [],
-            properties: {
-              min: 2,
-              max: 331,
-              zoom: 3,
-              center: [47.517200697839414, -112.06054687499999],
-            },
-          },
-        },
-        {
-          title: 'Top 5 _type: nginx',
-          label: 'Top 5 _type: nginx',
-          geoJson: {
-            type: 'FeatureCollection',
-            features: [],
-            properties: {
-              min: 1,
-              max: 88,
-              zoom: 3,
-              center: [47.517200697839414, -112.06054687499999],
-            },
-          },
-        },
-      ],
-    };
-
-    beforeEach(function () {
-      data = new Data(geohashGridData, mockUiState, () => undefined);
-    });
-
-    describe('getVisData', function () {
-      it('should return the rows property', function () {
-        const visData = data.getVisData();
-        expect(visData[0].title).toEqual(geohashGridData.rows[0].title);
-      });
-    });
-
-    describe('getGeoExtents', function () {
-      it('should return the min and max geoJson properties', function () {
-        const minMax = data.getGeoExtents();
-        expect(minMax.min).toBe(1);
-        expect(minMax.max).toBe(331);
-      });
-    });
   });
 
   describe('null value check', function () {

@@ -5,20 +5,20 @@
  * 2.0.
  */
 
-import React from 'react';
-import { FormattedMessage } from '@kbn/i18n-react';
 import { EuiCallOut, EuiSpacer } from '@elastic/eui';
-import { ThemeServiceStart, ToastInput } from '@kbn/core/public';
-import { toMountPoint } from '@kbn/kibana-react-plugin/public';
+import { CoreStart, ToastInput } from '@kbn/core/public';
+import { FormattedMessage } from '@kbn/i18n-react';
+import { toMountPoint } from '@kbn/react-kibana-mount';
+import React from 'react';
 
 export const getGeneralErrorToast = (
   errorText: string,
   err: Error,
-  theme: ThemeServiceStart
+  core: CoreStart
 ): ToastInput => ({
   text: toMountPoint(
     <>
-      <EuiCallOut title={errorText} color="danger" iconType="alert">
+      <EuiCallOut title={errorText} color="danger" iconType="warning">
         {err.toString()}
       </EuiCallOut>
 
@@ -29,7 +29,7 @@ export const getGeneralErrorToast = (
         defaultMessage="Try refreshing the page."
       />
     </>,
-    { theme$: theme.theme$ }
+    core
   ),
   iconType: undefined,
 });

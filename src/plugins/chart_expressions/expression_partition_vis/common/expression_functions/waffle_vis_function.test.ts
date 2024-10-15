@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { functionWrapper } from '@kbn/expressions-plugin/common/expression_functions/specs/tests/utils';
@@ -16,8 +17,9 @@ import {
 import { ExpressionValueVisDimension } from '@kbn/visualizations-plugin/common';
 import { Datatable } from '@kbn/expressions-plugin/common/expression_types/specs';
 import { waffleVisFunction } from './waffle_vis_function';
-import { PARTITION_LABELS_VALUE } from '../constants';
+import { PARTITION_LABELS_VALUE, PARTITION_VIS_RENDERER_NAME } from '../constants';
 import { ExecutionContext } from '@kbn/expressions-plugin/common';
+import { LegendValue } from '@elastic/charts';
 
 describe('interpreter/functions#waffleVis', () => {
   const fn = functionWrapper(waffleVisFunction());
@@ -34,7 +36,7 @@ describe('interpreter/functions#waffleVis', () => {
 
   const visConfig: WaffleVisConfig = {
     addTooltip: true,
-    showValuesInLegend: true,
+    legendStats: [LegendValue.Value],
     metricsToLabels: JSON.stringify({}),
     legendDisplay: LegendDisplay.SHOW,
     legendPosition: 'right',
@@ -120,5 +122,24 @@ describe('interpreter/functions#waffleVis', () => {
     await fn(context, visConfig, handlers);
 
     expect(loggedTable!).toMatchSnapshot();
+  });
+
+  it('should pass over overrides from variables', async () => {
+    const overrides = {
+      settings: {
+        onBrushEnd: 'ignore',
+      },
+    };
+    const handlers = {
+      variables: { overrides },
+      getExecutionContext: jest.fn(),
+    } as unknown as ExecutionContext;
+    const result = await fn(context, visConfig, handlers);
+
+    expect(result).toEqual({
+      type: 'render',
+      as: PARTITION_VIS_RENDERER_NAME,
+      value: expect.objectContaining({ overrides }),
+    });
   });
 });

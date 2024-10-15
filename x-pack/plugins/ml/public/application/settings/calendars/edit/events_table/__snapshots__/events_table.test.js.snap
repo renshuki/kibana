@@ -17,13 +17,17 @@ exports[`EventsTable Renders events table with no search bar 1`] = `
         },
         Object {
           "field": "start_time",
-          "name": "Start",
+          "name": <span>
+            Start
+          </span>,
           "render": [Function],
           "sortable": true,
         },
         Object {
           "field": "end_time",
-          "name": "End",
+          "name": <span>
+            End
+          </span>,
           "render": [Function],
           "sortable": true,
         },
@@ -56,13 +60,13 @@ exports[`EventsTable Renders events table with no search bar 1`] = `
         ],
       }
     }
-    responsive={true}
     rowProps={[Function]}
+    searchFormat="eql"
     sorting={
       Object {
         "sort": Object {
           "direction": "asc",
-          "field": "description",
+          "field": "start_time",
         },
       }
     }
@@ -88,13 +92,17 @@ exports[`EventsTable Renders events table with search bar 1`] = `
         },
         Object {
           "field": "start_time",
-          "name": "Start",
+          "name": <span>
+            Start
+          </span>,
           "render": [Function],
           "sortable": true,
         },
         Object {
           "field": "end_time",
-          "name": "End",
+          "name": <span>
+            End
+          </span>,
           "render": [Function],
           "sortable": true,
         },
@@ -127,7 +135,6 @@ exports[`EventsTable Renders events table with search bar 1`] = `
         ],
       }
     }
-    responsive={true}
     rowProps={[Function]}
     search={
       Object {
@@ -137,41 +144,38 @@ exports[`EventsTable Renders events table with search bar 1`] = `
         "filters": Array [],
         "toolsRight": Array [
           <EuiButton
-            color="primary"
             data-test-subj="mlCalendarNewEventButton"
             iconType="plusInCircle"
             isDisabled={false}
             onClick={[MockFunction]}
             size="s"
           >
-            <FormattedMessage
+            <Memo(MemoizedFormattedMessage)
               defaultMessage="New event"
               id="xpack.ml.calendarsEdit.eventsTable.newEventButtonLabel"
-              values={Object {}}
             />
           </EuiButton>,
           <EuiButton
-            color="primary"
             data-test-subj="mlCalendarImportEventsButton"
             iconType="importAction"
             isDisabled={false}
             onClick={[MockFunction]}
             size="s"
           >
-            <FormattedMessage
+            <Memo(MemoizedFormattedMessage)
               defaultMessage="Import events"
               id="xpack.ml.calendarsEdit.eventsTable.importEventsButtonLabel"
-              values={Object {}}
             />
           </EuiButton>,
         ],
       }
     }
+    searchFormat="eql"
     sorting={
       Object {
         "sort": Object {
           "direction": "asc",
-          "field": "description",
+          "field": "start_time",
         },
       }
     }

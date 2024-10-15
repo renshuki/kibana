@@ -10,7 +10,11 @@ import { i18n } from '@kbn/i18n';
 
 import { splitPkgKey } from '../../../../../../../common/services';
 
-import { useGetPackageInfoByKey, useLink, useFleetServerHostsForPolicy } from '../../../../hooks';
+import {
+  useGetPackageInfoByKeyQuery,
+  useLink,
+  useFleetServerHostsForPolicy,
+} from '../../../../hooks';
 
 import type { AddToPolicyParams, CreatePackagePolicyParams } from '../types';
 
@@ -70,7 +74,7 @@ export const CreatePackagePolicyMultiPage: CreatePackagePolicyParams = ({
     data: packageInfoData,
     error: packageInfoError,
     isLoading: isPackageInfoLoading,
-  } = useGetPackageInfoByKey(pkgName, pkgVersion, { prerelease, full: true });
+  } = useGetPackageInfoByKeyQuery(pkgName, pkgVersion, { prerelease, full: true });
 
   const {
     agentPolicy,
@@ -92,7 +96,7 @@ export const CreatePackagePolicyMultiPage: CreatePackagePolicyParams = ({
     setOnSplash(false);
   };
 
-  const { fleetServerHosts, fleetProxy, isLoadingInitialRequest } =
+  const { fleetServerHost, fleetProxy, downloadSource, isLoadingInitialRequest } =
     useFleetServerHostsForPolicy(agentPolicy);
 
   const cancelUrl = getHref('add_integration_to_policy', {
@@ -134,8 +138,9 @@ export const CreatePackagePolicyMultiPage: CreatePackagePolicyParams = ({
 
   return (
     <MultiPageStepsLayout
-      fleetServerHosts={fleetServerHosts}
+      fleetServerHost={fleetServerHost}
       fleetProxy={fleetProxy}
+      downloadSource={downloadSource}
       agentPolicy={agentPolicy}
       enrollmentAPIKey={enrollmentAPIKey}
       currentStep={currentStep}

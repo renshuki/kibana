@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -27,6 +28,8 @@ export const FieldComponent: React.FC<FieldProps> = ({
   placeholder,
   selectedField,
   acceptsCustomOptions = false,
+  showMappingConflicts = false,
+  'aria-label': ariaLabel,
 }): JSX.Element => {
   const {
     isInvalid,
@@ -44,6 +47,7 @@ export const FieldComponent: React.FC<FieldProps> = ({
     isRequired,
     selectedField,
     fieldInputWidth,
+    showMappingConflicts,
     onChange,
   });
 
@@ -68,6 +72,8 @@ export const FieldComponent: React.FC<FieldProps> = ({
           values: { searchValuePlaceholder: '{searchValue}' },
         })}
         fullWidth
+        renderOption={renderFields}
+        aria-label={ariaLabel}
       />
     );
   }
@@ -88,6 +94,7 @@ export const FieldComponent: React.FC<FieldProps> = ({
       style={fieldWidth}
       fullWidth
       renderOption={renderFields}
+      aria-label={ariaLabel}
     />
   );
 };

@@ -6,10 +6,12 @@
  */
 
 import { RouteDependencies } from '../../plugin';
+import { registerCrawlerExtractionRulesRoutes } from '../enterprise_search/crawler/crawler_extraction_rules';
 
 import { registerSearchRelevanceSuggestionsRoutes } from './adaptive_relevance';
 import { registerAnalyticsRoutes } from './analytics';
 import { registerApiLogsRoutes } from './api_logs';
+import { registerAppSearchGatedFormRoute } from './app_search_gated_form';
 import { registerCrawlerRoutes } from './crawler';
 import { registerCrawlerCrawlRulesRoutes } from './crawler_crawl_rules';
 import { registerCrawlerEntryPointRoutes } from './crawler_entry_points';
@@ -50,6 +52,8 @@ export const registerAppSearchRoutes = (dependencies: RouteDependencies) => {
   registerCrawlerRoutes(dependencies);
   registerCrawlerEntryPointRoutes(dependencies);
   registerCrawlerCrawlRulesRoutes(dependencies);
+  registerCrawlerExtractionRulesRoutes(dependencies);
   registerCrawlerSitemapRoutes(dependencies);
   registerSearchRelevanceSuggestionsRoutes(dependencies);
+  registerAppSearchGatedFormRoute(dependencies);
 };

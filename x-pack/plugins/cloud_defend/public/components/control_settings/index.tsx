@@ -29,7 +29,16 @@ export const ControlSettings = ({ policy, onChange }: SettingsDeps) => {
   const isGeneralViewSelected = viewMode === VIEW_MODE_GENERAL;
   const isYamlViewSelected = viewMode === VIEW_MODE_YAML;
 
-  const onChanges = useCallback(
+  const onGeneralChanges = useCallback(
+    (opts: OnChangeDeps) => {
+      opts.updatedPolicy = policy;
+      onChange(opts);
+      setIsValid(opts.isValid);
+    },
+    [onChange, policy]
+  );
+
+  const onYamlChanges = useCallback(
     (opts: OnChangeDeps) => {
       opts.updatedPolicy = policy;
       onChange(opts);
@@ -63,8 +72,14 @@ export const ControlSettings = ({ policy, onChange }: SettingsDeps) => {
         </EuiTabs>
       </EuiFlexItem>
       <EuiFlexItem>
-        <ControlGeneralView show={isGeneralViewSelected} policy={policy} onChange={onChanges} />
-        <ControlYamlView show={isYamlViewSelected} policy={policy} onChange={onChanges} />
+        {isGeneralViewSelected && (
+          <ControlGeneralView
+            show={isGeneralViewSelected}
+            policy={policy}
+            onChange={onGeneralChanges}
+          />
+        )}
+        <ControlYamlView show={isYamlViewSelected} policy={policy} onChange={onYamlChanges} />
       </EuiFlexItem>
     </EuiFlexGroup>
   );

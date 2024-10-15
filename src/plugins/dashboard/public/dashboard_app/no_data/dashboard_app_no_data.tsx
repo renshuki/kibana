@@ -1,46 +1,57 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
-import {
-  AnalyticsNoDataPageKibanaProvider,
-  AnalyticsNoDataPage,
-} from '@kbn/shared-ux-page-analytics-no-data';
 
-import { pluginServices } from '../../services/plugin_services';
+import { withSuspense } from '@kbn/shared-ux-utility';
+
+import { DASHBOARD_APP_ID } from '../../dashboard_constants';
+import {
+  coreServices,
+  dataService,
+  dataViewEditorService,
+  embeddableService,
+  noDataPageService,
+  shareService,
+} from '../../services/kibana_services';
+import { getDashboardBackupService } from '../../services/dashboard_backup_service';
+import { getDashboardContentManagementService } from '../../services/dashboard_content_management_service';
 
 export const DashboardAppNoDataPage = ({
   onDataViewCreated,
 }: {
   onDataViewCreated: () => void;
 }) => {
-  const {
-    application,
-    data: { dataViews },
-    dataViewEditor,
-    http: { basePath },
-    documentationLinks: { indexPatternsDocLink, kibanaGuideDocLink },
-  } = pluginServices.getServices();
-
   const analyticsServices = {
-    coreStart: {
-      docLinks: {
-        links: {
-          kibana: { guide: kibanaGuideDocLink },
-          indexPatterns: { introduction: indexPatternsDocLink },
-        },
-      },
-      application,
-      http: { basePath },
-    },
-    dataViews,
-    dataViewEditor,
+    coreStart: coreServices,
+    dataViews: dataService.dataViews,
+    dataViewEditor: dataViewEditorService,
+    noDataPage: noDataPageService,
+    share: shareService,
   };
+
+  const importPromise = import('@kbn/shared-ux-page-analytics-no-data');
+  const AnalyticsNoDataPageKibanaProvider = withSuspense(
+    React.lazy(() =>
+      importPromise.then(({ AnalyticsNoDataPageKibanaProvider: NoDataProvider }) => {
+        return { default: NoDataProvider };
+      })
+    )
+  );
+  const AnalyticsNoDataPage = withSuspense(
+    React.lazy(() =>
+      importPromise.then(({ AnalyticsNoDataPage: NoDataPage }) => {
+        return { default: NoDataPage };
+      })
+    )
+  );
+
   return (
     <AnalyticsNoDataPageKibanaProvider {...analyticsServices}>
       <AnalyticsNoDataPage onDataViewCreated={onDataViewCreated} />
@@ -49,10 +60,24 @@ export const DashboardAppNoDataPage = ({
 };
 
 export const isDashboardAppInNoDataState = async () => {
-  const {
-    data: { dataViews },
-  } = pluginServices.getServices();
+  const hasUserDataView = await dataService.dataViews.hasData.hasUserDataView().catch(() => false);
 
-  const hasUserDataView = await dataViews.hasData.hasUserDataView().catch(() => false);
-  return !hasUserDataView;
+  if (hasUserDataView) return false;
+
+  // consider has data if there is an incoming embeddable
+  const hasIncomingEmbeddable = embeddableService
+    .getStateTransfer()
+    .getIncomingEmbeddablePackage(DASHBOARD_APP_ID, false);
+  if (hasIncomingEmbeddable) return false;
+
+  // consider has data if there is unsaved dashboard with edits
+  if (getDashboardBackupService().dashboardHasUnsavedEdits()) return false;
+
+  // consider has data if there is at least one dashboard
+  const { total } = await getDashboardContentManagementService()
+    .findDashboards.search({ search: '', size: 1 })
+    .catch(() => ({ total: 0 }));
+  if (total > 0) return false;
+
+  return true;
 };

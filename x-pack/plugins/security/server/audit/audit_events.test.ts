@@ -7,11 +7,8 @@
 
 import { URL } from 'url';
 
-import { AuditAction } from '@kbn/core-saved-objects-server';
 import { httpServerMock } from '@kbn/core/server/mocks';
 
-import { mockAuthenticatedUser } from '../../common/model/authenticated_user.mock';
-import { AuthenticationResult } from '../authentication';
 import {
   httpRequestEvent,
   savedObjectEvent,
@@ -23,6 +20,9 @@ import {
   userLogoutEvent,
   userSessionConcurrentLimitLogoutEvent,
 } from './audit_events';
+import { mockAuthenticatedUser } from '../../common/model/authenticated_user.mock';
+import { AuthenticationResult } from '../authentication';
+import { AuditAction } from '../saved_objects/saved_objects_security_extension';
 
 describe('#savedObjectEvent', () => {
   test('creates event with `unknown` outcome', () => {
@@ -30,7 +30,7 @@ describe('#savedObjectEvent', () => {
       savedObjectEvent({
         action: AuditAction.CREATE,
         outcome: 'unknown',
-        savedObject: { type: 'dashboard', id: 'SAVED_OBJECT_ID' },
+        savedObject: { type: 'dashboard', id: 'SAVED_OBJECT_ID', name: 'test_dashboard' },
       })
     ).toMatchInlineSnapshot(`
       Object {
@@ -50,8 +50,11 @@ describe('#savedObjectEvent', () => {
           "delete_from_spaces": undefined,
           "saved_object": Object {
             "id": "SAVED_OBJECT_ID",
+            "name": "test_dashboard",
             "type": "dashboard",
           },
+          "unauthorized_spaces": undefined,
+          "unauthorized_types": undefined,
         },
         "message": "User is creating dashboard [id=SAVED_OBJECT_ID]",
       }
@@ -62,7 +65,7 @@ describe('#savedObjectEvent', () => {
     expect(
       savedObjectEvent({
         action: AuditAction.CREATE,
-        savedObject: { type: 'dashboard', id: 'SAVED_OBJECT_ID' },
+        savedObject: { type: 'dashboard', id: 'SAVED_OBJECT_ID', name: 'test_dashboard' },
       })
     ).toMatchInlineSnapshot(`
       Object {
@@ -82,8 +85,11 @@ describe('#savedObjectEvent', () => {
           "delete_from_spaces": undefined,
           "saved_object": Object {
             "id": "SAVED_OBJECT_ID",
+            "name": "test_dashboard",
             "type": "dashboard",
           },
+          "unauthorized_spaces": undefined,
+          "unauthorized_types": undefined,
         },
         "message": "User has created dashboard [id=SAVED_OBJECT_ID]",
       }
@@ -94,7 +100,7 @@ describe('#savedObjectEvent', () => {
     expect(
       savedObjectEvent({
         action: AuditAction.CREATE,
-        savedObject: { type: 'dashboard', id: 'SAVED_OBJECT_ID' },
+        savedObject: { type: 'dashboard', id: 'SAVED_OBJECT_ID', name: 'test_dashboard' },
         error: new Error('ERROR_MESSAGE'),
       })
     ).toMatchInlineSnapshot(`
@@ -118,8 +124,11 @@ describe('#savedObjectEvent', () => {
           "delete_from_spaces": undefined,
           "saved_object": Object {
             "id": "SAVED_OBJECT_ID",
+            "name": "test_dashboard",
             "type": "dashboard",
           },
+          "unauthorized_spaces": undefined,
+          "unauthorized_types": undefined,
         },
         "message": "Failed attempt to create dashboard [id=SAVED_OBJECT_ID]",
       }
@@ -157,13 +166,13 @@ describe('#savedObjectEvent', () => {
     expect(
       savedObjectEvent({
         action: AuditAction.GET,
-        savedObject: { type: 'telemetry', id: 'SAVED_OBJECT_ID' },
+        savedObject: { type: 'telemetry', id: 'SAVED_OBJECT_ID', name: 'telemetry_name' },
       })
     ).toBeUndefined();
     expect(
       savedObjectEvent({
         action: AuditAction.RESOLVE,
-        savedObject: { type: 'config', id: 'SAVED_OBJECT_ID' },
+        savedObject: { type: 'config', id: 'SAVED_OBJECT_ID', name: 'config_name' },
       })
     ).toBeUndefined();
     expect(
@@ -190,13 +199,13 @@ describe('#savedObjectEvent', () => {
     expect(
       savedObjectEvent({
         action: AuditAction.UPDATE,
-        savedObject: { type: 'config', id: 'SAVED_OBJECT_ID' },
+        savedObject: { type: 'config', id: 'SAVED_OBJECT_ID', name: 'config_name' },
       })
     ).not.toBeUndefined();
     expect(
       savedObjectEvent({
         action: AuditAction.UPDATE,
-        savedObject: { type: 'telemetry', id: 'SAVED_OBJECT_ID' },
+        savedObject: { type: 'telemetry', id: 'SAVED_OBJECT_ID', name: 'telemetry_name' },
       })
     ).not.toBeUndefined();
   });
@@ -227,8 +236,95 @@ describe('#savedObjectEvent', () => {
             "id": "SAVED_OBJECT_ID",
             "type": "dashboard",
           },
+          "unauthorized_spaces": undefined,
+          "unauthorized_types": undefined,
         },
         "message": "User has removed references to dashboard [id=SAVED_OBJECT_ID]",
+      }
+    `);
+  });
+
+  test('can create event with `add_to_spaces` and `delete_from_spaces`', () => {
+    expect(
+      savedObjectEvent({
+        action: AuditAction.UPDATE_OBJECTS_SPACES,
+        savedObject: { type: 'dashboard', id: 'SAVED_OBJECT_ID' },
+        addToSpaces: ['space1', 'space3', 'space5'],
+        deleteFromSpaces: ['space2', 'space4', 'space6'],
+      })
+    ).toMatchInlineSnapshot(`
+      Object {
+        "error": undefined,
+        "event": Object {
+          "action": "saved_object_update_objects_spaces",
+          "category": Array [
+            "database",
+          ],
+          "outcome": "success",
+          "type": Array [
+            "change",
+          ],
+        },
+        "kibana": Object {
+          "add_to_spaces": Array [
+            "space1",
+            "space3",
+            "space5",
+          ],
+          "delete_from_spaces": Array [
+            "space2",
+            "space4",
+            "space6",
+          ],
+          "saved_object": Object {
+            "id": "SAVED_OBJECT_ID",
+            "type": "dashboard",
+          },
+          "unauthorized_spaces": undefined,
+          "unauthorized_types": undefined,
+        },
+        "message": "User has updated spaces of dashboard [id=SAVED_OBJECT_ID]",
+      }
+    `);
+  });
+
+  test('can create event with `requested_spaces` and `requested_types`', () => {
+    expect(
+      savedObjectEvent({
+        action: AuditAction.FIND,
+        savedObject: undefined,
+        unauthorizedSpaces: ['space1', 'space2', 'space3'],
+        unauthorizedTypes: ['x', 'y', 'z'],
+      })
+    ).toMatchInlineSnapshot(`
+      Object {
+        "error": undefined,
+        "event": Object {
+          "action": "saved_object_find",
+          "category": Array [
+            "database",
+          ],
+          "outcome": "success",
+          "type": Array [
+            "access",
+          ],
+        },
+        "kibana": Object {
+          "add_to_spaces": undefined,
+          "delete_from_spaces": undefined,
+          "saved_object": undefined,
+          "unauthorized_spaces": Array [
+            "space1",
+            "space2",
+            "space3",
+          ],
+          "unauthorized_types": Array [
+            "x",
+            "y",
+            "z",
+          ],
+        },
+        "message": "User has accessed saved objects",
       }
     `);
   });

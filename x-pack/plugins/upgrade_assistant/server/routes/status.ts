@@ -24,6 +24,10 @@ export function registerUpgradeStatusRoute({
   router.get(
     {
       path: `${API_BASE_PATH}/status`,
+      options: {
+        access: 'public',
+        summary: `Get upgrade readiness status`,
+      },
       validate: false,
     },
     versionCheckHandlerWrapper(async ({ core }, request, response) => {
@@ -37,9 +41,27 @@ export function registerUpgradeStatusRoute({
           esClient,
           featureSet
         );
-        // Fetch system indices migration status
+
+        const getSystemIndicesMigrationStatus = async () => {
+          /**
+           * Skip system indices migration status check if `featureSet.migrateSystemIndices`
+           * is set to `false`. This flag is enabled from configs for major version stack ugprades.
+           * returns `migration_status: 'NO_MIGRATION_NEEDED'` to indicate no migation needed.
+           */
+          if (!featureSet.migrateSystemIndices) {
+            return {
+              migration_status: 'NO_MIGRATION_NEEDED',
+              features: [],
+            };
+          }
+
+          // Fetch system indices migration status from ES
+          return await getESSystemIndicesMigrationStatus(esClient.asCurrentUser);
+        };
+
         const { migration_status: systemIndicesMigrationStatus, features } =
-          await getESSystemIndicesMigrationStatus(esClient.asCurrentUser);
+          await getSystemIndicesMigrationStatus();
+
         const notMigratedSystemIndices = features.filter(
           (feature) => feature.migration_status !== 'NO_MIGRATION_NEEDED'
         ).length;

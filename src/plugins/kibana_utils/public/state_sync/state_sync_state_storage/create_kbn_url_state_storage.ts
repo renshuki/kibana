@@ -1,14 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Observable, of } from 'rxjs';
-import { catchError, map, share } from 'rxjs/operators';
+import { catchError, map, share } from 'rxjs';
 import { History } from 'history';
+import { throttle } from 'lodash';
 import { IStateStorage } from './types';
 import {
   createKbnUrlControls,
@@ -74,6 +76,7 @@ export const createKbnUrlStateStorage = (
   }
 ): IKbnUrlStateStorage => {
   const url = createKbnUrlControls(history);
+  const onGetErrorThrottled = onGetError ? throttle((e) => onGetError(e), 100) : undefined;
   return {
     set: <State>(
       key: string,
@@ -100,7 +103,7 @@ export const createKbnUrlStateStorage = (
       try {
         return getStateFromKbnUrl(key, url.getPendingUrl(), { getFromHashQuery: useHashQuery });
       } catch (e) {
-        if (onGetError) onGetError(e);
+        if (onGetErrorThrottled) onGetErrorThrottled(e);
         return null;
       }
     },
@@ -114,9 +117,13 @@ export const createKbnUrlStateStorage = (
           unlisten();
         };
       }).pipe(
-        map(() => getStateFromKbnUrl<State>(key, undefined, { getFromHashQuery: useHashQuery })),
+        map(() =>
+          getStateFromKbnUrl<State>(key, history?.createHref(history.location), {
+            getFromHashQuery: useHashQuery,
+          })
+        ),
         catchError((error) => {
-          if (onGetError) onGetError(error);
+          if (onGetErrorThrottled) onGetErrorThrottled(error);
           return of(null);
         }),
         share()

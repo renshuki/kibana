@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { useCallback, useContext } from 'react';
+import React, { useCallback, useContext, useState } from 'react';
 import {
   EuiDraggable,
   EuiDroppable,
@@ -24,6 +25,7 @@ import { buildEmptyFilter, getFilterParams, BooleanRelation } from '@kbn/es-quer
 import { DataViewField } from '@kbn/data-views-plugin/common';
 import { cx } from '@emotion/css';
 
+import { css } from '@emotion/react';
 import { FieldInput } from './field_input';
 import { OperatorInput } from './operator_input';
 import { ParamsEditor } from './params_editor';
@@ -33,6 +35,7 @@ import { FilterGroup } from '../filter_group';
 import type { Path } from '../types';
 import { getFieldFromFilter, getOperatorFromFilter } from '../../filter_bar/filter_editor';
 import { Operator } from '../../filter_bar/filter_editor';
+import { getGroupedFilters } from '../utils/filters_builder';
 import {
   cursorAddCss,
   cursorOrCss,
@@ -70,6 +73,7 @@ export interface FilterItemProps {
   /** @internal used for recursive rendering **/
   renderedLevel: number;
   reverseBackground: boolean;
+  filtersCount?: number;
 }
 
 const isMaxFilterNesting = (path: string) => {
@@ -88,6 +92,7 @@ export function FilterItem({
   index,
   renderedLevel,
   draggable = true,
+  filtersCount = 1,
 }: FilterItemProps) {
   const {
     dispatch,
@@ -95,24 +100,32 @@ export function FilterItem({
     dropTarget,
     globalParams: { hideOr },
     timeRangeForSuggestionsOverride,
+    filtersForSuggestions,
     disabled,
   } = useContext(FiltersBuilderContextType);
   const conditionalOperationType = getBooleanRelationType(filter);
   const { euiTheme } = useEuiTheme();
   let field: DataViewField | undefined;
-  let operator: Operator | undefined;
-  let params: Filter['meta']['params'] | undefined;
+  let params: Filter['meta']['params'];
   const isMaxNesting = isMaxFilterNesting(path);
   if (!conditionalOperationType) {
     field = getFieldFromFilter(filter, dataView!);
     if (field) {
-      operator = getOperatorFromFilter(filter);
       params = getFilterParams(filter);
     }
   }
+  const [operator, setOperator] = useState<Operator | undefined>(() => {
+    if (!conditionalOperationType && field) {
+      return getOperatorFromFilter(filter);
+    }
+  });
+  const [multiValueFilterParams, setMultiValueFilterParams] = useState<
+    Array<Filter | boolean | string | number>
+  >(Array.isArray(params) ? params : []);
 
   const onHandleField = useCallback(
     (selectedField: DataViewField) => {
+      setOperator(undefined);
       dispatch({
         type: 'updateFilter',
         payload: { dest: { path, index }, field: selectedField },
@@ -123,16 +136,28 @@ export function FilterItem({
 
   const onHandleOperator = useCallback(
     (selectedOperator: Operator) => {
+      const preservedParams =
+        params && selectedOperator.getParamsFromPrevOperator?.(operator, params);
+      setMultiValueFilterParams(Array.isArray(preservedParams) ? preservedParams : []);
+      setOperator(selectedOperator);
       dispatch({
         type: 'updateFilter',
-        payload: { dest: { path, index }, field, operator: selectedOperator },
+        payload: {
+          dest: { path, index },
+          field,
+          operator: selectedOperator,
+          params: params && selectedOperator.getParamsFromPrevOperator?.(operator, params),
+        },
       });
     },
-    [dispatch, path, index, field]
+    [dispatch, path, index, field, operator, params]
   );
 
   const onHandleParamsChange = useCallback(
-    (selectedParams: unknown) => {
+    (selectedParams: Filter['meta']['params']) => {
+      if (Array.isArray(selectedParams)) {
+        setMultiValueFilterParams(selectedParams);
+      }
       dispatch({
         type: 'updateFilter',
         payload: { dest: { path, index }, field, operator, params: selectedParams },
@@ -142,14 +167,27 @@ export function FilterItem({
   );
 
   const onHandleParamsUpdate = useCallback(
-    (value: Filter['meta']['params']) => {
-      const paramsValues = Array.isArray(params) ? params : [];
+    (value: Filter | boolean | string | number) => {
+      const paramsValues: Array<Filter | boolean | string | number> = Array.isArray(
+        multiValueFilterParams
+      )
+        ? multiValueFilterParams
+        : [];
+      if (value) {
+        paramsValues.push(value);
+        setMultiValueFilterParams(paramsValues);
+      }
       dispatch({
         type: 'updateFilter',
-        payload: { dest: { path, index }, field, operator, params: [...paramsValues, value] },
+        payload: {
+          dest: { path, index },
+          field,
+          operator,
+          params: paramsValues as Filter['meta']['params'],
+        },
       });
     },
-    [dispatch, path, index, field, operator, params]
+    [dispatch, path, index, field, operator, multiValueFilterParams]
   );
 
   const onRemoveFilter = useCallback(() => {
@@ -192,7 +230,7 @@ export function FilterItem({
         <FilterGroup
           path={path}
           booleanRelation={conditionalOperationType}
-          filters={Array.isArray(filter) ? filter : filter.meta?.params}
+          filters={getGroupedFilters(filter)}
           reverseBackground={!reverseBackground}
           renderedLevel={renderedLevel + 1}
         />
@@ -213,6 +251,7 @@ export function FilterItem({
             hasInteractiveChildren={true}
             disableInteractiveElementBlocking
             className={cx(disabledDraggableCss)}
+            usePortal
           >
             {(provided) => (
               <EuiFlexGroup
@@ -232,8 +271,18 @@ export function FilterItem({
                       className={cx({
                         [cursorOrCss]: dropTarget === path && !hideOr,
                       })}
+                      css={
+                        // With a single filter there's a disabled cursor set at dragging level
+                        // so we need to revert such css directive for the rest of the editor row
+                        filtersCount === 1
+                          ? css`
+                              cursor: auto;
+                            `
+                          : undefined
+                      }
                     >
                       <EuiFlexItem
+                        role="button"
                         grow={false}
                         aria-label={strings.getDragFilterAriaLabel()}
                         {...provided.dragHandleProps}
@@ -279,7 +328,18 @@ export function FilterItem({
                           </EuiFlexItem>
                           <EuiFlexItem className={fieldAndParamCss(euiTheme)}>
                             <EuiFormRow>
-                              <div data-test-subj="filterParams">
+                              <div
+                                data-test-subj="filterParams"
+                                css={
+                                  // The disabled cursor downstream is unset
+                                  // so force the correct cursor here based on the operator
+                                  operator
+                                    ? undefined
+                                    : css`
+                                        cursor: not-allowed;
+                                      `
+                                }
+                              >
                                 <ParamsEditor
                                   dataView={dataView}
                                   field={field}
@@ -288,6 +348,7 @@ export function FilterItem({
                                   onHandleParamsChange={onHandleParamsChange}
                                   onHandleParamsUpdate={onHandleParamsUpdate}
                                   timeRangeForSuggestionsOverride={timeRangeForSuggestionsOverride}
+                                  filtersForSuggestions={filtersForSuggestions}
                                 />
                               </div>
                             </EuiFormRow>

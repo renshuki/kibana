@@ -94,7 +94,7 @@ export const RelationsParameter = () => {
   const renderWarning = () => (
     <EuiCallOut
       color="warning"
-      iconType="alert"
+      iconType="warning"
       size="s"
       title={
         <FormattedMessage
@@ -244,7 +244,6 @@ export const RelationsParameter = () => {
                     defaultMessage: 'No relationship defined',
                   }
                 )}
-                hasActions
               />
 
               {/* Add relation button */}

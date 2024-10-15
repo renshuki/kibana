@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import Path from 'path';
@@ -14,7 +15,7 @@ import { createFailError } from '@kbn/dev-cli-errors';
 import { REPO_ROOT } from '@kbn/repo-info';
 import { asyncForEachWithLimit, asyncMapWithLimit } from '@kbn/std';
 import { SomeDevLog } from '@kbn/some-dev-log';
-import { TsProject, TS_PROJECTS } from '@kbn/ts-projects';
+import { type TsProject, TS_PROJECTS } from '@kbn/ts-projects';
 
 import {
   updateRootRefsConfig,
@@ -124,6 +125,9 @@ run(
           '--pretty',
           ...(flagsReader.boolean('verbose') ? ['--verbose'] : []),
         ],
+        env: {
+          NODE_OPTIONS: '--max-old-space-size=8192',
+        },
         cwd: REPO_ROOT,
         wait: true,
       });

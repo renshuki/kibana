@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { $Values } from '@kbn/utility-types';
@@ -15,6 +16,8 @@ import {
 } from '@kbn/expressions-plugin/common';
 import { ExpressionValueVisDimension } from '@kbn/visualizations-plugin/common';
 import { CustomPaletteState } from '@kbn/charts-plugin/common';
+import type { MakeOverridesSerializable, Simplify } from '@kbn/chart-expressions-common/types';
+import type { GoalProps } from '@elastic/charts';
 import {
   EXPRESSION_GAUGE_NAME,
   GAUGE_FUNCTION_RENDERER_NAME,
@@ -39,19 +42,27 @@ export interface GaugeState {
   labelMajorMode: GaugeLabelMajorMode;
   labelMajor?: string;
   labelMinor?: string;
-  centralMajorMode?: GaugeCentralMajorMode;
-  centralMajor?: string;
   colorMode?: GaugeColorMode;
   palette?: PaletteOutput<CustomPaletteParams>;
   shape: GaugeShape;
-  /** @deprecated This field is deprecated and going to be removed in the futher release versions. */
-  percentageMode?: boolean;
   respectRanges?: boolean;
   commonLabel?: string;
+  /**
+   * @deprecated Use `labelMajorMode` instead
+   */
+  centralMajorMode?: GaugeCentralMajorMode;
+  /**
+   * @deprecated Use `labelMajor` instead
+   */
+  centralMajor?: string;
+  /**
+   * This field is deprecated and will be removed in a future release
+   * @deprecated
+   */
+  percentageMode?: boolean;
 }
 
 export type GaugeArguments = GaugeState & {
-  shape: GaugeShape;
   colorMode: GaugeColorMode;
   palette?: PaletteOutput<CustomPaletteState>;
   ariaLabel?: string;
@@ -84,3 +95,7 @@ export interface Accessors {
   metric?: string;
   goal?: string;
 }
+
+export type AllowedGaugeOverrides = Partial<
+  Record<'gauge', Simplify<MakeOverridesSerializable<GoalProps>>>
+>;

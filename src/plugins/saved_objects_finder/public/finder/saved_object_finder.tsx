@@ -1,60 +1,54 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { debounce } from 'lodash';
 import PropTypes from 'prop-types';
-import React from 'react';
-import type { SavedObjectsManagementPluginStart } from '@kbn/saved-objects-management-plugin/public';
+import React, { ReactElement, ReactNode } from 'react';
+import { getTagFindReferences, parseQuery } from '@kbn/saved-objects-management-plugin/public';
+import type { ContentClient } from '@kbn/content-management-plugin/public';
+import type { IUiSettingsClient } from '@kbn/core/public';
 
 import {
+  EuiFlexGroup,
+  EuiFlexItem,
   EuiInMemoryTable,
   EuiLink,
-  EuiTableFieldDataColumnType,
-  IconType,
-  EuiIcon,
-  EuiToolTip,
   EuiSearchBarProps,
-  SearchFilterConfig,
-  Query,
+  EuiTableFieldDataColumnType,
+  EuiText,
+  EuiToolTip,
+  EuiIconTip,
+  IconType,
   PropertySort,
+  Query,
+  SearchFilterConfig,
 } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 
-import type {
-  SimpleSavedObject,
-  SavedObject,
-  SavedObjectsStart,
-  IUiSettingsClient,
-} from '@kbn/core/public';
 import type { SavedObjectsTaggingApi } from '@kbn/saved-objects-tagging-oss-plugin/public';
-import { LISTING_LIMIT_SETTING } from '@kbn/saved-objects-plugin/public';
+import { FinderAttributes, SavedObjectCommon, LISTING_LIMIT_SETTING } from '../../common';
 
-export interface SavedObjectMetaData<T = unknown> {
+export interface SavedObjectMetaData<T extends FinderAttributes = FinderAttributes> {
   type: string;
   name: string;
-  getIconForSavedObject(savedObject: SimpleSavedObject<T>): IconType;
-  getTooltipForSavedObject?(savedObject: SimpleSavedObject<T>): string;
-  showSavedObject?(savedObject: SimpleSavedObject<T>): boolean;
-  getSavedObjectSubType?(savedObject: SimpleSavedObject<T>): string;
+  getIconForSavedObject(savedObject: SavedObjectCommon<T>): IconType;
+  getTooltipForSavedObject?(savedObject: SavedObjectCommon<T>): string;
+  showSavedObject?(savedObject: SavedObjectCommon<T>): boolean;
+  getSavedObjectSubType?(savedObject: SavedObjectCommon<T>): string;
+  /** @deprecated doesn't do anything, the full object is returned **/
   includeFields?: string[];
-  defaultSearchField?: string;
 }
 
-interface FinderAttributes {
-  title?: string;
-  name?: string;
-  type: string;
-}
-
-interface SavedObjectFinderItem extends SavedObject {
+interface SavedObjectFinderItem extends SavedObjectCommon {
   title: string | null;
   name: string | null;
-  simple: SimpleSavedObject<FinderAttributes>;
+  simple: SavedObjectCommon<FinderAttributes>;
 }
 
 interface SavedObjectFinderState {
@@ -65,23 +59,26 @@ interface SavedObjectFinderState {
 }
 
 interface SavedObjectFinderServices {
-  savedObjects: SavedObjectsStart;
+  savedObjectsTagging?: SavedObjectsTaggingApi;
+  contentClient: ContentClient;
   uiSettings: IUiSettingsClient;
-  savedObjectsManagement: SavedObjectsManagementPluginStart;
-  savedObjectsTagging: SavedObjectsTaggingApi | undefined;
 }
 
 interface BaseSavedObjectFinder {
   services: SavedObjectFinderServices;
   onChoose?: (
-    id: SimpleSavedObject['id'],
-    type: SimpleSavedObject['type'],
+    id: SavedObjectCommon['id'],
+    type: SavedObjectCommon['type'],
     name: string,
-    savedObject: SimpleSavedObject
+    savedObject: SavedObjectCommon
   ) => void;
-  noItemsMessage?: React.ReactNode;
+  noItemsMessage?: ReactNode;
   savedObjectMetaData: Array<SavedObjectMetaData<FinderAttributes>>;
   showFilter?: boolean;
+  leftChildren?: ReactElement | ReactElement[];
+  children?: ReactElement | ReactElement[];
+  helpText?: string;
+  getTooltipText?: (item: SavedObjectFinderItem) => string | undefined;
 }
 
 interface SavedObjectFinderFixedPage extends BaseSavedObjectFinder {
@@ -113,53 +110,43 @@ export class SavedObjectFinderUi extends React.Component<
 
   private debouncedFetch = debounce(async (query: Query) => {
     const metaDataMap = this.getSavedObjectMetaDataMap();
-    const { queryText, visibleTypes, selectedTags } =
-      this.props.services.savedObjectsManagement.parseQuery(
-        query,
-        Object.values(metaDataMap).map((metadata) => ({
-          name: metadata.type,
-          namespaceType: 'single',
-          hidden: false,
-          displayName: metadata.name,
-        }))
-      );
+    const { contentClient, uiSettings } = this.props.services;
 
-    const fields = Object.values(metaDataMap)
-      .map((metaData) => metaData.includeFields || [])
-      .reduce((allFields, currentFields) => allFields.concat(currentFields), ['title', 'name']);
+    const { queryText, visibleTypes, selectedTags } = parseQuery(
+      query,
+      Object.values(metaDataMap).map((metadata) => ({
+        name: metadata.type,
+        namespaceType: 'single',
+        hidden: false,
+        displayName: metadata.name,
+      }))
+    );
+    const includeTags = getTagFindReferences({
+      selectedTags,
+      taggingApi: this.props.services.savedObjectsTagging,
+    })?.map(({ id, type }) => id);
 
-    const additionalSearchFields = Object.values(metaDataMap).reduce<string[]>((col, item) => {
-      if (item.defaultSearchField) {
-        col.push(item.defaultSearchField);
-      }
-      return col;
-    }, []);
+    const types = visibleTypes ?? Object.keys(metaDataMap);
 
-    const perPage = this.props.services.uiSettings.get(LISTING_LIMIT_SETTING);
-    const response = await this.props.services.savedObjects.client.find<FinderAttributes>({
-      type: visibleTypes ?? Object.keys(metaDataMap),
-      fields: [...new Set(fields)],
-      search: queryText ? `${queryText}*` : undefined,
-      page: 1,
-      perPage,
-      searchFields: ['title^3', 'description', ...additionalSearchFields],
-      defaultSearchOperator: 'AND',
-      hasReference: this.props.services.savedObjectsManagement.getTagFindReferences({
-        selectedTags,
-        taggingApi: this.props.services.savedObjectsTagging,
-      }),
+    const response = await contentClient.mSearch<SavedObjectCommon<FinderAttributes>>({
+      contentTypes: types.map((type) => ({ contentTypeId: type })),
+      query: {
+        text: queryText ? `${queryText}*` : undefined,
+        ...(includeTags?.length ? { tags: { included: includeTags } } : {}),
+        limit: uiSettings.get(LISTING_LIMIT_SETTING), // TODO: support pagination,
+      },
     });
 
-    const savedObjects = response.savedObjects
+    const savedObjects = response.hits
       .map((savedObject) => {
         const {
           attributes: { name, title },
         } = savedObject;
         const titleToUse = typeof title === 'string' ? title : '';
-        const nameToUse = name && typeof name === 'string' ? name : titleToUse;
+        const nameToUse = name ? name : titleToUse;
         return {
           ...savedObject,
-          version: savedObject._version,
+          version: savedObject.version,
           title: titleToUse,
           name: nameToUse,
           simple: savedObject,
@@ -169,9 +156,8 @@ export class SavedObjectFinderUi extends React.Component<
         const metaData = metaDataMap[savedObject.type];
         if (metaData.showSavedObject) {
           return metaData.showSavedObject(savedObject.simple);
-        } else {
-          return true;
         }
+        return true;
       });
 
     if (!this.isComponentMounted) {
@@ -228,7 +214,7 @@ export class SavedObjectFinderUi extends React.Component<
     const { onChoose, savedObjectMetaData } = this.props;
     const taggingApi = this.props.services.savedObjectsTagging;
     const originalTagColumn = taggingApi?.ui.getTableColumnDefinition();
-    const tagColumn: EuiTableFieldDataColumnType<SavedObject> | undefined = originalTagColumn
+    const tagColumn: EuiTableFieldDataColumnType<SavedObjectCommon> | undefined = originalTagColumn
       ? {
           ...originalTagColumn,
           sortable: (item) =>
@@ -266,18 +252,18 @@ export class SavedObjectFinderUi extends React.Component<
                 currentSavedObjectMetaData ||
                 ({
                   getIconForSavedObject: () => 'document',
-                } as Pick<SavedObjectMetaData<{ title: string }>, 'getIconForSavedObject'>)
+                } as Pick<SavedObjectMetaData, 'getIconForSavedObject'>)
               ).getIconForSavedObject(item.simple);
 
               return (
-                <EuiToolTip position="top" content={currentSavedObjectMetaData.name}>
-                  <EuiIcon
-                    aria-label={currentSavedObjectMetaData.name}
-                    type={iconType}
-                    size="s"
-                    data-test-subj="objectType"
-                  />
-                </EuiToolTip>
+                <EuiIconTip
+                  position="top"
+                  content={currentSavedObjectMetaData.name}
+                  aria-label={currentSavedObjectMetaData.name}
+                  type={iconType}
+                  size="s"
+                  data-test-subj="objectType"
+                />
               );
             },
           }
@@ -289,7 +275,7 @@ export class SavedObjectFinderUi extends React.Component<
         name: i18n.translate('savedObjectsFinder.titleName', {
           defaultMessage: 'Title',
         }),
-        width: '55%',
+        width: tagColumn ? '55%' : '100%',
         description: i18n.translate('savedObjectsFinder.titleDescription', {
           defaultMessage: 'Title of the saved object',
         }),
@@ -304,7 +290,7 @@ export class SavedObjectFinderUi extends React.Component<
             ? currentSavedObjectMetaData.getTooltipForSavedObject(item.simple)
             : `${item.name} (${currentSavedObjectMetaData!.name})`;
 
-          return (
+          const link = (
             <EuiLink
               onClick={
                 onChoose
@@ -318,6 +304,16 @@ export class SavedObjectFinderUi extends React.Component<
             >
               {item.name}
             </EuiLink>
+          );
+
+          const tooltipText = this.props.getTooltipText?.(item);
+
+          return tooltipText ? (
+            <EuiToolTip position="left" content={tooltipText}>
+              {link}
+            </EuiToolTip>
+          ) : (
+            link
           );
         },
       },
@@ -353,6 +349,9 @@ export class SavedObjectFinderUi extends React.Component<
       box: {
         incremental: true,
         'data-test-subj': 'savedObjectFinderSearchInput',
+        schema: {
+          recognizedFields: ['type', 'tag'],
+        },
       },
       filters: this.props.showFilter
         ? [
@@ -361,22 +360,35 @@ export class SavedObjectFinderUi extends React.Component<
           ]
         : undefined,
       toolsRight: this.props.children ? <>{this.props.children}</> : undefined,
+      toolsLeft: this.props.leftChildren ? <>{this.props.leftChildren}</> : undefined,
     };
 
     return (
-      <EuiInMemoryTable
-        loading={this.state.isFetchingItems}
-        itemId="id"
-        items={this.state.items}
-        columns={columns}
-        message={this.props.noItemsMessage}
-        search={search}
-        pagination={pagination}
-        sorting={sorting}
-        onTableChange={({ sort }) => {
-          this.setState({ sort });
-        }}
-      />
+      <EuiFlexGroup direction="column">
+        {this.props.helpText ? (
+          <EuiFlexItem>
+            <EuiText size="s" color="subdued">
+              {this.props.helpText}
+            </EuiText>
+          </EuiFlexItem>
+        ) : undefined}
+        <EuiFlexItem>
+          <EuiInMemoryTable
+            loading={this.state.isFetchingItems}
+            itemId="id"
+            items={this.state.items}
+            columns={columns}
+            data-test-subj="savedObjectsFinderTable"
+            message={this.props.noItemsMessage}
+            search={search}
+            pagination={pagination}
+            sorting={sorting}
+            onTableChange={({ sort }) => {
+              this.setState({ sort });
+            }}
+          />
+        </EuiFlexItem>
+      </EuiFlexGroup>
     );
   }
 }

@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { MapSavedObjectAttributes } from '../../../common/map_saved_object_type';
+import type { MapAttributes } from '../../../common/content_management';
 import {
   EMS_BASEMAP_KEYS,
   JOIN_KEYS,
@@ -38,7 +38,7 @@ export class MapStatsCollector {
   private _customIconsCountStats: ClusterCountStats | undefined;
   private _sourceCountStats: ClusterCountStats | undefined;
 
-  push(attributes: MapSavedObjectAttributes) {
+  push(attributes: MapAttributes) {
     if (!attributes || !attributes.mapStateJSON || !attributes.layerListJSON) {
       return;
     }
@@ -155,7 +155,7 @@ export class MapStatsCollector {
     counts: { [key: string]: number }
   ) {
     for (const key in counts) {
-      if (!counts.hasOwnProperty(key)) {
+      if (!Object.hasOwn(counts, key)) {
         continue;
       }
 
@@ -174,7 +174,7 @@ export class MapStatsCollector {
     }
 
     for (const key in clusterStats) {
-      if (clusterStats.hasOwnProperty(key)) {
+      if (Object.hasOwn(clusterStats, key)) {
         clusterStats[key].avg = clusterStats[key].total / this._mapCount;
       }
     }
@@ -186,7 +186,7 @@ export class MapStatsCollector {
   } {
     const results: { [key: string]: Omit<ClusterCountStats, 'total'> } = {};
     for (const key in clusterStats) {
-      if (clusterStats.hasOwnProperty(key)) {
+      if (Object.hasOwn(clusterStats, key)) {
         results[key] = this._excludeTotal(clusterStats[key]);
       }
     }

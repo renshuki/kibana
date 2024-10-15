@@ -6,20 +6,19 @@
  */
 
 import type { History } from 'history';
-import type { FunctionComponent } from 'react';
+import type { FC, PropsWithChildren } from 'react';
 import React from 'react';
 import { render, unmountComponentAtNode } from 'react-dom';
-import type { RouteComponentProps } from 'react-router-dom';
-import { Redirect, Route, Router, Switch } from 'react-router-dom';
-import type { Observable } from 'rxjs';
+import { Redirect } from 'react-router-dom';
 
-import type { CoreStart, CoreTheme, StartServicesAccessor } from '@kbn/core/public';
+import type { CoreStart, StartServicesAccessor } from '@kbn/core/public';
 import { i18n } from '@kbn/i18n';
-import { I18nProvider } from '@kbn/i18n-react';
-import { KibanaContextProvider, KibanaThemeProvider } from '@kbn/kibana-react-plugin/public';
+import { KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
 import type { RegisterManagementAppArgs } from '@kbn/management-plugin/public';
+import { KibanaRenderContextProvider } from '@kbn/react-kibana-context-render';
+import type { AuthenticationServiceSetup } from '@kbn/security-plugin-types-public';
+import { Route, Router, Routes } from '@kbn/shared-ux-router';
 
-import type { AuthenticationServiceSetup } from '../../authentication';
 import type { BreadcrumbsChangeHandler } from '../../components/breadcrumb';
 import {
   Breadcrumb,
@@ -36,10 +35,6 @@ interface CreateParams {
   getStartServices: StartServicesAccessor<PluginStartDependencies>;
 }
 
-interface EditUserParams {
-  username: string;
-}
-
 export const usersManagementApp = Object.freeze({
   id: 'users',
   create({ authc, getStartServices }: CreateParams) {
@@ -50,7 +45,7 @@ export const usersManagementApp = Object.freeze({
       id: this.id,
       order: 10,
       title,
-      async mount({ element, theme$, setBreadcrumbs, history }) {
+      async mount({ element, setBreadcrumbs, history }) {
         const [
           [coreStart],
           { UsersGridPage },
@@ -68,7 +63,6 @@ export const usersManagementApp = Object.freeze({
         render(
           <Providers
             services={coreStart}
-            theme$={theme$}
             history={history}
             authc={authc}
             onChange={createBreadcrumbsChangeHandler(coreStart.chrome, setBreadcrumbs)}
@@ -85,7 +79,7 @@ export const usersManagementApp = Object.freeze({
               })}
               href="/"
             >
-              <Switch>
+              <Routes>
                 <Route path={['/', '']} exact>
                   <UsersGridPage
                     notifications={coreStart.notifications}
@@ -108,7 +102,7 @@ export const usersManagementApp = Object.freeze({
                 </Route>
                 <Route
                   path="/edit/:username"
-                  render={(props: RouteComponentProps<EditUserParams>) => {
+                  render={(props) => {
                     // Additional decoding is a workaround for a bug in react-router's version of the `history` module.
                     // See https://github.com/elastic/kibana/issues/82440
                     const username = tryDecodeURIComponent(props.match.params.username);
@@ -122,7 +116,7 @@ export const usersManagementApp = Object.freeze({
                 <Route path="/edit">
                   <Redirect to="/create" />
                 </Route>
-              </Switch>
+              </Routes>
             </Breadcrumb>
           </Providers>,
           element
@@ -138,29 +132,25 @@ export const usersManagementApp = Object.freeze({
 
 export interface ProvidersProps {
   services: CoreStart;
-  theme$: Observable<CoreTheme>;
   history: History;
   authc: AuthenticationServiceSetup;
   onChange?: BreadcrumbsChangeHandler;
 }
 
-export const Providers: FunctionComponent<ProvidersProps> = ({
+export const Providers: FC<PropsWithChildren<ProvidersProps>> = ({
   services,
-  theme$,
   history,
   authc,
   onChange,
   children,
 }) => (
-  <KibanaContextProvider services={services}>
-    <AuthenticationProvider authc={authc}>
-      <I18nProvider>
-        <KibanaThemeProvider theme$={theme$}>
-          <Router history={history}>
-            <BreadcrumbsProvider onChange={onChange}>{children}</BreadcrumbsProvider>
-          </Router>
-        </KibanaThemeProvider>
-      </I18nProvider>
-    </AuthenticationProvider>
-  </KibanaContextProvider>
+  <KibanaRenderContextProvider {...services}>
+    <KibanaContextProvider services={services}>
+      <AuthenticationProvider authc={authc}>
+        <Router history={history}>
+          <BreadcrumbsProvider onChange={onChange}>{children}</BreadcrumbsProvider>
+        </Router>
+      </AuthenticationProvider>
+    </KibanaContextProvider>
+  </KibanaRenderContextProvider>
 );

@@ -5,22 +5,33 @@
  * 2.0.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useUserPrivileges } from '../../common/components/user_privileges';
 import type { ResponseActionType } from './get_supported_response_actions';
 import { getSupportedResponseActions, responseActionTypes } from './get_supported_response_actions';
-import { useOsqueryEnabled } from './use_osquery_enabled';
 
 export const useSupportedResponseActionTypes = () => {
   const [supportedResponseActionTypes, setSupportedResponseActionTypes] = useState<
     ResponseActionType[] | undefined
   >();
 
-  const isOsqueryEnabled = useOsqueryEnabled();
+  const { canIsolateHost, canKillProcess, canSuspendProcess } =
+    useUserPrivileges().endpointPrivileges;
+
+  const userHasPermissionsToExecute = useMemo(
+    () => ({
+      endpoint: canIsolateHost || canKillProcess || canSuspendProcess,
+    }),
+    [canIsolateHost, canKillProcess, canSuspendProcess]
+  );
 
   useEffect(() => {
-    const supportedTypes = getSupportedResponseActions(responseActionTypes);
+    const supportedTypes = getSupportedResponseActions(
+      responseActionTypes,
+      userHasPermissionsToExecute
+    );
     setSupportedResponseActionTypes(supportedTypes);
-  }, [isOsqueryEnabled]);
+  }, [userHasPermissionsToExecute]);
 
   return supportedResponseActionTypes;
 };

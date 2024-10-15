@@ -13,11 +13,12 @@ import { generateSpanLinksData } from './data_generator';
 export default function ApiTest({ getService }: FtrProviderContext) {
   const registry = getService('registry');
   const apmApiClient = getService('apmApiClient');
-  const synthtraceEsClient = getService('synthtraceEsClient');
+  const apmSynthtraceEsClient = getService('apmSynthtraceEsClient');
 
   const start = new Date('2022-01-01T00:00:00.000Z').getTime();
   const end = new Date('2022-01-01T00:15:00.000Z').getTime() - 1;
 
+  // FLAKY: https://github.com/elastic/kibana/issues/177520
   registry.when('contains linked children', { config: 'basic', archives: [] }, () => {
     let ids: ReturnType<typeof generateSpanLinksData>['ids'];
 
@@ -26,7 +27,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
 
       ids = spanLinksData.ids;
 
-      await synthtraceEsClient.index([
+      await apmSynthtraceEsClient.index([
         Readable.from(spanLinksData.events.producerInternalOnly),
         Readable.from(spanLinksData.events.producerExternalOnly),
         Readable.from(spanLinksData.events.producerConsumer),
@@ -34,7 +35,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
       ]);
     });
 
-    after(() => synthtraceEsClient.clean());
+    after(() => apmSynthtraceEsClient.clean());
 
     describe('Span links count on traces', () => {
       async function fetchTraces({
@@ -228,6 +229,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
             transactionId: ids.producerConsumer.transactionCId,
             spanName: 'Transaction C',
             duration: 1000000,
+            environment: 'production',
           });
 
           const serviceDDetails = spanALinksDetails.childrenLinks.spanLinksDetails.find(
@@ -244,6 +246,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
             transactionId: ids.producerMultiple.transactionDId,
             spanName: 'Transaction D',
             duration: 1000000,
+            environment: 'production',
           });
         });
       });
@@ -299,6 +302,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
                 duration: 100000,
                 spanSubtype: 'http',
                 spanType: 'external',
+                environment: 'production',
               },
             },
           ]);
@@ -341,6 +345,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
                 duration: 100000,
                 spanSubtype: 'http',
                 spanType: 'external',
+                environment: 'production',
               },
             },
             {
@@ -352,6 +357,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
                 transactionId: ids.producerExternalOnly.transactionBId,
                 duration: 1000000,
                 spanName: 'Transaction B',
+                environment: 'production',
               },
             },
             {
@@ -375,6 +381,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
                 duration: 100000,
                 spanSubtype: 'http',
                 spanType: 'external',
+                environment: 'production',
               },
             },
           ]);
@@ -396,6 +403,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
                 transactionId: ids.producerMultiple.transactionDId,
                 spanName: 'Transaction D',
                 duration: 1000000,
+                environment: 'production',
               },
             },
           ]);
@@ -438,6 +446,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
                 duration: 100000,
                 spanSubtype: 'http',
                 spanType: 'external',
+                environment: 'production',
               },
             },
             {
@@ -451,6 +460,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
                 duration: 100000,
                 spanSubtype: 'http',
                 spanType: 'external',
+                environment: 'production',
               },
             },
           ]);
@@ -475,6 +485,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
                 duration: 100000,
                 spanSubtype: 'http',
                 spanType: 'external',
+                environment: 'production',
               },
             },
             {
@@ -486,6 +497,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
                 transactionId: ids.producerConsumer.transactionCId,
                 spanName: 'Transaction C',
                 duration: 1000000,
+                environment: 'production',
               },
             },
           ]);

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { get, map } from 'lodash';
@@ -11,7 +12,7 @@ import { ElasticsearchClient, SavedObjectsClientContract } from '@kbn/core/serve
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { getFieldSubtypeNested } from '@kbn/data-plugin/common';
 import type { FieldSpec } from '@kbn/data-views-plugin/common';
-import { ConfigSchema } from '../../config';
+import { ConfigSchema } from '../config';
 import { findIndexPatternById, getFieldByName } from '../data_views';
 
 export async function termsAggSuggestions(
@@ -34,6 +35,11 @@ export async function termsAggSuggestions(
     const indexPattern = await findIndexPatternById(savedObjectsClient, index);
 
     field = indexPattern && getFieldByName(fieldName, indexPattern);
+  }
+
+  // Terms agg doesn't support IP with "exclude"/"include" parameter
+  if (field?.type === 'ip') {
+    return [];
   }
 
   const body = await getBody(autocompleteSearchOptions, field ?? fieldName, query, filters);

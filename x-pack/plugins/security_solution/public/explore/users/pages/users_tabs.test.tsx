@@ -7,26 +7,24 @@
 
 import { mount } from 'enzyme';
 import React from 'react';
-import { Router } from 'react-router-dom';
+import { Router } from '@kbn/shared-ux-router';
 
-import '../../../common/mock/match_media';
 import { TestProviders } from '../../../common/mock';
-import { TabNavigationWithBreadcrumbs } from '../../../common/components/navigation/tab_navigation_with_breadcrumbs';
+import { TabNavigation } from '../../../common/components/navigation/tab_navigation';
 import { Users } from './users';
-import { useSourcererDataView } from '../../../common/containers/sourcerer';
+import { useSourcererDataView } from '../../../sourcerer/containers';
 import { mockCasesContext } from '@kbn/cases-plugin/public/mocks/mock_cases_context';
-import { LandingPageComponent } from '../../../common/components/landing_page';
 
-jest.mock('../../../common/containers/sourcerer');
+jest.mock('../../../common/components/empty_prompt');
+jest.mock('../../../sourcerer/containers');
 jest.mock('../../../common/components/search_bar', () => ({
   SiemSearchBar: () => null,
 }));
 jest.mock('../../../common/components/query_bar', () => ({
   QueryBar: () => null,
 }));
-jest.mock('../../../common/components/visualization_actions', () => ({
-  VisualizationActions: jest.fn(() => <div data-test-subj="mock-viz-actions" />),
-}));
+jest.mock('../../../common/components/visualization_actions/actions');
+jest.mock('../../../common/components/visualization_actions/lens_embeddable');
 const mockNavigateToApp = jest.fn();
 jest.mock('../../../common/lib/kibana', () => {
   const original = jest.requireActual('../../../common/lib/kibana');
@@ -85,7 +83,7 @@ describe('Users - rendering', () => {
       </TestProviders>
     );
 
-    expect(wrapper.find(LandingPageComponent).exists()).toBe(true);
+    expect(wrapper.find(`[data-test-subj="empty-prompt"]`).exists()).toBe(true);
   });
 
   test('it should render tab navigation', async () => {
@@ -101,6 +99,6 @@ describe('Users - rendering', () => {
         </Router>
       </TestProviders>
     );
-    expect(wrapper.find(TabNavigationWithBreadcrumbs).exists()).toBe(true);
+    expect(wrapper.find(TabNavigation).exists()).toBe(true);
   });
 });

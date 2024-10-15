@@ -7,39 +7,31 @@
 
 import { useMemo } from 'react';
 import { SecurityPageName } from '../../../../common/constants';
-import { HostsTableType } from '../../../explore/hosts/store/model';
 import { NetworkRouteType } from '../../../explore/network/pages/navigation/types';
-import { useSourcererDataView } from '../../containers/sourcerer';
+import { useSourcererDataView } from '../../../sourcerer/containers';
 import { useDeepEqualSelector } from '../../hooks/use_selector';
 import { inputsSelectors } from '../../store';
-import { SourcererScopeName } from '../../store/sourcerer/model';
+import { SourcererScopeName } from '../../../sourcerer/store/model';
 import { useRouteSpy } from '../../utils/route/use_route_spy';
-import type { LensAttributes, GetLensAttributes, ExtraOptions } from './types';
+import type { LensAttributes, UseLensAttributesProps } from './types';
 import {
   getDetailsPageFilter,
   sourceOrDestinationIpExistsFilter,
-  hostNameExistsFilter,
   getIndexFilters,
   getNetworkDetailsPageFilter,
+  fieldNameExistsFilter,
 } from './utils';
 
 export const useLensAttributes = ({
   applyGlobalQueriesAndFilters = true,
+  applyPageAndTabsFilters = true,
   extraOptions,
   getLensAttributes,
   lensAttributes,
   scopeId = SourcererScopeName.default,
   stackByField,
   title,
-}: {
-  applyGlobalQueriesAndFilters?: boolean;
-  extraOptions?: ExtraOptions;
-  getLensAttributes?: GetLensAttributes;
-  lensAttributes?: LensAttributes | null;
-  scopeId?: SourcererScopeName;
-  stackByField?: string;
-  title?: string;
-}): LensAttributes | null => {
+}: UseLensAttributesProps): LensAttributes | null => {
   const { selectedPatterns, dataViewId, indicesExist } = useSourcererDataView(scopeId);
   const getGlobalQuerySelector = useMemo(() => inputsSelectors.globalQuerySelector(), []);
   const getGlobalFiltersQuerySelector = useMemo(
@@ -51,12 +43,11 @@ export const useLensAttributes = ({
   const [{ detailName, pageName, tabName }] = useRouteSpy();
 
   const tabsFilters = useMemo(() => {
-    if (pageName === SecurityPageName.hosts && tabName === HostsTableType.events) {
-      return hostNameExistsFilter;
-    }
-
-    if (pageName === SecurityPageName.network && tabName === NetworkRouteType.events) {
-      return sourceOrDestinationIpExistsFilter;
+    if (tabName === NetworkRouteType.events) {
+      if (pageName === SecurityPageName.network) {
+        return sourceOrDestinationIpExistsFilter;
+      }
+      return fieldNameExistsFilter(pageName);
     }
 
     return [];
@@ -81,7 +72,7 @@ export const useLensAttributes = ({
     () =>
       lensAttributes ??
       ((getLensAttributes &&
-        stackByField &&
+        stackByField !== null &&
         getLensAttributes(stackByField, extraOptions)) as LensAttributes),
     [extraOptions, getLensAttributes, lensAttributes, stackByField]
   );
@@ -89,7 +80,10 @@ export const useLensAttributes = ({
   const hasAdHocDataViews = Object.values(attrs?.state?.adHocDataViews ?? {}).length > 0;
 
   const lensAttrsWithInjectedData = useMemo(() => {
-    if (lensAttributes == null && (getLensAttributes == null || stackByField == null)) {
+    if (
+      lensAttributes == null &&
+      (getLensAttributes == null || stackByField === null || stackByField?.length === 0)
+    ) {
       return null;
     }
 
@@ -102,10 +96,10 @@ export const useLensAttributes = ({
         ...(applyGlobalQueriesAndFilters ? { query } : {}),
         filters: [
           ...attrs.state.filters,
-          ...(applyGlobalQueriesAndFilters ? filters : []),
-          ...pageFilters,
-          ...tabsFilters,
+          ...(applyPageAndTabsFilters ? pageFilters : []),
+          ...(applyPageAndTabsFilters ? tabsFilters : []),
           ...indexFilters,
+          ...(applyGlobalQueriesAndFilters ? filters : []),
         ],
       },
       references: attrs?.references?.map((ref: { id: string; name: string; type: string }) => ({
@@ -115,6 +109,7 @@ export const useLensAttributes = ({
     } as LensAttributes;
   }, [
     applyGlobalQueriesAndFilters,
+    applyPageAndTabsFilters,
     attrs,
     dataViewId,
     filters,

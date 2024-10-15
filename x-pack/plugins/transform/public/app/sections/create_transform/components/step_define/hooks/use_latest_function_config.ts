@@ -7,12 +7,13 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { i18n } from '@kbn/i18n';
-import { EuiComboBoxOptionOption } from '@elastic/eui';
+import type { EuiComboBoxOptionOption } from '@elastic/eui';
 import type { AggConfigs, FieldParamType } from '@kbn/data-plugin/common';
-import { LatestFunctionConfigUI } from '../../../../../../../common/types/transform';
-import { StepDefineFormProps } from '../step_define_form';
-import { StepDefineExposedState } from '../common';
-import { LatestFunctionConfig } from '../../../../../../../common/api_schemas/transforms';
+import { isCounterTimeSeriesMetric } from '@kbn/ml-agg-utils';
+import type { LatestFunctionConfig } from '../../../../../../../server/routes/api_schemas/transforms';
+import type { LatestFunctionConfigUI } from '../../../../../../../common/types/transform';
+import type { StepDefineFormProps } from '../step_define_form';
+import type { StepDefineExposedState } from '../common';
 import { useAppDependencies } from '../../../../../app_dependencies';
 
 /**
@@ -48,17 +49,36 @@ function getOptions(
         .filter((ip) => ip.runtimeField === undefined)
     : [];
 
-  const ignoreFieldNames = new Set(['_source', '_type', '_index', '_id', '_version', '_score']);
+  const ignoreFieldNames = new Set([
+    '_source',
+    '_type',
+    '_index',
+    '_id',
+    '_version',
+    '_score',
+    '_ignored',
+  ]);
 
   const runtimeFieldsOptions = runtimeMappings
-    ? Object.keys(runtimeMappings).map((k) => ({ label: k, value: k }))
+    ? Object.entries(runtimeMappings).map(([fieldName, fieldMapping]) => ({
+        label: fieldName,
+        value: fieldName,
+        field: {
+          id: fieldName,
+          type: fieldMapping.type,
+        },
+      }))
     : [];
 
   const uniqueKeyOptions: Array<EuiComboBoxOptionOption<string>> = filteredDataViewFields
-    .filter((v) => !ignoreFieldNames.has(v.name))
+    .filter((v) => !ignoreFieldNames.has(v.name) && !isCounterTimeSeriesMetric(v))
     .map((v) => ({
       label: v.displayName,
       value: v.name,
+      field: {
+        id: v.name,
+        type: Array.isArray(v.esTypes) && v.esTypes?.length > 0 ? v.esTypes[0] : 'keyword',
+      },
     }));
 
   const runtimeFieldsSortOptions: Array<EuiComboBoxOptionOption<string>> = runtimeMappings
@@ -67,6 +87,10 @@ function getOptions(
         .map(([fieldName, fieldMapping]) => ({
           label: fieldName,
           value: fieldName,
+          field: {
+            id: fieldName,
+            type: fieldMapping.type,
+          },
         }))
     : [];
 
@@ -76,6 +100,10 @@ function getOptions(
     .map((v) => ({
       label: v.displayName,
       value: v.name,
+      field: {
+        id: v.name,
+        type: Array.isArray(v.esTypes) && v.esTypes?.length > 0 ? v.esTypes[0] : 'keyword',
+      },
     }));
 
   const sortByLabel = (a: EuiComboBoxOptionOption<string>, b: EuiComboBoxOptionOption<string>) =>
@@ -133,7 +161,7 @@ export function useLatestFunctionConfig(
   }, [dataView, data.search.aggs, runtimeMappings]);
 
   const updateLatestFunctionConfig = useCallback(
-    (update) =>
+    (update: any) =>
       setLatestFunctionConfig({
         ...config,
         ...update,

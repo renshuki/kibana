@@ -4,19 +4,16 @@ exports[`Table render conflict summary modal  1`] = `
 <React.Fragment>
   <EuiModalHeader>
     <EuiModalHeaderTitle>
-      <h1>
-        <FormattedMessage
-          defaultMessage="This field has a type conflict"
-          id="indexPatternManagement.editIndexPattern.fields.conflictModal.title"
-          values={Object {}}
-        />
-      </h1>
+      <Memo(MemoizedFormattedMessage)
+        defaultMessage="This field has a type conflict"
+        id="indexPatternManagement.editIndexPattern.fields.conflictModal.title"
+      />
     </EuiModalHeaderTitle>
   </EuiModalHeader>
   <EuiModalBody>
     <EuiText>
       <p>
-        <FormattedMessage
+        <Memo(MemoizedFormattedMessage)
           defaultMessage="The type of the {fieldName} field changes across indices and might not be available for search, visualizations, and other analysis."
           id="indexPatternManagement.editIndexPattern.fields.conflictModal.description"
           values={
@@ -59,7 +56,6 @@ exports[`Table render conflict summary modal  1`] = `
             token="euiBasicTable.noItemsMessage"
           />
         }
-        responsive={true}
         rowHeader="firstName"
         tableCaption="Demo of EuiBasicTable"
         tableLayout="auto"
@@ -68,15 +64,12 @@ exports[`Table render conflict summary modal  1`] = `
   </EuiModalBody>
   <EuiModalFooter>
     <EuiButton
-      color="primary"
       fill={true}
       onClick={[Function]}
-      size="m"
     >
-      <FormattedMessage
+      <Memo(MemoizedFormattedMessage)
         defaultMessage="Close"
         id="indexPatternManagement.editIndexPattern.fields.conflictModal.closeBtn"
-        values={Object {}}
       />
     </EuiButton>
   </EuiModalFooter>
@@ -84,13 +77,17 @@ exports[`Table render conflict summary modal  1`] = `
 `;
 
 exports[`Table render name 1`] = `
-<span>
+<span
+  data-test-subj="field-name-customer"
+>
   customer
 </span>
 `;
 
 exports[`Table render name 2`] = `
-<span>
+<span
+  data-test-subj="field-name-customer"
+>
   customer
   <span>
      
@@ -107,11 +104,12 @@ exports[`Table should render conflicting type 1`] = `
 <span>
   text, long
   <span>
+     
     <EuiBadge
       color="warning"
       iconOnClick={[Function]}
       iconOnClickAriaLabel="Conflict Detail"
-      iconType="alert"
+      iconType="warning"
       onClick={[Function]}
       onClickAriaLabel="Conflict Detail"
     >
@@ -128,7 +126,9 @@ exports[`Table should render mixed, non-conflicting type 1`] = `
 `;
 
 exports[`Table should render normal field name 1`] = `
-<span>
+<span
+  data-test-subj="field-name-Elastic"
+>
   Elastic
 </span>
 `;
@@ -301,7 +301,7 @@ exports[`Table should render normally 1`] = `
       ],
     }
   }
-  responsive={true}
+  searchFormat="eql"
   sorting={
     Object {
       "sort": Object {
@@ -326,7 +326,9 @@ exports[`Table should render the boolean template (true) 1`] = `
 `;
 
 exports[`Table should render timestamp field name 1`] = `
-<span>
+<span
+  data-test-subj="field-name-timestamp"
+>
   timestamp
   <span>
      

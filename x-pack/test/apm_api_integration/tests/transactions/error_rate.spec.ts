@@ -6,6 +6,7 @@
  */
 import { apm, timerange } from '@kbn/apm-synthtrace-client';
 import expect from '@kbn/expect';
+import { buildQueryFromFilters } from '@kbn/es-query';
 import { first, last } from 'lodash';
 import moment from 'moment';
 import {
@@ -13,6 +14,8 @@ import {
   APIReturnType,
 } from '@kbn/apm-plugin/public/services/rest/create_call_apm_api';
 import { RecursivePartial } from '@kbn/apm-plugin/typings/common';
+import { ApmDocumentType } from '@kbn/apm-plugin/common/document_type';
+import { RollupInterval } from '@kbn/apm-plugin/common/rollup';
 import { FtrProviderContext } from '../../common/ftr_provider_context';
 
 type ErrorRate =
@@ -21,7 +24,7 @@ type ErrorRate =
 export default function ApiTest({ getService }: FtrProviderContext) {
   const registry = getService('registry');
   const apmApiClient = getService('apmApiClient');
-  const synthtraceEsClient = getService('synthtraceEsClient');
+  const apmSynthtraceEsClient = getService('apmSynthtraceEsClient');
 
   // url parameters
   const start = new Date('2021-01-01T00:00:00.000Z').getTime();
@@ -42,6 +45,9 @@ export default function ApiTest({ getService }: FtrProviderContext) {
           transactionType: 'request',
           environment: 'ENVIRONMENT_ALL',
           kuery: '',
+          documentType: ApmDocumentType.TransactionMetric,
+          rollupInterval: RollupInterval.OneMinute,
+          bucketSizeInSeconds: 60,
           ...overrides?.query,
         },
       },
@@ -77,6 +83,7 @@ export default function ApiTest({ getService }: FtrProviderContext) {
     });
   });
 
+  // FLAKY: https://github.com/elastic/kibana/issues/177598
   registry.when('Error rate when data is loaded', { config: 'basic', archives: [] }, () => {
     const config = {
       firstTransaction: {
@@ -84,13 +91,18 @@ export default function ApiTest({ getService }: FtrProviderContext) {
         successRate: 50,
         failureRate: 50,
       },
+      secondTransaction: {
+        name: 'GET /pear 🍎 ',
+        successRate: 25,
+        failureRate: 75,
+      },
     };
     before(async () => {
       const serviceGoProdInstance = apm
         .service({ name: 'opbeans-go', environment: 'production', agentName: 'go' })
         .instance('instance-a');
 
-      const { firstTransaction } = config;
+      const { firstTransaction, secondTransaction } = config;
 
       const documents = [
         timerange(start, end)
@@ -102,30 +114,38 @@ export default function ApiTest({ getService }: FtrProviderContext) {
               .duration(1000)
               .success()
           ),
-
         timerange(start, end)
           .ratePerMinute(firstTransaction.failureRate)
           .generator((timestamp) =>
             serviceGoProdInstance
               .transaction({ transactionName: firstTransaction.name })
-              .errors(
-                serviceGoProdInstance
-                  .error({
-                    message: 'Error 1',
-                    type: firstTransaction.name,
-                    groupingName: 'Error test',
-                  })
-                  .timestamp(timestamp)
-              )
+              .duration(1000)
+              .timestamp(timestamp)
+              .failure()
+          ),
+        timerange(start, end)
+          .ratePerMinute(secondTransaction.successRate)
+          .generator((timestamp) =>
+            serviceGoProdInstance
+              .transaction({ transactionName: secondTransaction.name })
+              .timestamp(timestamp)
+              .duration(1000)
+              .success()
+          ),
+        timerange(start, end)
+          .ratePerMinute(secondTransaction.failureRate)
+          .generator((timestamp) =>
+            serviceGoProdInstance
+              .transaction({ transactionName: secondTransaction.name })
               .duration(1000)
               .timestamp(timestamp)
               .failure()
           ),
       ];
-      await synthtraceEsClient.index(documents);
+      await apmSynthtraceEsClient.index(documents);
     });
 
-    after(() => synthtraceEsClient.clean());
+    after(() => apmSynthtraceEsClient.clean());
 
     describe('returns the transaction error rate', () => {
       let errorRateResponse: ErrorRate;
@@ -174,17 +194,17 @@ export default function ApiTest({ getService }: FtrProviderContext) {
       });
     });
 
-    describe('returns the transaction error rate with comparison data', () => {
+    describe('returns the transaction error rate with comparison data per transaction name', () => {
       let errorRateResponse: ErrorRate;
 
       before(async () => {
-        const response = await fetchErrorCharts({
-          query: {
-            transactionName: config.firstTransaction.name,
-            start: moment(end).subtract(7, 'minutes').toISOString(),
-            offset: '7m',
-          },
-        });
+        const query = {
+          transactionName: config.firstTransaction.name,
+          start: moment(end).subtract(7, 'minutes').toISOString(),
+          offset: '7m',
+        };
+
+        const response = await fetchErrorCharts({ query });
 
         errorRateResponse = response.body;
       });
@@ -244,6 +264,169 @@ export default function ApiTest({ getService }: FtrProviderContext) {
         expect(errorRateResponse.currentPeriod.timeseries.map(({ x }) => x)).to.be.eql(
           errorRateResponse.previousPeriod.timeseries.map(({ x }) => x)
         );
+      });
+    });
+
+    describe('returns the same error rate for tx metrics and service tx metrics ', () => {
+      let txMetricsErrorRateResponse: ErrorRate;
+      let serviceTxMetricsErrorRateResponse: ErrorRate;
+
+      before(async () => {
+        const [txMetricsResponse, serviceTxMetricsResponse] = await Promise.all([
+          fetchErrorCharts(),
+          fetchErrorCharts({
+            query: { documentType: ApmDocumentType.ServiceTransactionMetric },
+          }),
+        ]);
+
+        txMetricsErrorRateResponse = txMetricsResponse.body;
+        serviceTxMetricsErrorRateResponse = serviceTxMetricsResponse.body;
+      });
+
+      describe('has the correct calculation for average', () => {
+        const expectedFailureRate =
+          (config.firstTransaction.failureRate + config.secondTransaction.failureRate) / 2 / 100;
+
+        it('for tx metrics', () => {
+          expect(txMetricsErrorRateResponse.currentPeriod.average).to.eql(expectedFailureRate);
+        });
+
+        it('for service tx metrics', () => {
+          expect(serviceTxMetricsErrorRateResponse.currentPeriod.average).to.eql(
+            expectedFailureRate
+          );
+        });
+      });
+    });
+
+    describe('handles kuery', () => {
+      let txMetricsErrorRateResponse: ErrorRate;
+
+      before(async () => {
+        const txMetricsResponse = await fetchErrorCharts({
+          query: {
+            kuery: 'transaction.name : "GET /pear 🍎 "',
+          },
+        });
+        txMetricsErrorRateResponse = txMetricsResponse.body;
+      });
+
+      describe('has the correct calculation for average with kuery', () => {
+        const expectedFailureRate = config.secondTransaction.failureRate / 100;
+
+        it('for tx metrics', () => {
+          expect(txMetricsErrorRateResponse.currentPeriod.average).to.eql(expectedFailureRate);
+        });
+      });
+    });
+
+    describe('handles filters', () => {
+      const filters = [
+        {
+          meta: {
+            disabled: false,
+            negate: false,
+            alias: null,
+            key: 'transaction.name',
+            params: ['GET /api/product/list'],
+            type: 'phrases',
+          },
+          query: {
+            bool: {
+              minimum_should_match: 1,
+              should: {
+                match_phrase: {
+                  'transaction.name': 'GET /pear 🍎 ',
+                },
+              },
+            },
+          },
+        },
+      ];
+      const serializedFilters = JSON.stringify(buildQueryFromFilters(filters, undefined));
+      let txMetricsErrorRateResponse: ErrorRate;
+
+      before(async () => {
+        const txMetricsResponse = await fetchErrorCharts({
+          query: {
+            filters: serializedFilters,
+          },
+        });
+        txMetricsErrorRateResponse = txMetricsResponse.body;
+      });
+
+      describe('has the correct calculation for average with filter', () => {
+        const expectedFailureRate = config.secondTransaction.failureRate / 100;
+
+        it('for tx metrics', () => {
+          expect(txMetricsErrorRateResponse.currentPeriod.average).to.eql(expectedFailureRate);
+        });
+      });
+
+      describe('has the correct calculation for average with negate filter', () => {
+        const expectedFailureRate = config.secondTransaction.failureRate / 100;
+
+        it('for tx metrics', () => {
+          expect(txMetricsErrorRateResponse.currentPeriod.average).to.eql(expectedFailureRate);
+        });
+      });
+    });
+
+    describe('handles negate filters', () => {
+      const filters = [
+        {
+          meta: {
+            disabled: false,
+            negate: true,
+            alias: null,
+            key: 'transaction.name',
+            params: ['GET /api/product/list'],
+            type: 'phrases',
+          },
+          query: {
+            bool: {
+              minimum_should_match: 1,
+              should: {
+                match_phrase: {
+                  'transaction.name': 'GET /pear 🍎 ',
+                },
+              },
+            },
+          },
+        },
+      ];
+      const serializedFilters = JSON.stringify(buildQueryFromFilters(filters, undefined));
+      let txMetricsErrorRateResponse: ErrorRate;
+
+      before(async () => {
+        const txMetricsResponse = await fetchErrorCharts({
+          query: {
+            filters: serializedFilters,
+          },
+        });
+        txMetricsErrorRateResponse = txMetricsResponse.body;
+      });
+
+      describe('has the correct calculation for average with filter', () => {
+        const expectedFailureRate = config.firstTransaction.failureRate / 100;
+
+        it('for tx metrics', () => {
+          expect(txMetricsErrorRateResponse.currentPeriod.average).to.eql(expectedFailureRate);
+        });
+      });
+    });
+
+    describe('handles bad filters request', () => {
+      it('for tx metrics', async () => {
+        try {
+          await fetchErrorCharts({
+            query: {
+              filters: '{}}}',
+            },
+          });
+        } catch (e) {
+          expect(e.res.status).to.eql(400);
+        }
       });
     });
   });

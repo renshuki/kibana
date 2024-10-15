@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -25,13 +26,15 @@ import {
 } from '@elastic/eui';
 
 import { Pager } from '@elastic/eui';
-
+import { Storage } from '@kbn/kibana-utils-plugin/public';
 import { FormattedMessage } from '@kbn/i18n-react';
-import { MatchedItem, Tag } from '@kbn/data-views-plugin/public';
+import { INDEX_PATTERN_TYPE, MatchedItem, Tag } from '@kbn/data-views-plugin/public';
+import { RollupDeprecationTooltip } from '@kbn/rollup';
 
-interface IndicesListProps {
+export interface IndicesListProps {
   indices: MatchedItem[];
   query: string;
+  isExactMatch: (indexName: string) => boolean;
 }
 
 interface IndicesListState {
@@ -41,15 +44,20 @@ interface IndicesListState {
 }
 
 const PER_PAGE_INCREMENTS = [5, 10, 20, 50];
+export const PER_PAGE_STORAGE_KEY = 'dataViews.previewPanel.indicesPerPage';
 
 export class IndicesList extends React.Component<IndicesListProps, IndicesListState> {
   pager: Pager;
+  storage: Storage;
+
   constructor(props: IndicesListProps) {
     super(props);
 
+    this.storage = new Storage(localStorage);
+
     this.state = {
       page: 0,
-      perPage: PER_PAGE_INCREMENTS[1],
+      perPage: this.storage.get(PER_PAGE_STORAGE_KEY) || PER_PAGE_INCREMENTS[1],
       isPerPageControlOpen: false,
     };
 
@@ -75,6 +83,7 @@ export class IndicesList extends React.Component<IndicesListProps, IndicesListSt
     this.setState({ perPage });
     this.resetPageTo0();
     this.closePerPageControl();
+    this.storage.set(PER_PAGE_STORAGE_KEY, perPage);
   };
 
   openPerPageControl = () => {
@@ -144,11 +153,20 @@ export class IndicesList extends React.Component<IndicesListProps, IndicesListSt
   }
 
   highlightIndexName(indexName: string, query: string) {
+    const { isExactMatch } = this.props;
+
     if (!query) {
       return indexName;
     }
 
-    const queryAsArray = query.split(',').map((q) => q.trim());
+    if (isExactMatch(indexName)) {
+      return <strong>{indexName}</strong>;
+    }
+
+    const queryAsArray = query
+      .split(',')
+      .map((q) => q.trim())
+      .filter(Boolean);
     let queryIdx = -1;
     let queryWithoutWildcard = '';
     for (let i = 0; i < queryAsArray.length; i++) {
@@ -162,6 +180,7 @@ export class IndicesList extends React.Component<IndicesListProps, IndicesListSt
         break;
       }
     }
+
     if (queryIdx === -1) {
       return indexName;
     }
@@ -179,7 +198,7 @@ export class IndicesList extends React.Component<IndicesListProps, IndicesListSt
   }
 
   render() {
-    const { indices, query, ...rest } = this.props;
+    const { indices, query, isExactMatch, ...rest } = this.props;
 
     const paginatedIndices = indices.slice(this.pager.firstItemIndex, this.pager.lastItemIndex + 1);
     const rows = paginatedIndices.map((index, key) => {
@@ -188,10 +207,18 @@ export class IndicesList extends React.Component<IndicesListProps, IndicesListSt
           <EuiTableRowCell>{this.highlightIndexName(index.name, query)}</EuiTableRowCell>
           <EuiTableRowCell>
             {index.tags.map((tag: Tag) => {
-              return (
+              const badge = (
                 <EuiBadge key={`index_${key}_tag_${tag.key}`} color={tag.color}>
                   {tag.name}
                 </EuiBadge>
+              );
+
+              return tag.key === INDEX_PATTERN_TYPE.ROLLUP ? (
+                <>
+                  &nbsp;<RollupDeprecationTooltip>{badge}</RollupDeprecationTooltip>
+                </>
+              ) : (
+                badge
               );
             })}
           </EuiTableRowCell>
@@ -201,7 +228,7 @@ export class IndicesList extends React.Component<IndicesListProps, IndicesListSt
 
     return (
       <div {...rest}>
-        <EuiTable responsive={false} tableLayout="auto">
+        <EuiTable responsiveBreakpoint={false} tableLayout="auto">
           <EuiTableBody>{rows}</EuiTableBody>
         </EuiTable>
         <EuiSpacer size="m" />

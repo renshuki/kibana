@@ -1,64 +1,41 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import apm from 'elastic-apm-node';
-import { config as pathConfig } from '@kbn/utils';
-import { reportPerformanceMetricEvent } from '@kbn/ebt-tools';
+import { firstValueFrom } from 'rxjs';
 import type { Logger, LoggerFactory } from '@kbn/logging';
+import type { NodeRoles } from '@kbn/core-node-server';
+import { CriticalError } from '@kbn/core-base-server-internal';
 import { ConfigService, Env, RawConfigurationProvider } from '@kbn/config';
-import type { ServiceConfigDescriptor } from '@kbn/core-base-server-internal';
 import { DocLinksService } from '@kbn/core-doc-links-server-internal';
-import {
-  LoggingService,
-  ILoggingSystem,
-  config as loggingConfig,
-} from '@kbn/core-logging-server-internal';
-import {
-  coreDeprecationProvider,
-  ensureValidConfiguration,
-} from '@kbn/core-config-server-internal';
-import { NodeService, nodeConfig } from '@kbn/core-node-server-internal';
+import { LoggingService, ILoggingSystem } from '@kbn/core-logging-server-internal';
+import { ensureValidConfiguration } from '@kbn/core-config-server-internal';
+import { NodeService } from '@kbn/core-node-server-internal';
 import { AnalyticsService } from '@kbn/core-analytics-server-internal';
-import type { AnalyticsServiceSetup, AnalyticsServiceStart } from '@kbn/core-analytics-server';
-import { EnvironmentService, pidConfig } from '@kbn/core-environment-server-internal';
-import {
-  ExecutionContextService,
-  executionContextConfig,
-} from '@kbn/core-execution-context-server-internal';
+import { EnvironmentService } from '@kbn/core-environment-server-internal';
+import { ExecutionContextService } from '@kbn/core-execution-context-server-internal';
+import { FeatureFlagsService } from '@kbn/core-feature-flags-server-internal';
 import { PrebootService } from '@kbn/core-preboot-server-internal';
 import { ContextService } from '@kbn/core-http-context-server-internal';
-import {
-  HttpService,
-  config as httpConfig,
-  cspConfig,
-  externalUrlConfig,
-} from '@kbn/core-http-server-internal';
-import {
-  ElasticsearchService,
-  config as elasticsearchConfig,
-} from '@kbn/core-elasticsearch-server-internal';
-import { MetricsService, opsConfig } from '@kbn/core-metrics-server-internal';
+import { HttpService } from '@kbn/core-http-server-internal';
+import { ElasticsearchService } from '@kbn/core-elasticsearch-server-internal';
+import { MetricsService } from '@kbn/core-metrics-server-internal';
 import { CapabilitiesService } from '@kbn/core-capabilities-server-internal';
 import type { SavedObjectsServiceStart } from '@kbn/core-saved-objects-server';
-import {
-  savedObjectsConfig,
-  savedObjectsMigrationConfig,
-} from '@kbn/core-saved-objects-base-server-internal';
 import { SavedObjectsService } from '@kbn/core-saved-objects-server-internal';
-import { I18nService, config as i18nConfig } from '@kbn/core-i18n-server-internal';
-import {
-  DeprecationsService,
-  config as deprecationConfig,
-} from '@kbn/core-deprecations-server-internal';
+import { I18nService } from '@kbn/core-i18n-server-internal';
+import { DeprecationsService } from '@kbn/core-deprecations-server-internal';
 import { CoreUsageDataService } from '@kbn/core-usage-data-server-internal';
-import { StatusService, statusConfig } from '@kbn/core-status-server-internal';
-import { UiSettingsService, uiSettingsConfig } from '@kbn/core-ui-settings-server-internal';
+import { StatusService } from '@kbn/core-status-server-internal';
+import { UiSettingsService } from '@kbn/core-ui-settings-server-internal';
 import { CustomBrandingService } from '@kbn/core-custom-branding-server-internal';
+import { UserSettingsService } from '@kbn/core-user-settings-server-internal';
 import {
   CoreRouteHandlerContext,
   PrebootCoreRouteHandlerContext,
@@ -68,38 +45,24 @@ import type {
   PrebootRequestHandlerContext,
 } from '@kbn/core-http-request-handler-context-server';
 import { RenderingService } from '@kbn/core-rendering-server-internal';
-
 import { HttpResourcesService } from '@kbn/core-http-resources-server-internal';
 import type {
   InternalCorePreboot,
   InternalCoreSetup,
   InternalCoreStart,
 } from '@kbn/core-lifecycle-server-internal';
-import {
-  DiscoveredPlugins,
-  PluginsService,
-  config as pluginsConfig,
-} from '@kbn/core-plugins-server-internal';
+import { DiscoveredPlugins, PluginsService } from '@kbn/core-plugins-server-internal';
 import { CoreAppsService } from '@kbn/core-apps-server-internal';
-import { elasticApmConfig } from './root/elastic_config';
+import { SecurityService } from '@kbn/core-security-server-internal';
+import { UserProfileService } from '@kbn/core-user-profile-server-internal';
+import { registerServiceConfig } from './register_service_config';
+import { MIGRATION_EXCEPTION_CODE } from './constants';
+import { coreConfig, type CoreConfigType } from './core_config';
+import { registerRootEvents, reportKibanaStartedEvent, type UptimeSteps } from './events';
 
 const coreId = Symbol('core');
-const rootConfigPath = '';
-const KIBANA_STARTED_EVENT = 'kibana_started';
 
 /** @internal */
-interface UptimePerStep {
-  start: number;
-  end: number;
-}
-
-/** @internal */
-interface UptimeSteps {
-  constructor: UptimePerStep;
-  preboot: UptimePerStep;
-  setup: UptimePerStep;
-  start: UptimePerStep;
-}
 
 export class Server {
   public readonly configService: ConfigService;
@@ -107,6 +70,7 @@ export class Server {
   private readonly capabilities: CapabilitiesService;
   private readonly context: ContextService;
   private readonly elasticsearch: ElasticsearchService;
+  private readonly featureFlags: FeatureFlagsService;
   private readonly http: HttpService;
   private readonly rendering: RenderingService;
   private readonly log: Logger;
@@ -127,6 +91,9 @@ export class Server {
   private readonly prebootService: PrebootService;
   private readonly docLinks: DocLinksService;
   private readonly customBranding: CustomBrandingService;
+  private readonly userSettingsService: UserSettingsService;
+  private readonly security: SecurityService;
+  private readonly userProfile: UserProfileService;
 
   private readonly savedObjectsStartPromise: Promise<SavedObjectsServiceStart>;
   private resolveSavedObjectsStartPromise?: (value: SavedObjectsServiceStart) => void;
@@ -135,6 +102,7 @@ export class Server {
   private coreStart?: InternalCoreStart;
   private discoveredPlugins?: DiscoveredPlugins;
   private readonly logger: LoggerFactory;
+  private nodeRoles?: NodeRoles;
 
   private readonly uptimePerStep: Partial<UptimeSteps> = {};
 
@@ -152,6 +120,7 @@ export class Server {
     const core = { coreId, configService: this.configService, env, logger: this.logger };
     this.analytics = new AnalyticsService(core);
     this.context = new ContextService(core);
+    this.featureFlags = new FeatureFlagsService(core);
     this.http = new HttpService(core);
     this.rendering = new RenderingService(core);
     this.plugins = new PluginsService(core);
@@ -173,6 +142,9 @@ export class Server {
     this.prebootService = new PrebootService(core);
     this.docLinks = new DocLinksService(core);
     this.customBranding = new CustomBrandingService(core);
+    this.userSettingsService = new UserSettingsService(core);
+    this.security = new SecurityService(core);
+    this.userProfile = new UserProfileService(core);
 
     this.savedObjectsStartPromise = new Promise((resolve) => {
       this.resolveSavedObjectsStartPromise = resolve;
@@ -181,15 +153,23 @@ export class Server {
     this.uptimePerStep.constructor = { start: constructorStartUptime, end: performance.now() };
   }
 
-  public async preboot() {
+  public async preboot(): Promise<InternalCorePreboot | undefined> {
     this.log.debug('prebooting server');
+
+    const config = await firstValueFrom(this.configService.atPath<CoreConfigType>(coreConfig.path));
+    const { disablePreboot } = config.lifecycle;
+    if (disablePreboot) {
+      this.log.info('preboot phase is disabled - skipping');
+    }
+
     const prebootStartUptime = performance.now();
     const prebootTransaction = apm.startTransaction('server-preboot', 'kibana-platform');
 
+    // service required for plugin discovery
     const analyticsPreboot = this.analytics.preboot();
-
     const environmentPreboot = await this.environment.preboot({ analytics: analyticsPreboot });
     const nodePreboot = await this.node.preboot({ loggingSystem: this.loggingSystem });
+    this.nodeRoles = nodePreboot.roles;
 
     // Discover any plugins before continuing. This allows other systems to utilize the plugin dependency graph.
     this.discoveredPlugins = await this.plugins.discover({
@@ -197,56 +177,74 @@ export class Server {
       node: nodePreboot,
     });
 
-    // Immediately terminate in case of invalid configuration. This needs to be done after plugin discovery. We also
-    // silent deprecation warnings until `setup` stage where we'll validate config once again.
-    await ensureValidConfiguration(this.configService, { logDeprecations: false });
+    if (!disablePreboot) {
+      // Immediately terminate in case of invalid configuration. This needs to be done after plugin discovery. We also
+      // silent deprecation warnings until `setup` stage where we'll validate config once again.
+      await ensureValidConfiguration(this.configService, { logDeprecations: false });
+    }
 
-    const { uiPlugins, pluginTree, pluginPaths } = this.discoveredPlugins.preboot;
-    const contextServicePreboot = this.context.preboot({
-      pluginDependencies: new Map([...pluginTree.asOpaqueIds]),
-    });
-    const httpPreboot = await this.http.preboot({ context: contextServicePreboot });
-
-    // setup i18n prior to any other service, to have translations ready
-    await this.i18n.preboot({ http: httpPreboot, pluginPaths });
-
-    this.capabilities.preboot({ http: httpPreboot });
-    const elasticsearchServicePreboot = await this.elasticsearch.preboot();
+    // services we need to preboot even when preboot is disabled
     const uiSettingsPreboot = await this.uiSettings.preboot();
-
-    const renderingPreboot = await this.rendering.preboot({ http: httpPreboot, uiPlugins });
-    const httpResourcesPreboot = this.httpResources.preboot({
-      http: httpPreboot,
-      rendering: renderingPreboot,
-    });
-
     const loggingPreboot = this.logging.preboot({ loggingSystem: this.loggingSystem });
 
-    const corePreboot: InternalCorePreboot = {
-      analytics: analyticsPreboot,
-      context: contextServicePreboot,
-      elasticsearch: elasticsearchServicePreboot,
-      http: httpPreboot,
-      uiSettings: uiSettingsPreboot,
-      httpResources: httpResourcesPreboot,
-      logging: loggingPreboot,
-      preboot: this.prebootService.preboot(),
-    };
+    let corePreboot: InternalCorePreboot | undefined;
 
-    await this.plugins.preboot(corePreboot);
+    if (!disablePreboot) {
+      const { uiPlugins, pluginTree, pluginPaths } = this.discoveredPlugins.preboot;
 
-    httpPreboot.registerRouteHandlerContext<PrebootRequestHandlerContext, 'core'>(
-      coreId,
-      'core',
-      () => {
-        return new PrebootCoreRouteHandlerContext(corePreboot);
-      }
-    );
+      const contextServicePreboot = this.context.preboot({
+        pluginDependencies: new Map([...pluginTree.asOpaqueIds]),
+      });
 
-    this.coreApp.preboot(corePreboot, uiPlugins);
+      const httpPreboot = await this.http.preboot({ context: contextServicePreboot });
 
-    prebootTransaction?.end();
+      // setup i18n prior to any other service, to have translations ready
+      const i18nPreboot = await this.i18n.preboot({ http: httpPreboot, pluginPaths });
+
+      this.capabilities.preboot({ http: httpPreboot });
+
+      const elasticsearchServicePreboot = await this.elasticsearch.preboot();
+
+      await this.status.preboot({ http: httpPreboot });
+
+      const renderingPreboot = await this.rendering.preboot({
+        http: httpPreboot,
+        uiPlugins,
+        i18n: i18nPreboot,
+      });
+
+      const httpResourcesPreboot = this.httpResources.preboot({
+        http: httpPreboot,
+        rendering: renderingPreboot,
+      });
+
+      corePreboot = {
+        analytics: analyticsPreboot,
+        context: contextServicePreboot,
+        elasticsearch: elasticsearchServicePreboot,
+        http: httpPreboot,
+        uiSettings: uiSettingsPreboot,
+        httpResources: httpResourcesPreboot,
+        logging: loggingPreboot,
+        preboot: this.prebootService.preboot(),
+      };
+
+      await this.plugins.preboot(corePreboot);
+
+      httpPreboot.registerRouteHandlerContext<PrebootRequestHandlerContext, 'core'>(
+        coreId,
+        'core',
+        () => {
+          return new PrebootCoreRouteHandlerContext(corePreboot!);
+        }
+      );
+
+      this.coreApp.preboot(corePreboot, uiPlugins);
+    }
+
+    prebootTransaction.end();
     this.uptimePerStep.preboot = { start: prebootStartUptime, end: performance.now() };
+
     return corePreboot;
   }
 
@@ -257,12 +255,12 @@ export class Server {
 
     const analyticsSetup = this.analytics.setup();
 
-    this.registerKibanaStartedEventType(analyticsSetup);
+    registerRootEvents(analyticsSetup);
 
     const environmentSetup = this.environment.setup();
 
     // Configuration could have changed after preboot.
-    await ensureValidConfiguration(this.configService);
+    await this.ensureValidConfiguration();
 
     const { uiPlugins, pluginPaths, pluginTree } = this.discoveredPlugins!.standard;
     const contextServiceSetup = this.context.setup({
@@ -270,6 +268,8 @@ export class Server {
     });
     const executionContextSetup = this.executionContext.setup();
     const docLinksSetup = this.docLinks.setup();
+    const securitySetup = this.security.setup();
+    const userProfileSetup = this.userProfile.setup();
 
     const httpSetup = await this.http.setup({
       context: contextServiceSetup,
@@ -327,13 +327,18 @@ export class Server {
     });
 
     const customBrandingSetup = this.customBranding.setup();
+    const userSettingsServiceSetup = this.userSettingsService.setup();
+    const featureFlagsSetup = this.featureFlags.setup();
 
     const renderingSetup = await this.rendering.setup({
       elasticsearch: elasticsearchServiceSetup,
+      featureFlags: featureFlagsSetup,
       http: httpSetup,
       status: statusSetup,
       uiPlugins,
       customBranding: customBrandingSetup,
+      userSettings: userSettingsServiceSetup,
+      i18n: i18nServiceSetup,
     });
 
     const httpResourcesSetup = this.httpResources.setup({
@@ -352,6 +357,7 @@ export class Server {
       elasticsearch: elasticsearchServiceSetup,
       environment: environmentSetup,
       executionContext: executionContextSetup,
+      featureFlags: featureFlagsSetup,
       http: httpSetup,
       i18n: i18nServiceSetup,
       savedObjects: savedObjectsSetup,
@@ -363,15 +369,18 @@ export class Server {
       metrics: metricsSetup,
       deprecations: deprecationsSetup,
       coreUsageData: coreUsageDataSetup,
+      userSettings: userSettingsServiceSetup,
+      security: securitySetup,
+      userProfile: userProfileSetup,
     };
 
     const pluginsSetup = await this.plugins.setup(coreSetup);
     this.#pluginsInitialized = pluginsSetup.initialized;
 
     this.registerCoreContext(coreSetup);
-    this.coreApp.setup(coreSetup, uiPlugins);
+    await this.coreApp.setup(coreSetup, uiPlugins);
 
-    setupTransaction?.end();
+    setupTransaction.end();
     this.uptimePerStep.setup = { start: setupStartUptime, end: performance.now() };
     return coreSetup;
   }
@@ -382,20 +391,42 @@ export class Server {
     const startTransaction = apm.startTransaction('server-start', 'kibana-platform');
 
     const analyticsStart = this.analytics.start();
+    const securityStart = this.security.start();
+    const userProfileStart = this.userProfile.start();
+    this.userSettingsService.start({ userProfile: userProfileStart });
     const executionContextStart = this.executionContext.start();
     const docLinkStart = this.docLinks.start();
+
     const elasticsearchStart = await this.elasticsearch.start();
+    this.uptimePerStep.elasticsearch = {
+      waitTime: elasticsearchStart.metrics.elasticsearchWaitTime,
+    };
+
     const deprecationsStart = this.deprecations.start();
-    const soStartSpan = startTransaction?.startSpan('saved_objects.migration', 'migration');
+    const soStartSpan = startTransaction.startSpan('saved_objects.migration', 'migration');
     const savedObjectsStart = await this.savedObjects.start({
       elasticsearch: elasticsearchStart,
       pluginsInitialized: this.#pluginsInitialized,
       docLinks: docLinkStart,
       node: await this.node.start(),
     });
+    this.uptimePerStep.savedObjects = {
+      migrationTime: savedObjectsStart.metrics.migrationDuration,
+    };
     await this.resolveSavedObjectsStartPromise!(savedObjectsStart);
 
     soStartSpan?.end();
+
+    if (this.nodeRoles?.migrator === true) {
+      startTransaction.end();
+      this.log.info('Detected migrator node role; shutting down Kibana...');
+      throw new CriticalError(
+        'Migrations completed, shutting down Kibana',
+        MIGRATION_EXCEPTION_CODE,
+        0
+      );
+    }
+
     const capabilitiesStart = this.capabilities.start();
     const uiSettingsStart = await this.uiSettings.start();
     const customBrandingStart = this.customBranding.start();
@@ -407,6 +438,8 @@ export class Server {
       exposedConfigsToUsage: this.plugins.getExposedPluginConfigsToUsage(),
     });
 
+    const featureFlagsStart = this.featureFlags.start();
+
     this.status.start();
 
     this.coreStart = {
@@ -416,22 +449,31 @@ export class Server {
       docLinks: docLinkStart,
       elasticsearch: elasticsearchStart,
       executionContext: executionContextStart,
+      featureFlags: featureFlagsStart,
       http: httpStart,
       metrics: metricsStart,
       savedObjects: savedObjectsStart,
       uiSettings: uiSettingsStart,
       coreUsageData: coreUsageDataStart,
       deprecations: deprecationsStart,
+      security: securityStart,
+      userProfile: userProfileStart,
     };
+
+    this.coreApp.start(this.coreStart);
 
     await this.plugins.start(this.coreStart);
 
     await this.http.start();
 
-    startTransaction?.end();
+    startTransaction.end();
 
     this.uptimePerStep.start = { start: startStartUptime, end: performance.now() };
-    this.reportKibanaStartedEvents(analyticsStart);
+
+    reportKibanaStartedEvent({
+      uptimeSteps: this.uptimePerStep as UptimeSteps,
+      analytics: analyticsStart,
+    });
 
     return this.coreStart;
   }
@@ -439,6 +481,7 @@ export class Server {
   public async stop() {
     this.log.debug('stopping server');
 
+    this.coreApp.stop();
     await this.analytics.stop();
     await this.http.stop(); // HTTP server has to stop before savedObjects and ES clients are closed to be able to gracefully attempt to resolve any pending requests
     await this.plugins.stop();
@@ -450,8 +493,32 @@ export class Server {
     await this.status.stop();
     await this.logging.stop();
     await this.customBranding.stop();
+    await this.featureFlags.stop();
     this.node.stop();
     this.deprecations.stop();
+    this.security.stop();
+    this.userProfile.stop();
+  }
+
+  private async ensureValidConfiguration() {
+    try {
+      await ensureValidConfiguration(this.configService);
+    } catch (validationError) {
+      if (this.env.packageInfo.buildFlavor !== 'serverless') {
+        throw validationError;
+      }
+      // When running on serverless, we may allow unknown keys, but stripping them from the final config object.
+      this.configService.setGlobalStripUnknownKeys(true);
+      await ensureValidConfiguration(this.configService, {
+        logDeprecations: true,
+        stripUnknownKeys: true,
+      });
+      this.log
+        .get('config-validation')
+        .error(
+          `Strict config validation failed! Extra unknown keys removed in Serverless-compatible mode. Original error: ${validationError}`
+        );
+    }
   }
 
   private registerCoreContext(coreSetup: InternalCoreSetup) {
@@ -465,154 +532,6 @@ export class Server {
   }
 
   public setupCoreConfig() {
-    const configDescriptors: Array<ServiceConfigDescriptor<unknown>> = [
-      cspConfig,
-      deprecationConfig,
-      elasticsearchConfig,
-      elasticApmConfig,
-      executionContextConfig,
-      externalUrlConfig,
-      httpConfig,
-      i18nConfig,
-      loggingConfig,
-      nodeConfig,
-      opsConfig,
-      pathConfig,
-      pidConfig,
-      pluginsConfig,
-      savedObjectsConfig,
-      savedObjectsMigrationConfig,
-      statusConfig,
-      uiSettingsConfig,
-    ];
-
-    this.configService.addDeprecationProvider(rootConfigPath, coreDeprecationProvider);
-    for (const descriptor of configDescriptors) {
-      if (descriptor.deprecations) {
-        this.configService.addDeprecationProvider(descriptor.path, descriptor.deprecations);
-      }
-      this.configService.setSchema(descriptor.path, descriptor.schema);
-    }
-  }
-
-  /**
-   * Register the legacy KIBANA_STARTED_EVENT.
-   * @param analyticsSetup The {@link AnalyticsServiceSetup}
-   * @private
-   */
-  private registerKibanaStartedEventType(analyticsSetup: AnalyticsServiceSetup) {
-    analyticsSetup.registerEventType<{ uptime_per_step: UptimeSteps }>({
-      eventType: KIBANA_STARTED_EVENT,
-      schema: {
-        uptime_per_step: {
-          properties: {
-            constructor: {
-              properties: {
-                start: {
-                  type: 'float',
-                  _meta: {
-                    description:
-                      'Number of seconds the Node.js process has been running until the constructor was called',
-                  },
-                },
-                end: {
-                  type: 'float',
-                  _meta: {
-                    description:
-                      'Number of seconds the Node.js process has been running until the constructor finished',
-                  },
-                },
-              },
-            },
-            preboot: {
-              properties: {
-                start: {
-                  type: 'float',
-                  _meta: {
-                    description:
-                      'Number of seconds the Node.js process has been running until `preboot` was called',
-                  },
-                },
-                end: {
-                  type: 'float',
-                  _meta: {
-                    description:
-                      'Number of seconds the Node.js process has been running until `preboot` finished',
-                  },
-                },
-              },
-            },
-            setup: {
-              properties: {
-                start: {
-                  type: 'float',
-                  _meta: {
-                    description:
-                      'Number of seconds the Node.js process has been running until `setup` was called',
-                  },
-                },
-                end: {
-                  type: 'float',
-                  _meta: {
-                    description:
-                      'Number of seconds the Node.js process has been running until `setup` finished',
-                  },
-                },
-              },
-            },
-            start: {
-              properties: {
-                start: {
-                  type: 'float',
-                  _meta: {
-                    description:
-                      'Number of seconds the Node.js process has been running until `start` was called',
-                  },
-                },
-                end: {
-                  type: 'float',
-                  _meta: {
-                    description:
-                      'Number of seconds the Node.js process has been running until `start` finished',
-                  },
-                },
-              },
-            },
-          },
-          _meta: {
-            description:
-              'Number of seconds the Node.js process has been running until each phase of the server execution is called and finished.',
-          },
-        },
-      },
-    });
-  }
-
-  /**
-   * Reports the new and legacy KIBANA_STARTED_EVENT.
-   * @param analyticsStart The {@link AnalyticsServiceStart}.
-   * @private
-   */
-  private reportKibanaStartedEvents(analyticsStart: AnalyticsServiceStart) {
-    // Report the legacy KIBANA_STARTED_EVENT.
-    analyticsStart.reportEvent(KIBANA_STARTED_EVENT, { uptime_per_step: this.uptimePerStep });
-
-    const ups = this.uptimePerStep;
-
-    // Report the metric-shaped KIBANA_STARTED_EVENT.
-    reportPerformanceMetricEvent(analyticsStart, {
-      eventName: KIBANA_STARTED_EVENT,
-      duration: ups.start!.end - ups.constructor!.start,
-      key1: 'time_to_constructor',
-      value1: ups.constructor!.start,
-      key2: 'constructor_time',
-      value2: ups.constructor!.end - ups.constructor!.start,
-      key3: 'preboot_time',
-      value3: ups.preboot!.end - ups.preboot!.start,
-      key4: 'setup_time',
-      value4: ups.setup!.end - ups.setup!.start,
-      key5: 'start_time',
-      value5: ups.start!.end - ups.start!.start,
-    });
+    registerServiceConfig(this.configService);
   }
 }

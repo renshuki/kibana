@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import {
@@ -14,7 +15,7 @@ import {
   EuiEmptyPrompt,
   EuiPage,
   EuiPageBody,
-  EuiPageContent_Deprecated as EuiPageContent,
+  EuiPageSection,
 } from '@elastic/eui';
 import React from 'react';
 import { Observable, Subscription, merge, tap, fromEvent } from 'rxjs';
@@ -75,11 +76,14 @@ export class FatalErrorsScreen extends React.Component<Props, State> {
 
   public render() {
     return (
-      <EuiPage style={{ minHeight: '100vh' }}>
+      <EuiPage
+        style={{ minHeight: '100vh', alignItems: 'center' }}
+        data-test-subj="fatalErrorScreen"
+      >
         <EuiPageBody>
-          <EuiPageContent verticalPosition="center" horizontalPosition="center">
+          <EuiPageSection alignment="center">
             <EuiEmptyPrompt
-              iconType="alert"
+              iconType="warning"
               iconColor="danger"
               title={
                 <h2>
@@ -119,7 +123,7 @@ export class FatalErrorsScreen extends React.Component<Props, State> {
               ]}
             />
             {this.state.errors.map((error, i) => (
-              <EuiCallOut key={i} title={error.message} color="danger" iconType="alert">
+              <EuiCallOut key={i} title={error.message} color="danger" iconType="warning">
                 <EuiCodeBlock language="bash" className="eui-textBreakAll">
                   {`Version: ${this.props.kibanaVersion}` +
                     '\n' +
@@ -129,7 +133,7 @@ export class FatalErrorsScreen extends React.Component<Props, State> {
                 </EuiCodeBlock>
               </EuiCallOut>
             ))}
-          </EuiPageContent>
+          </EuiPageSection>
         </EuiPageBody>
       </EuiPage>
     );

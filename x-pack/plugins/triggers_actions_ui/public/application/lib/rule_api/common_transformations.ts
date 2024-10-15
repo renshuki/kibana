@@ -6,29 +6,34 @@
  */
 import { RuleExecutionStatus } from '@kbn/alerting-plugin/common';
 import { AsApiContract, RewriteRequestCase } from '@kbn/actions-plugin/common';
-import { Rule, RuleAction, ResolvedRule, RuleLastRun } from '../../../types';
+import type { Rule, RuleUiAction, ResolvedRule, RuleLastRun } from '../../../types';
 
-const transformAction: RewriteRequestCase<RuleAction> = ({
-  group,
-  id,
-  connector_type_id: actionTypeId,
-  params,
-  frequency,
-}) => ({
-  group,
-  id,
-  params,
-  actionTypeId,
-  ...(frequency
-    ? {
-        frequency: {
-          summary: frequency.summary,
-          notifyWhen: frequency.notify_when,
-          throttle: frequency.throttle,
-        },
-      }
-    : {}),
-});
+const transformAction: RewriteRequestCase<RuleUiAction> = (action) => {
+  const { uuid, id, connector_type_id: actionTypeId, params } = action;
+  return {
+    ...('group' in action && action.group ? { group: action.group } : {}),
+    id,
+    params,
+    actionTypeId,
+    ...('use_alert_data_for_template' in action &&
+    typeof action.use_alert_data_for_template !== 'undefined'
+      ? { useAlertDataForTemplate: action.use_alert_data_for_template }
+      : {}),
+    ...('frequency' in action && action.frequency
+      ? {
+          frequency: {
+            summary: action.frequency.summary,
+            notifyWhen: action.frequency.notify_when,
+            throttle: action.frequency.throttle,
+          },
+        }
+      : {}),
+    ...('alerts_filter' in action && action.alerts_filter
+      ? { alertsFilter: action.alerts_filter }
+      : {}),
+    ...(uuid && { uuid }),
+  };
+};
 
 const transformExecutionStatus: RewriteRequestCase<RuleExecutionStatus> = ({
   last_execution_date: lastExecutionDate,
@@ -42,13 +47,25 @@ const transformExecutionStatus: RewriteRequestCase<RuleExecutionStatus> = ({
 
 const transformLastRun: RewriteRequestCase<RuleLastRun> = ({
   outcome_msg: outcomeMsg,
+  outcome_order: outcomeOrder,
   alerts_count: alertsCount,
   ...rest
 }) => ({
   outcomeMsg,
+  outcomeOrder,
   alertsCount,
   ...rest,
 });
+
+const transformFlapping = (flapping: AsApiContract<Rule['flapping']>) => {
+  if (!flapping) {
+    return flapping;
+  }
+  return {
+    lookBackWindow: flapping.look_back_window,
+    statusChangeThreshold: flapping.status_change_threshold,
+  };
+};
 
 export const transformRule: RewriteRequestCase<Rule> = ({
   rule_type_id: ruleTypeId,
@@ -57,6 +74,7 @@ export const transformRule: RewriteRequestCase<Rule> = ({
   created_at: createdAt,
   updated_at: updatedAt,
   api_key_owner: apiKeyOwner,
+  api_key_created_by_user: apiKeyCreatedByUser,
   notify_when: notifyWhen,
   mute_all: muteAll,
   muted_alert_ids: mutedInstanceIds,
@@ -68,6 +86,8 @@ export const transformRule: RewriteRequestCase<Rule> = ({
   active_snoozes: activeSnoozes,
   last_run: lastRun,
   next_run: nextRun,
+  alert_delay: alertDelay,
+  flapping,
   ...rest
 }: any) => ({
   ruleTypeId,
@@ -82,13 +102,16 @@ export const transformRule: RewriteRequestCase<Rule> = ({
   snoozeSchedule,
   executionStatus: executionStatus ? transformExecutionStatus(executionStatus) : undefined,
   actions: actions
-    ? actions.map((action: AsApiContract<RuleAction>) => transformAction(action))
+    ? actions.map((action: AsApiContract<RuleUiAction>) => transformAction(action))
     : [],
   scheduledTaskId,
   isSnoozedUntil,
   activeSnoozes,
   ...(lastRun ? { lastRun: transformLastRun(lastRun) } : {}),
   ...(nextRun ? { nextRun } : {}),
+  ...(apiKeyCreatedByUser !== undefined ? { apiKeyCreatedByUser } : {}),
+  ...(alertDelay ? { alertDelay } : {}),
+  ...(flapping !== undefined ? { flapping: transformFlapping(flapping) } : {}),
   ...rest,
 });
 

@@ -5,8 +5,8 @@
  * 2.0.
  */
 
+import type { caseApiV1 } from '../../../../common/types/api';
 import { INTERNAL_BULK_GET_CASES_URL } from '../../../../common/constants';
-import type { CasesBulkGetRequestCertainFields } from '../../../../common/api';
 import { createCaseError } from '../../../common/error';
 import { createCasesRoute } from '../create_cases_route';
 import { escapeHatch } from '../utils';
@@ -17,15 +17,20 @@ export const bulkGetCasesRoute = createCasesRoute({
   params: {
     body: escapeHatch,
   },
+  routerOptions: {
+    access: 'internal',
+  },
   handler: async ({ context, request, response }) => {
-    const params = request.body as CasesBulkGetRequestCertainFields;
+    const params = request.body as caseApiV1.CasesBulkGetRequest;
 
     try {
       const casesContext = await context.cases;
       const casesClient = await casesContext.getCasesClient();
 
+      const res: caseApiV1.CasesBulkGetResponse = await casesClient.cases.bulkGet({ ...params });
+
       return response.ok({
-        body: await casesClient.cases.bulkGet({ ...params }),
+        body: res,
       });
     } catch (error) {
       const ids = params.ids ?? [];

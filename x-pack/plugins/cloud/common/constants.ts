@@ -5,9 +5,11 @@
  * 2.0.
  */
 
-export const ELASTIC_SUPPORT_LINK = 'https://cloud.elastic.co/support';
+export const ELASTIC_SUPPORT_LINK = 'https://support.elastic.co/';
 
 /**
  * This is the page for managing your snapshots on Cloud.
  */
 export const CLOUD_SNAPSHOTS_PATH = 'elasticsearch/snapshots/';
+
+export const ELASTICSEARCH_CONFIG_ROUTE = '/api/internal/cloud/elasticsearch_config';

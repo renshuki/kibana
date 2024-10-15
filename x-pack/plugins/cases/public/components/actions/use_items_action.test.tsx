@@ -104,16 +104,15 @@ describe('useItemsAction', () => {
         expect(onActionSuccess).toHaveBeenCalled();
         expect(fieldSelector).toHaveBeenCalled();
         expect(itemsTransformer).toHaveBeenCalled();
-        expect(updateSpy).toHaveBeenCalledWith(
-          [
+        expect(updateSpy).toHaveBeenCalledWith({
+          cases: [
             {
               [props.fieldKey]: ['coke', 'one'],
               id: basicCase.id,
               version: basicCase.version,
             },
           ],
-          expect.anything()
-        );
+        });
       });
     });
 
@@ -191,16 +190,15 @@ describe('useItemsAction', () => {
       await waitFor(() => {
         expect(result.current.isFlyoutOpen).toBe(false);
         expect(onActionSuccess).toHaveBeenCalled();
-        expect(updateSpy).toHaveBeenCalledWith(
-          [
+        expect(updateSpy).toHaveBeenCalledWith({
+          cases: [
             {
               [props.fieldKey]: ['coke', 'one'],
               id: basicCase.id,
               version: basicCase.version,
             },
           ],
-          expect.anything()
-        );
+        });
       });
     });
 
@@ -221,9 +219,10 @@ describe('useItemsAction', () => {
       });
 
       await waitFor(() => {
-        expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith(
-          'My toaster title'
-        );
+        expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith({
+          title: 'My toaster title',
+          className: 'eui-textBreakWord',
+        });
       });
     });
 

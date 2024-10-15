@@ -62,8 +62,10 @@ describe('MetaEnginesTableExpandedRow', () => {
         conflictingEngines={new Set(['source-engine-1', 'source-engine-2'])}
       />
     );
+    const table = wrapper.find(EuiBasicTable).dive();
+    // @ts-expect-error upgrade typescript v5.1.6
+    const tableBody = table.find('RenderWithEuiTheme').renderProp('children')();
 
-    const table = wrapper.find(EuiBasicTable);
-    expect(table.dive().find(EuiHealth)).toHaveLength(2);
+    expect(tableBody.find(EuiHealth)).toHaveLength(2);
   });
 });

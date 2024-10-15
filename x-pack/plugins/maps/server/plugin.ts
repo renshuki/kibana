@@ -17,12 +17,15 @@ import {
 import { HomeServerPluginSetup } from '@kbn/home-plugin/server';
 import { DataViewPersistableStateService } from '@kbn/data-views-plugin/common';
 import type { EMSSettings } from '@kbn/maps-ems-plugin/server';
+
+import { KibanaFeatureScope } from '@kbn/features-plugin/common';
+import { CONTENT_ID, LATEST_VERSION } from '../common/content_management';
 import { getEcommerceSavedObjects } from './sample_data/ecommerce_saved_objects';
 import { getFlightsSavedObjects } from './sample_data/flights_saved_objects';
 import { getWebLogsSavedObjects } from './sample_data/web_logs_saved_objects';
 import { registerMapsUsageCollector } from './maps_telemetry/collectors/register';
 import { APP_ID, APP_ICON, MAP_SAVED_OBJECT_TYPE, getFullPath } from '../common/constants';
-import { MapsXPackConfig } from '../config';
+import { MapsXPackConfig } from './config';
 import { setStartServices } from './kibana_server_services';
 import { emsBoundariesSpecProvider } from './tutorials/ems';
 import { initRoutes } from './routes';
@@ -30,6 +33,7 @@ import { setupEmbeddable } from './embeddable';
 import { setupSavedObjects } from './saved_objects';
 import { registerIntegrations } from './register_integrations';
 import { StartDeps, SetupDeps } from './types';
+import { MapsStorage } from './content_management';
 
 export class MapsPlugin implements Plugin {
   readonly _initializerContext: PluginInitializerContext<MapsXPackConfig>;
@@ -142,7 +146,7 @@ export class MapsPlugin implements Plugin {
     );
   }
 
-  setup(core: CoreSetup, plugins: SetupDeps) {
+  setup(core: CoreSetup<StartDeps>, plugins: SetupDeps) {
     const getFilterMigrations = plugins.data.query.filterManager.getAllMigrations.bind(
       plugins.data.query.filterManager
     );
@@ -150,7 +154,7 @@ export class MapsPlugin implements Plugin {
       DataViewPersistableStateService
     );
 
-    const { usageCollection, home, features, customIntegrations } = plugins;
+    const { usageCollection, home, features, customIntegrations, contentManagement } = plugins;
     const config$ = this._initializerContext.config.create();
 
     const emsSettings = plugins.mapsEms.createEMSSettings();
@@ -172,6 +176,7 @@ export class MapsPlugin implements Plugin {
       }),
       order: 400,
       category: DEFAULT_APP_CATEGORIES.kibana,
+      scope: [KibanaFeatureScope.Spaces, KibanaFeatureScope.Security],
       app: [APP_ID, 'kibana'],
       catalogue: [APP_ID],
       privileges: {
@@ -199,6 +204,17 @@ export class MapsPlugin implements Plugin {
     setupSavedObjects(core, getFilterMigrations, getDataViewMigrations);
     registerMapsUsageCollector(usageCollection);
 
+    contentManagement.register({
+      id: CONTENT_ID,
+      storage: new MapsStorage({
+        throwOnResultValidationError: this._initializerContext.env.mode.dev,
+        logger: this._logger.get('storage'),
+      }),
+      version: {
+        latest: LATEST_VERSION,
+      },
+    });
+
     setupEmbeddable(plugins.embeddable, getFilterMigrations, getDataViewMigrations);
 
     return {
@@ -207,6 +223,6 @@ export class MapsPlugin implements Plugin {
   }
 
   start(core: CoreStart, plugins: StartDeps) {
-    setStartServices(core, plugins);
+    setStartServices(core);
   }
 }

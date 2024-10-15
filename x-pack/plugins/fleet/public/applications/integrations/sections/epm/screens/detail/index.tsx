@@ -6,11 +6,12 @@
  */
 import type { ReactEventHandler } from 'react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Redirect, Route, Switch, useLocation, useParams, useHistory } from 'react-router-dom';
+import { Redirect, useLocation, useParams, useHistory } from 'react-router-dom';
+import { Routes, Route } from '@kbn/shared-ux-router';
+
 import styled from 'styled-components';
 import {
   EuiBadge,
-  EuiButtonEmpty,
   EuiCallOut,
   EuiDescriptionList,
   EuiDescriptionListDescription,
@@ -25,10 +26,13 @@ import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import semverLt from 'semver/functions/lt';
 
+import { getDeferredInstallationsCnt } from '../../../../../../services/has_deferred_installations';
+
 import {
   getPackageReleaseLabel,
   isPackagePrerelease,
   splitPkgKey,
+  packageToPackagePolicyInputs,
 } from '../../../../../../../common/services';
 import { HIDDEN_API_REFERENCE_PACKAGES } from '../../../../../../../common/constants';
 
@@ -39,20 +43,20 @@ import {
   useBreadcrumbs,
   useStartServices,
   useAuthz,
-  usePermissionCheck,
+  usePermissionCheckQuery,
   useIntegrationsStateContext,
-  useGetSettings,
+  useGetSettingsQuery,
 } from '../../../../hooks';
 import { INTEGRATIONS_ROUTING_PATHS } from '../../../../constants';
 import { ExperimentalFeaturesService } from '../../../../services';
 import {
-  useGetPackageInfoByKey,
+  useGetPackageInfoByKeyQuery,
   useLink,
   useAgentPolicyContext,
   useIsGuidedOnboardingActive,
 } from '../../../../hooks';
 import { pkgKeyFromPackageInfo } from '../../../../services';
-import type { DetailViewPanelName, PackageInfo } from '../../../../types';
+import type { PackageInfo } from '../../../../types';
 import { InstallStatus } from '../../../../types';
 import {
   Error,
@@ -63,9 +67,13 @@ import {
 import type { WithHeaderLayoutProps } from '../../../../layouts';
 import { WithHeaderLayout } from '../../../../layouts';
 
-import { useIsFirstTimeAgentUser } from './hooks';
+import { PermissionsError } from '../../../../../fleet/layouts';
+
+import { DeferredAssetsWarning } from './assets/deferred_assets_warning';
+import { useIsFirstTimeAgentUserQuery } from './hooks';
 import { getInstallPkgRouteOptions } from './utils';
 import {
+  BackLink,
   IntegrationAgentPolicyCount,
   UpdateIcon,
   IconPanel,
@@ -77,9 +85,20 @@ import { OverviewPage } from './overview';
 import { PackagePoliciesPage } from './policies';
 import { SettingsPage } from './settings';
 import { CustomViewPage } from './custom';
-import { DocumentationPage } from './documentation';
+import { DocumentationPage, hasDocumentation } from './documentation';
+import { Configs } from './configs';
 
 import './index.scss';
+import type { InstallPkgRouteOptions } from './utils/get_install_route_options';
+
+export type DetailViewPanelName =
+  | 'overview'
+  | 'policies'
+  | 'assets'
+  | 'settings'
+  | 'custom'
+  | 'api-reference'
+  | 'configs';
 
 export interface DetailParams {
   pkgkey: string;
@@ -114,17 +133,32 @@ export function Detail() {
   const { getFromIntegrations } = useIntegrationsStateContext();
   const { pkgkey, panel } = useParams<DetailParams>();
   const { getHref, getPath } = useLink();
-  const canInstallPackages = useAuthz().integrations.installPackages;
-  const canReadPackageSettings = useAuthz().integrations.readPackageSettings;
-  const canReadIntegrationPolicies = useAuthz().integrations.readIntegrationPolicies;
-  const permissionCheck = usePermissionCheck();
-  const missingSecurityConfiguration =
-    !permissionCheck.data?.success && permissionCheck.data?.error === 'MISSING_SECURITY';
-  const userCanInstallPackages = canInstallPackages && permissionCheck.data?.success;
   const history = useHistory();
   const { pathname, search, hash } = useLocation();
   const queryParams = useMemo(() => new URLSearchParams(search), [search]);
   const integration = useMemo(() => queryParams.get('integration'), [queryParams]);
+  const prerelease = useMemo(() => Boolean(queryParams.get('prerelease')), [queryParams]);
+  /** Users from Security Solution onboarding page will have onboardingLink and onboardingAppId in the query params
+   ** to redirect back to the onboarding page after adding an integration
+   */
+  const onboardingLink = useMemo(() => queryParams.get('onboardingLink'), [queryParams]);
+  const onboardingAppId = useMemo(() => queryParams.get('onboardingAppId'), [queryParams]);
+
+  const authz = useAuthz();
+  const canAddAgent = authz.fleet.addAgents;
+  const canInstallPackages = authz.integrations.installPackages;
+  const canReadPackageSettings = authz.integrations.readPackageSettings;
+  const canReadIntegrationPolicies = authz.integrations.readIntegrationPolicies;
+
+  const {
+    data: permissionCheck,
+    error: permissionCheckError,
+    isLoading: isPermissionCheckLoading,
+  } = usePermissionCheckQuery();
+  const missingSecurityConfiguration =
+    !permissionCheck?.success && permissionCheckError === 'MISSING_SECURITY';
+  const userCanInstallPackages = canInstallPackages && permissionCheck?.success;
+
   const services = useStartServices();
   const isCloud = !!services?.cloud?.cloudId;
   const { createPackagePolicyMultiPageLayout: isExperimentalAddIntegrationPageEnabled } =
@@ -143,9 +177,8 @@ export function Detail() {
     if (packageInfo === null || !packageInfo.name) {
       return undefined;
     }
-    return getPackageInstallStatus(packageInfo.name).status;
+    return getPackageInstallStatus(packageInfo?.name)?.status;
   }, [packageInfo, getPackageInstallStatus]);
-
   const isInstalled = useMemo(
     () =>
       packageInstallStatus === InstallStatus.installed ||
@@ -155,20 +188,22 @@ export function Detail() {
 
   const updateAvailable =
     packageInfo &&
-    'savedObject' in packageInfo &&
-    packageInfo.savedObject &&
-    semverLt(packageInfo.savedObject.attributes.version, packageInfo.latestVersion);
+    'installationInfo' in packageInfo &&
+    packageInfo.installationInfo?.version &&
+    semverLt(packageInfo.installationInfo.version, packageInfo.latestVersion);
 
   const [prereleaseIntegrationsEnabled, setPrereleaseIntegrationsEnabled] = React.useState<
     boolean | undefined
   >();
 
-  const { data: settings } = useGetSettings();
+  const { data: settings, isInitialLoading: isSettingsInitialLoading } = useGetSettingsQuery({
+    enabled: authz.fleet.readSettings,
+  });
 
   useEffect(() => {
-    const isEnabled = Boolean(settings?.item.prerelease_integrations_enabled);
+    const isEnabled = Boolean(settings?.item.prerelease_integrations_enabled) || prerelease;
     setPrereleaseIntegrationsEnabled(isEnabled);
-  }, [settings?.item.prerelease_integrations_enabled]);
+  }, [settings?.item.prerelease_integrations_enabled, prerelease]);
 
   const { pkgName, pkgVersion } = splitPkgKey(pkgkey);
   // Fetch package info
@@ -176,17 +211,26 @@ export function Detail() {
     data: packageInfoData,
     error: packageInfoError,
     isLoading: packageInfoLoading,
-    isInitialRequest: packageIsInitialRequest,
-    resendRequest: refreshPackageInfo,
-  } = useGetPackageInfoByKey(pkgName, pkgVersion, {
-    prerelease: prereleaseIntegrationsEnabled,
-  });
+    isFetchedAfterMount: packageInfoIsFetchedAfterMount,
+    refetch: refetchPackageInfo,
+  } = useGetPackageInfoByKeyQuery(
+    pkgName,
+    pkgVersion,
+    {
+      prerelease: prereleaseIntegrationsEnabled,
+      withMetadata: true,
+    },
+    {
+      enabled: !authz.fleet.readSettings || !isSettingsInitialLoading, // Load only after settings are loaded
+      refetchOnMount: 'always',
+    }
+  );
 
   const [latestGAVersion, setLatestGAVersion] = useState<string | undefined>();
   const [latestPrereleaseVersion, setLatestPrereleaseVersion] = useState<string | undefined>();
 
   // fetch latest GA version (prerelease=false)
-  const { data: packageInfoLatestGAData } = useGetPackageInfoByKey(pkgName, '', {
+  const { data: packageInfoLatestGAData } = useGetPackageInfoByKeyQuery(pkgName, '', {
     prerelease: false,
   });
 
@@ -199,7 +243,7 @@ export function Detail() {
   }, [packageInfoLatestGAData?.item]);
 
   // fetch latest Prerelease version (prerelease=true)
-  const { data: packageInfoLatestPrereleaseData } = useGetPackageInfoByKey(pkgName, '', {
+  const { data: packageInfoLatestPrereleaseData } = useGetPackageInfoByKeyQuery(pkgName, '', {
     prerelease: true,
   });
 
@@ -208,7 +252,7 @@ export function Detail() {
   }, [packageInfoLatestPrereleaseData?.item.version]);
 
   const { isFirstTimeAgentUser = false, isLoading: firstTimeUserLoading } =
-    useIsFirstTimeAgentUser();
+    useIsFirstTimeAgentUserQuery();
   const isGuidedOnboardingActive = useIsGuidedOnboardingActive(pkgName);
 
   // Refresh package info when status change
@@ -220,35 +264,46 @@ export function Detail() {
     }
     if (oldPackageInstallStatus === 'not_installed' && packageInstallStatus === 'installed') {
       setOldPackageStatus(packageInstallStatus);
-      refreshPackageInfo();
+      refetchPackageInfo();
     }
-  }, [packageInstallStatus, oldPackageInstallStatus, refreshPackageInfo]);
+  }, [packageInstallStatus, oldPackageInstallStatus, refetchPackageInfo]);
 
   const isLoading =
-    (packageInfoLoading && !packageIsInitialRequest) ||
-    permissionCheck.isLoading ||
-    firstTimeUserLoading;
+    packageInfoLoading ||
+    isPermissionCheckLoading ||
+    firstTimeUserLoading ||
+    !packageInfoIsFetchedAfterMount;
 
   const showCustomTab =
-    useUIExtension(packageInfoData?.item.name ?? '', 'package-detail-custom') !== undefined;
+    useUIExtension(packageInfoData?.item?.name ?? '', 'package-detail-custom') !== undefined;
+
+  // Only show config tab if package has `inputs`
+  const showConfigTab =
+    canAddAgent && (packageInfo ? packageToPackagePolicyInputs(packageInfo).length > 0 : false);
+
+  // Only show API references tab if it is allowed & has documentation to show
+  const showDocumentationTab =
+    !HIDDEN_API_REFERENCE_PACKAGES.includes(pkgName) &&
+    packageInfo &&
+    hasDocumentation({ packageInfo, integration });
 
   // Track install status state
   useEffect(() => {
-    if (packageInfoData?.item) {
+    if (packageInfoIsFetchedAfterMount && packageInfoData?.item) {
       const packageInfoResponse = packageInfoData.item;
       setPackageInfo(packageInfoResponse);
 
       let installedVersion;
       const { name } = packageInfoData.item;
-      if ('savedObject' in packageInfoResponse) {
-        installedVersion = packageInfoResponse.savedObject.attributes.version;
+      if ('installationInfo' in packageInfoResponse) {
+        installedVersion = packageInfoResponse.installationInfo?.version;
       }
       const status: InstallStatus = packageInfoResponse?.status as any;
       if (name) {
         setPackageInstallStatus({ name, status, version: installedVersion || null });
       }
     }
-  }, [packageInfoData, setPackageInstallStatus, setPackageInfo]);
+  }, [packageInfoData, packageInfoIsFetchedAfterMount, setPackageInstallStatus, setPackageInfo]);
 
   const integrationInfo = useMemo(
     () =>
@@ -269,18 +324,18 @@ export function Detail() {
       ? getHref('integrations_installed')
       : getHref('integrations_all');
 
+  const numOfDeferredInstallations = useMemo(
+    () => getDeferredInstallationsCnt(packageInfo),
+    [packageInfo]
+  );
+
   const headerLeftContent = useMemo(
     () => (
-      <EuiFlexGroup direction="column" gutterSize="m">
+      <EuiFlexGroup direction="column" gutterSize="m" data-test-subj="headerLeft">
         <EuiFlexItem>
           {/* Allows button to break out of full width */}
           <div>
-            <EuiButtonEmpty iconType="arrowLeft" size="xs" flush="left" href={href}>
-              <FormattedMessage
-                id="xpack.fleet.epm.browseAllButtonText"
-                defaultMessage="Back to integrations"
-              />
-            </EuiButtonEmpty>
+            <BackLink queryParams={queryParams} href={href} />
           </div>
         </EuiFlexItem>
         <EuiFlexItem>
@@ -327,7 +382,7 @@ export function Detail() {
         </EuiFlexItem>
       </EuiFlexGroup>
     ),
-    [integrationInfo, isLoading, packageInfo, href]
+    [integrationInfo, isLoading, packageInfo, href, queryParams]
   );
 
   const handleAddIntegrationPolicyClick = useCallback<ReactEventHandler>(
@@ -341,7 +396,7 @@ export function Detail() {
         hash,
       });
 
-      const navigateOptions = getInstallPkgRouteOptions({
+      const defaultNavigateOptions: InstallPkgRouteOptions = getInstallPkgRouteOptions({
         agentPolicyId: agentPolicyIdFromContext,
         currentPath,
         integration,
@@ -351,6 +406,25 @@ export function Detail() {
         isGuidedOnboardingActive,
         pkgkey,
       });
+
+      /** Users from Security Solution onboarding page will have onboardingLink and onboardingAppId in the query params
+       ** to redirect back to the onboarding page after adding an integration
+       */
+      const navigateOptions: InstallPkgRouteOptions =
+        onboardingAppId && onboardingLink
+          ? [
+              defaultNavigateOptions[0],
+              {
+                ...defaultNavigateOptions[1],
+                state: {
+                  ...(defaultNavigateOptions[1]?.state ?? {}),
+                  onCancelNavigateTo: [onboardingAppId, { path: onboardingLink }],
+                  onCancelUrl: onboardingLink,
+                  onSaveNavigateTo: [onboardingAppId, { path: onboardingLink }],
+                },
+              },
+            ]
+          : defaultNavigateOptions;
 
       services.application.navigateToApp(...navigateOptions);
     },
@@ -363,6 +437,8 @@ export function Detail() {
       isExperimentalAddIntegrationPageEnabled,
       isFirstTimeAgentUser,
       isGuidedOnboardingActive,
+      onboardingAppId,
+      onboardingLink,
       pathname,
       pkgkey,
       search,
@@ -565,10 +641,16 @@ export function Detail() {
       tabs.push({
         id: 'assets',
         name: (
-          <FormattedMessage
-            id="xpack.fleet.epm.packageDetailsNav.packageAssetsLinkText"
-            defaultMessage="Assets"
-          />
+          <div style={{ display: 'flex', textAlign: 'center' }}>
+            <FormattedMessage
+              id="xpack.fleet.epm.packageDetailsNav.packageAssetsLinkText"
+              defaultMessage="Assets"
+            />
+            &nbsp;
+            {numOfDeferredInstallations > 0 ? (
+              <DeferredAssetsWarning numOfDeferredInstallations={numOfDeferredInstallations} />
+            ) : null}
+          </div>
         ),
         isSelected: panel === 'assets',
         'data-test-subj': `tab-assets`,
@@ -597,6 +679,24 @@ export function Detail() {
       });
     }
 
+    if (canReadPackageSettings && showConfigTab) {
+      tabs.push({
+        id: 'configs',
+        name: (
+          <FormattedMessage
+            id="xpack.fleet.epm.packageDetailsNav.configsText"
+            defaultMessage="Configs"
+          />
+        ),
+        isSelected: panel === 'configs',
+        'data-test-subj': `tab-configs`,
+        href: getHref('integration_details_configs', {
+          pkgkey: packageInfoKey,
+          ...(integration ? { integration } : {}),
+        }),
+      });
+    }
+
     if (canReadPackageSettings && showCustomTab) {
       tabs.push({
         id: 'custom',
@@ -615,7 +715,7 @@ export function Detail() {
       });
     }
 
-    if (!HIDDEN_API_REFERENCE_PACKAGES.includes(packageInfo.name)) {
+    if (showDocumentationTab) {
       tabs.push({
         id: 'api-reference',
         name: (
@@ -643,7 +743,10 @@ export function Detail() {
     isInstalled,
     CustomAssets,
     canReadPackageSettings,
+    showConfigTab,
     showCustomTab,
+    showDocumentationTab,
+    numOfDeferredInstallations,
   ]);
 
   const securityCallout = missingSecurityConfiguration ? (
@@ -698,12 +801,12 @@ export function Detail() {
               defaultMessage="Error loading integration details"
             />
           }
-          error={packageInfoError}
+          error={packageInfoError.message}
         />
       ) : isLoading || !packageInfo ? (
         <Loading />
       ) : (
-        <Switch>
+        <Routes>
           <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_overview}>
             <OverviewPage
               packageInfo={packageInfo}
@@ -712,13 +815,27 @@ export function Detail() {
             />
           </Route>
           <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_settings}>
-            <SettingsPage packageInfo={packageInfo} theme$={services.theme.theme$} />
+            <SettingsPage
+              packageInfo={packageInfo}
+              packageMetadata={packageInfoData?.metadata}
+              startServices={services}
+            />
           </Route>
           <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_assets}>
-            <AssetsPage packageInfo={packageInfo} />
+            <AssetsPage packageInfo={packageInfo} refetchPackageInfo={refetchPackageInfo} />
+          </Route>
+          <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_configs}>
+            <Configs packageInfo={packageInfo} />
           </Route>
           <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_policies}>
-            <PackagePoliciesPage name={packageInfo.name} version={packageInfo.version} />
+            {canReadIntegrationPolicies ? (
+              <PackagePoliciesPage name={packageInfo.name} version={packageInfo.version} />
+            ) : (
+              <PermissionsError
+                error="MISSING_PRIVILEGES"
+                requiredFleetRole="Agent Policies Read and Integrations Read"
+              />
+            )}
           </Route>
           <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_custom}>
             <CustomViewPage packageInfo={packageInfo} />
@@ -727,7 +844,7 @@ export function Detail() {
             <DocumentationPage packageInfo={packageInfo} integration={integrationInfo?.name} />
           </Route>
           <Redirect to={INTEGRATIONS_ROUTING_PATHS.integration_details_overview} />
-        </Switch>
+        </Routes>
       )}
     </WithHeaderLayout>
   );

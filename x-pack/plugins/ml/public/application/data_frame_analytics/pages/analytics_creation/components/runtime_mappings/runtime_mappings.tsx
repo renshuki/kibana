@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, useState, useEffect } from 'react';
+import type { FC } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   EuiButton,
   EuiButtonIcon,
@@ -19,14 +20,12 @@ import {
 } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
-import { XJsonMode } from '@kbn/ace';
 import { XJson } from '@kbn/es-ui-shared-plugin/public';
 import { isPopulatedObject } from '@kbn/ml-is-populated-object';
-import { useMlContext } from '../../../../../contexts/ml';
-import { CreateAnalyticsFormProps } from '../../../analytics_management/hooks/use_create_analytics_form';
-import { getCombinedRuntimeMappings } from '../../../../../components/data_grid/common';
+import { getCombinedRuntimeMappings, isRuntimeMappings } from '@kbn/ml-runtime-field-utils';
+import { useDataSource } from '../../../../../contexts/ml';
+import type { CreateAnalyticsFormProps } from '../../../analytics_management/hooks/use_create_analytics_form';
 import { RuntimeMappingsEditor } from './runtime_mappings_editor';
-import { isRuntimeMappings } from '../../../../../../../common';
 import { SwitchModal } from './switch_modal';
 
 const advancedEditorsSidebarWidth = '220px';
@@ -66,8 +65,6 @@ const RUNTIME_FIELDS_LABEL_TEXT = i18n.translate(
 );
 
 const { useXJsonMode } = XJson;
-const xJsonMode = new XJsonMode();
-export type XJsonModeType = ReturnType<typeof XJsonMode>;
 
 interface Props {
   actions: CreateAnalyticsFormProps['actions'];
@@ -94,8 +91,7 @@ export const RuntimeMappings: FC<Props> = ({ actions, state }) => {
     xJson: advancedRuntimeMappingsConfig,
   } = useXJsonMode(runtimeMappings || '');
 
-  const mlContext = useMlContext();
-  const { currentDataView } = mlContext;
+  const { selectedDataView } = useDataSource();
 
   const applyChanges = () => {
     const removeRuntimeMappings = advancedRuntimeMappingsConfig === '';
@@ -133,7 +129,7 @@ export const RuntimeMappings: FC<Props> = ({ actions, state }) => {
   };
 
   useEffect(function getInitialRuntimeMappings() {
-    const combinedRuntimeMappings = getCombinedRuntimeMappings(currentDataView, runtimeMappings);
+    const combinedRuntimeMappings = getCombinedRuntimeMappings(selectedDataView, runtimeMappings);
 
     const prettySourceConfig = JSON.stringify(combinedRuntimeMappings, null, 2);
 
@@ -177,7 +173,6 @@ export const RuntimeMappings: FC<Props> = ({ actions, state }) => {
                   }
                   setAdvancedRuntimeMappingsConfig={setAdvancedRuntimeMappingsConfig}
                   convertToJson={convertToJson}
-                  xJsonMode={xJsonMode}
                 />
               </>
             )}

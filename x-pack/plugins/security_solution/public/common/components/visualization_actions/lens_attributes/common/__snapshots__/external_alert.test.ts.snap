@@ -41,6 +41,9 @@ Object {
                 "isBucketed": false,
                 "label": "Count of records",
                 "operationType": "count",
+                "params": Object {
+                  "emptyAsNull": true,
+                },
                 "scale": "ratio",
                 "sourceField": "___records___",
               },
@@ -50,6 +53,7 @@ Object {
                 "label": "@timestamp",
                 "operationType": "date_histogram",
                 "params": Object {
+                  "includeEmptyRows": true,
                   "interval": "auto",
                 },
                 "scale": "interval",
@@ -101,23 +105,6 @@ Object {
         "query": Object {
           "match_phrase": Object {
             "event.kind": "alert",
-          },
-        },
-      },
-      Object {
-        "meta": Object {
-          "alias": null,
-          "disabled": false,
-          "key": "host.id",
-          "negate": false,
-          "params": Object {
-            "query": "123",
-          },
-          "type": "phrase",
-        },
-        "query": Object {
-          "match_phrase": Object {
-            "host.id": "123",
           },
         },
       },
@@ -184,12 +171,34 @@ Object {
           },
         },
       },
+      Object {
+        "meta": Object {
+          "alias": null,
+          "disabled": false,
+          "key": "host.id",
+          "negate": false,
+          "params": Object {
+            "query": "123",
+          },
+          "type": "phrase",
+        },
+        "query": Object {
+          "match_phrase": Object {
+            "host.id": "123",
+          },
+        },
+      },
     ],
     "query": Object {
       "language": "kql",
       "query": "host.name: *",
     },
     "visualization": Object {
+      "axisTitlesVisibilitySettings": Object {
+        "x": false,
+        "yLeft": false,
+        "yRight": true,
+      },
       "layers": Array [
         Object {
           "accessors": Array [
@@ -206,6 +215,10 @@ Object {
       ],
       "legend": Object {
         "isVisible": true,
+        "legendSize": "xlarge",
+        "legendStats": Array [
+          "currentAndLastValue",
+        ],
         "position": "right",
       },
       "preferredSeriesType": "bar_stacked",

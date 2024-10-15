@@ -47,7 +47,8 @@ const bodySchema = schema.object({
 export const updateAlertRoute = (
   router: AlertingRouter,
   licenseState: ILicenseState,
-  usageCounter?: UsageCounter
+  usageCounter?: UsageCounter,
+  isServerless?: boolean
 ) => {
   router.put(
     {
@@ -55,6 +56,12 @@ export const updateAlertRoute = (
       validate: {
         body: bodySchema,
         params: paramSchema,
+      },
+      options: {
+        access: isServerless ? 'internal' : 'public',
+        summary: 'Update an alert',
+        tags: ['oas-tag:alerting'],
+        deprecated: true,
       },
     },
     handleDisabledApiKeysError(
@@ -68,7 +75,7 @@ export const updateAlertRoute = (
         const { id } = req.params;
         const { name, actions, params, schedule, tags, throttle, notifyWhen } = req.body;
         try {
-          const alertRes = await rulesClient.update({
+          const { systemActions, ...alertRes } = await rulesClient.update({
             id,
             data: {
               name,

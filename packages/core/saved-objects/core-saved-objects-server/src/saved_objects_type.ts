@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
@@ -14,8 +15,14 @@ import type { SavedObjectsTypeManagementDefinition } from './saved_objects_manag
 import type { SavedObjectsValidationMap } from './validation';
 import type { SavedObjectMigrationMap } from './migration';
 import type { SavedObjectsTypeMappingDefinition } from './mapping_definition';
+import type {
+  SavedObjectsModelVersionMap,
+  SavedObjectsModelVersionMapProvider,
+} from './model_version';
 
 /**
+ * Definition of a type of savedObject.
+ *
  * @public
  */
 export interface SavedObjectsType<Attributes = any> {
@@ -64,6 +71,7 @@ export interface SavedObjectsType<Attributes = any> {
   mappings: SavedObjectsTypeMappingDefinition;
   /**
    * An optional map of {@link SavedObjectMigrationFn | migrations} or a function returning a map of {@link SavedObjectMigrationFn | migrations} to be used to migrate the type.
+   * @deprecated Use {@link SavedObjectsType.modelVersions | modelVersions} instead.
    */
   migrations?: SavedObjectMigrationMap | (() => SavedObjectMigrationMap);
   /**
@@ -72,6 +80,7 @@ export interface SavedObjectsType<Attributes = any> {
    * When provided, calls to {@link SavedObjectsClient.create | create} will be validated against this schema.
    *
    * See {@link SavedObjectsValidationMap} for more details.
+   * @deprecated Use {@link SavedObjectsType.modelVersions | modelVersions} instead.
    */
   schemas?: SavedObjectsValidationMap | (() => SavedObjectsValidationMap);
   /**
@@ -128,6 +137,100 @@ export interface SavedObjectsType<Attributes = any> {
    * An optional {@link SavedObjectsTypeManagementDefinition | saved objects management section} definition for the type.
    */
   management?: SavedObjectsTypeManagementDefinition<Attributes>;
+
+  /**
+   * A map of model versions associated with this type.
+   *
+   * Model versions supersede the {@link SavedObjectsType.migrations | migrations} (and {@link SavedObjectsType.schemas | schemas}) APIs
+   * by exposing an unified way of describing the changes of shape or data of the type.
+   *
+   * Model versioning is decoupled from Kibana versioning, and isolated between types.
+   * Model versions are identified by a single numeric value, starting at `1` and without gaps.
+   *
+   * Please refer to {@link SavedObjectsModelVersion} for more details on the model version API.
+   *
+   * @example A **valid** versioning would be:
+   *
+   * ```ts
+   * {
+   *   name: 'foo',
+   *   // other mandatory attributes...
+   *   modelVersions: {
+   *     '1': modelVersion1,
+   *     '2': modelVersion2,
+   *     '3': modelVersion3,
+   *   }
+   * }
+   * ```
+   *
+   * @example An **invalid** versioning would be:
+   *
+   * ```ts
+   * {
+   *   name: 'foo',
+   *   // other mandatory attributes...
+   *   modelVersions: {
+   *     '1': modelVersion1,
+   *     '3': modelVersion3, // ERROR, no model version 2
+   *     '3.1': modelVersion31, // ERROR, model version is a single numeric value
+   *   }
+   * }
+   * ```
+   */
+  modelVersions?: SavedObjectsModelVersionMap | SavedObjectsModelVersionMapProvider;
+
+  /**
+   * Allows to opt-in to the model version API.
+   *
+   * Must be a valid semver version (with the patch version being necessarily 0)
+   *
+   * When specified, the type will switch from using the {@link SavedObjectsType.migrations | legacy migration API}
+   * to use the {@link SavedObjectsType.modelVersions | modelVersion API} after the specified version.
+   *
+   * Once opted in, it will no longer be possible to use the legacy migration API after the specified version.
+   *
+   * @example A **valid** usage example would be:
+   *
+   * ```ts
+   * {
+   *   name: 'foo',
+   *   // other mandatory attributes...
+   *   switchToModelVersionAt: '8.8.0',
+   *   migrations: {
+   *     '8.1.0': migrateTo810,
+   *     '8.7.0': migrateTo870,
+   *   },
+   *   modelVersions: {
+   *     '1': modelVersion1
+   *   }
+   * }
+   * ```
+   *
+   * @example An **invalid** usage example would be:
+   *
+   * ```ts
+   * {
+   *   name: 'foo',
+   *   // other mandatory attributes...
+   *   switchToModelVersionAt: '8.9.0',
+   *   migrations: {
+   *     '8.1.0': migrateTo8_1,
+   *     '8.9.0': migrateTo8_9, // error: migration registered for the switch version
+   *     '8.10.0': migrateTo8_10, // error: migration registered for after the switch version
+   *   },
+   *   modelVersions: {
+   *     '1': modelVersion1
+   *   }
+   * }
+   * ```
+   *
+   * Please refer to the {@link SavedObjectsType.modelVersions | modelVersion API} for more documentation on
+   * the new API.
+   *
+   * @remarks All types will be forced to switch to use the new API during `8.10.0`. This switch is
+   *          allowing types owners to switch their types before the milestone (and for testing purposes).
+   */
+  switchToModelVersionAt?: string;
 }
 
 /**

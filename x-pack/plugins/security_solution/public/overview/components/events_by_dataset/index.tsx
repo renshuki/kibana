@@ -7,7 +7,6 @@
 
 import { Position } from '@elastic/charts';
 import numeral from '@elastic/numeral';
-import type { MappingRuntimeFields } from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import React, { useEffect, useMemo, useCallback } from 'react';
 
 import type { DataViewBase, Filter, Query } from '@kbn/es-query';
@@ -27,38 +26,37 @@ import { useKibana, useUiSetting$ } from '../../../common/lib/kibana';
 import {
   eventsStackByOptions,
   eventsHistogramConfig,
+  NO_BREAKDOWN_STACK_BY_VALUE,
 } from '../../../common/components/events_tab/histogram_configurations';
 import { HostsTableType } from '../../../explore/hosts/store/model';
-import type { InputsModelId } from '../../../common/store/inputs/constants';
 import type { GlobalTimeArgs } from '../../../common/containers/use_global_time';
 
 import * as i18n from '../../pages/translations';
 import { SecurityPageName } from '../../../app/types';
 import { useFormatUrl } from '../../../common/components/link_to';
 import { useInvalidFilterQuery } from '../../../common/hooks/use_invalid_filter_query';
+import type { SourcererScopeName } from '../../../sourcerer/store/model';
 
-const DEFAULT_STACK_BY = 'event.dataset';
+const DEFAULT_STACK_BY = NO_BREAKDOWN_STACK_BY_VALUE;
 
 const ID = 'eventsByDatasetOverview';
+const CHART_HEIGHT = 160;
 
 interface Props extends Pick<GlobalTimeArgs, 'from' | 'to' | 'deleteQuery' | 'setQuery'> {
-  combinedQueries?: string;
+  filterQuery?: string;
   filters: Filter[];
   headerChildren?: React.ReactNode;
   indexPattern: DataViewBase;
-  indexNames: string[];
-  runtimeMappings?: MappingRuntimeFields;
   onlyField?: string;
   paddingSize?: 's' | 'm' | 'l' | 'none';
   query: Query;
   // Make a unique query type everywhere this query is used
   queryType: 'topN' | 'overview';
-  setAbsoluteRangeDatePickerTarget?: InputsModelId;
-  showLegend?: boolean;
   showSpacer?: boolean;
-  scopeId?: string;
   toggleTopN?: () => void;
   hideQueryToggle?: boolean;
+  sourcererScopeId?: SourcererScopeName;
+  applyGlobalQueriesAndFilters?: boolean;
 }
 
 const getHistogramOption = (fieldName: string): MatrixHistogramOption => ({
@@ -74,26 +72,23 @@ const StyledLinkButton = styled(EuiButton)`
 `;
 
 const EventsByDatasetComponent: React.FC<Props> = ({
-  combinedQueries,
+  filterQuery: filterQueryFromProps,
   deleteQuery,
   filters,
   from,
   headerChildren,
   indexPattern,
-  indexNames,
-  runtimeMappings,
   onlyField,
   paddingSize,
   query,
   queryType,
-  setAbsoluteRangeDatePickerTarget,
   setQuery,
-  showLegend,
   showSpacer = true,
-  scopeId,
+  sourcererScopeId,
   to,
   toggleTopN,
   hideQueryToggle = false,
+  applyGlobalQueriesAndFilters,
 }) => {
   const uniqueQueryId = useMemo(() => `${ID}-${queryType}`, [queryType]);
 
@@ -111,7 +106,7 @@ const EventsByDatasetComponent: React.FC<Props> = ({
   const [defaultNumberFormat] = useUiSetting$<string>(DEFAULT_NUMBER_FORMAT);
 
   const goToHostEvents = useCallback(
-    (ev) => {
+    (ev: React.SyntheticEvent) => {
       ev.preventDefault();
       navigateToApp(APP_UI_ID, {
         deepLinkId: SecurityPageName.hosts,
@@ -134,7 +129,7 @@ const EventsByDatasetComponent: React.FC<Props> = ({
   );
 
   const [filterQuery, kqlError] = useMemo(() => {
-    if (combinedQueries == null) {
+    if (filterQueryFromProps == null) {
       return convertToBuildEsQuery({
         config: getEsQueryConfig(kibana.services.uiSettings),
         indexPattern,
@@ -142,8 +137,8 @@ const EventsByDatasetComponent: React.FC<Props> = ({
         filters,
       });
     }
-    return [combinedQueries];
-  }, [combinedQueries, kibana, indexPattern, query, filters]);
+    return [filterQueryFromProps];
+  }, [filterQueryFromProps, kibana, indexPattern, query, filters]);
 
   useInvalidFilterQuery({
     id: uniqueQueryId,
@@ -162,7 +157,7 @@ const EventsByDatasetComponent: React.FC<Props> = ({
       defaultStackByOption:
         onlyField != null
           ? getHistogramOption(onlyField)
-          : eventsStackByOptions.find((o) => o.text === DEFAULT_STACK_BY) ??
+          : eventsStackByOptions.find((o) => o.value === DEFAULT_STACK_BY) ??
             eventsStackByOptions[0],
       legendPosition: Position.Right,
       subtitle: (totalCount: number) =>
@@ -191,20 +186,16 @@ const EventsByDatasetComponent: React.FC<Props> = ({
       filterQuery={filterQuery}
       headerChildren={headerContent}
       id={uniqueQueryId}
-      indexNames={indexNames}
-      runtimeMappings={runtimeMappings}
-      onError={toggleTopN}
       paddingSize={paddingSize}
-      setAbsoluteRangeDatePickerTarget={setAbsoluteRangeDatePickerTarget}
       setQuery={setQuery}
       showSpacer={showSpacer}
-      showLegend={showLegend}
-      skip={filterQuery === undefined}
       startDate={from}
-      scopeId={scopeId}
+      sourcererScopeId={sourcererScopeId}
       {...eventsByDatasetHistogramConfigs}
       title={onlyField != null ? i18n.TOP(onlyField) : eventsByDatasetHistogramConfigs.title}
+      chartHeight={CHART_HEIGHT}
       hideQueryToggle={hideQueryToggle}
+      applyGlobalQueriesAndFilters={applyGlobalQueriesAndFilters}
     />
   );
 };

@@ -6,19 +6,24 @@
  */
 import React from 'react';
 import { i18n } from '@kbn/i18n';
+import { useKibana } from '@kbn/kibana-react-plugin/public';
 import { includes } from 'lodash';
+import { EuiIcon, EuiToolTip } from '@elastic/eui';
+import { MonitoringStartServices } from '../../../types';
 import { PageTemplate } from '../page_template';
 import { TabMenuItem, PageTemplateProps } from '../page_template';
 import { ML_SUPPORTED_LICENSES } from '../../../../common/constants';
+import { ingestPipelineTabOnClick } from './ingest_pipeline_modal';
 
 interface ElasticsearchTemplateProps extends PageTemplateProps {
   cluster?: any;
 }
 
-export const ElasticsearchTemplate: React.FC<ElasticsearchTemplateProps> = ({
-  cluster,
-  ...props
-}) => {
+export const ElasticsearchTemplate: React.FC<
+  React.PropsWithChildren<ElasticsearchTemplateProps>
+> = ({ cluster, ...props }) => {
+  const { services } = useKibana<MonitoringStartServices>();
+
   const tabs: TabMenuItem[] = [
     {
       id: 'overview',
@@ -42,6 +47,25 @@ export const ElasticsearchTemplate: React.FC<ElasticsearchTemplateProps> = ({
       route: '/elasticsearch/indices',
     },
   ];
+
+  if (services.dashboard) {
+    tabs.push({
+      id: 'ingest_pipeines',
+      label: i18n.translate('xpack.monitoring.esNavigation.ingestPipelinesLinkText', {
+        defaultMessage: 'Ingest Pipelines',
+      }),
+      prepend: (
+        <EuiToolTip
+          content={i18n.translate('xpack.monitoring.esNavigation.ingestPipelinesBetaTooltip', {
+            defaultMessage: 'Ingest Pipeline monitoring is a beta feature',
+          })}
+        >
+          <EuiIcon type="beaker" />
+        </EuiToolTip>
+      ),
+      onClick: () => ingestPipelineTabOnClick(services),
+    });
+  }
 
   if (cluster && mlIsSupported(cluster.license)) {
     tabs.push({

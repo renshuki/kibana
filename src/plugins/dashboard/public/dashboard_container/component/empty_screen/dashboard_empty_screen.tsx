@@ -1,100 +1,159 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React from 'react';
-import { I18nProvider } from '@kbn/i18n-react';
+import React, { useCallback, useMemo } from 'react';
+import useObservable from 'react-use/lib/useObservable';
+
 import {
-  EuiIcon,
-  EuiSpacer,
-  EuiPageContent_Deprecated as EuiPageContent,
-  EuiPageBody,
-  EuiPage,
+  EuiButton,
+  EuiButtonEmpty,
+  EuiFlexGroup,
+  EuiFlexItem,
   EuiImage,
+  EuiPageTemplate,
   EuiText,
-  EuiTitle,
 } from '@elastic/eui';
-import { pluginServices } from '../../../services/plugin_services';
+import { METRIC_TYPE } from '@kbn/analytics';
+import { ViewMode } from '@kbn/embeddable-plugin/public';
+import { useStateFromPublishingSubject } from '@kbn/presentation-publishing';
+
+import { useDashboardApi } from '../../../dashboard_api/use_dashboard_api';
+import { DASHBOARD_UI_METRIC_ID } from '../../../dashboard_constants';
+import {
+  coreServices,
+  dataService,
+  embeddableService,
+  usageCollectionService,
+  visualizationsService,
+} from '../../../services/kibana_services';
+import { getDashboardCapabilities } from '../../../utils/get_dashboard_capabilities';
 import { emptyScreenStrings } from '../../_dashboard_container_strings';
 
-export interface DashboardEmptyScreenProps {
-  isEditMode?: boolean;
-}
-
-export function DashboardEmptyScreen({ isEditMode }: DashboardEmptyScreenProps) {
-  const {
-    dashboardCapabilities: { showWriteControls },
-    http: { basePath },
-    settings: { uiSettings },
-  } = pluginServices.getServices();
-  const isReadonlyMode = !showWriteControls;
-
-  const IS_DARK_THEME = uiSettings.get('theme:darkMode');
-  const emptyStateGraphicURL = IS_DARK_THEME
-    ? '/plugins/home/assets/welcome_graphic_dark_2x.png'
-    : '/plugins/home/assets/welcome_graphic_light_2x.png';
-
-  const page = (mainText: string, showAdditionalParagraph?: boolean, additionalText?: string) => {
-    return (
-      <EuiPage
-        data-test-subj={isReadonlyMode ? 'dashboardEmptyReadOnly' : 'dashboardEmptyReadWrite'}
-        className="dshStartScreen"
-        restrictWidth="500px"
-      >
-        <EuiPageBody>
-          <EuiPageContent
-            verticalPosition="center"
-            horizontalPosition="center"
-            paddingSize="none"
-            className="dshStartScreen__pageContent"
-          >
-            <EuiImage url={basePath.prepend(emptyStateGraphicURL)} alt="" />
-            <EuiText size="m">
-              <p style={{ fontWeight: 'bold' }}>{mainText}</p>
-            </EuiText>
-            {additionalText ? (
-              <EuiText size="m" color="subdued">
-                {additionalText}
-              </EuiText>
-            ) : null}
-            {showAdditionalParagraph ? (
-              <React.Fragment>
-                <EuiSpacer size="m" />
-                <div className="dshStartScreen__panelDesc">
-                  <EuiText size="m" color="subdued">
-                    <p>{emptyScreenStrings.getHowToStartWorkingOnNewDashboardDescription()}</p>
-                  </EuiText>
-                </div>
-              </React.Fragment>
-            ) : null}
-          </EuiPageContent>
-        </EuiPageBody>
-      </EuiPage>
-    );
-  };
-  const readonlyMode = page(
-    emptyScreenStrings.getEmptyDashboardTitle(),
-    false,
-    emptyScreenStrings.getEmptyDashboardAdditionalPrivilege()
+export function DashboardEmptyScreen() {
+  const lensAlias = useMemo(
+    () => visualizationsService.getAliases().find(({ name }) => name === 'lens'),
+    []
   );
-  const viewMode = page(emptyScreenStrings.getFillDashboardTitle(), true);
-  const editMode = (
-    <div data-test-subj="emptyDashboardWidget" className="dshEmptyWidget">
-      <EuiIcon color="subdued" size="xl" type="visAreaStacked" />
-      <EuiSpacer size="s" />
-      <EuiTitle size="xs">
-        <h3>{emptyScreenStrings.getEmptyWidgetTitle()}</h3>
-      </EuiTitle>
-      <EuiSpacer size="s" />
+  const { showWriteControls } = useMemo(() => {
+    return getDashboardCapabilities();
+  }, []);
+
+  const dashboardApi = useDashboardApi();
+  const isDarkTheme = useObservable(coreServices.theme.theme$)?.darkMode;
+  const viewMode = useStateFromPublishingSubject(dashboardApi.viewMode);
+  const isEditMode = useMemo(() => {
+    return viewMode === 'edit';
+  }, [viewMode]);
+
+  const goToLens = useCallback(() => {
+    if (!lensAlias || !lensAlias.alias) return;
+    const trackUiMetric = usageCollectionService?.reportUiCounter.bind(
+      usageCollectionService,
+      DASHBOARD_UI_METRIC_ID
+    );
+
+    if (trackUiMetric) {
+      trackUiMetric(METRIC_TYPE.CLICK, `${lensAlias.name}:create`);
+    }
+    const appContext = dashboardApi.getAppContext();
+    embeddableService.getStateTransfer().navigateToEditor(lensAlias.alias.app, {
+      path: lensAlias.alias.path,
+      state: {
+        originatingApp: appContext?.currentAppId,
+        originatingPath: appContext?.getCurrentPath?.() ?? '',
+        searchSessionId: dataService.search.session.getSessionId(),
+      },
+    });
+  }, [lensAlias, dashboardApi]);
+
+  // TODO replace these SVGs with versions from EuiIllustration as soon as it becomes available.
+  const imageUrl = coreServices.http.basePath.prepend(
+    `/plugins/dashboard/assets/${isDarkTheme ? 'dashboards_dark' : 'dashboards_light'}.svg`
+  );
+
+  // If the user ends up in edit mode without write privileges, we shouldn't show the edit prompt.
+  const showEditPrompt = showWriteControls && isEditMode;
+
+  const emptyPromptTestSubject = (() => {
+    if (showEditPrompt) return 'emptyDashboardWidget';
+    return showWriteControls ? 'dashboardEmptyReadWrite' : 'dashboardEmptyReadOnly';
+  })();
+
+  const title = (() => {
+    const titleString = showEditPrompt
+      ? emptyScreenStrings.getEditModeTitle()
+      : showWriteControls
+      ? emptyScreenStrings.getViewModeWithPermissionsTitle()
+      : emptyScreenStrings.getViewModeWithoutPermissionsTitle();
+    return <h2>{titleString}</h2>;
+  })();
+
+  const body = (() => {
+    const bodyString = showEditPrompt
+      ? emptyScreenStrings.getEditModeSubtitle()
+      : showWriteControls
+      ? emptyScreenStrings.getViewModeWithPermissionsSubtitle()
+      : emptyScreenStrings.getViewModeWithoutPermissionsSubtitle();
+    return (
       <EuiText size="s" color="subdued">
-        <span>{emptyScreenStrings.getEmptyWidgetDescription()}</span>
+        <span>{bodyString}</span>
       </EuiText>
+    );
+  })();
+
+  const actions = (() => {
+    if (showEditPrompt) {
+      return (
+        <EuiFlexGroup justifyContent="center" gutterSize="l" alignItems="center">
+          <EuiFlexItem grow={false}>
+            <EuiButton iconType="lensApp" onClick={() => goToLens()}>
+              {emptyScreenStrings.getCreateVisualizationButtonTitle()}
+            </EuiButton>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiButtonEmpty
+              flush="left"
+              iconType="folderOpen"
+              onClick={() => dashboardApi.addFromLibrary()}
+            >
+              {emptyScreenStrings.getAddFromLibraryButtonTitle()}
+            </EuiButtonEmpty>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      );
+    }
+    if (showWriteControls) {
+      return (
+        <EuiButton iconType="pencil" onClick={() => dashboardApi.setViewMode(ViewMode.EDIT)}>
+          {emptyScreenStrings.getEditLinkTitle()}
+        </EuiButton>
+      );
+    }
+  })();
+
+  return (
+    <div className="dshEmptyPromptParent">
+      <EuiPageTemplate
+        grow={false}
+        data-test-subj={emptyPromptTestSubject}
+        className="dshEmptyPromptPageTemplate"
+      >
+        <EuiPageTemplate.EmptyPrompt
+          icon={<EuiImage size="fullWidth" src={imageUrl} alt="" />}
+          title={title}
+          body={body}
+          actions={actions}
+          titleSize="xs"
+          color="transparent"
+          className="dshEmptyWidgetContainer"
+        />
+      </EuiPageTemplate>
     </div>
   );
-  const actionableMode = isEditMode ? editMode : viewMode;
-  return <I18nProvider>{isReadonlyMode ? readonlyMode : actionableMode}</I18nProvider>;
 }

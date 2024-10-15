@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Entity } from '../entity';
@@ -27,14 +28,19 @@ export function serverlessFunction({
   environment,
   agentName,
   architecture = 'arm',
+  serverlessType = 'aws.lambda',
 }: {
   functionName: string;
   environment: string;
   agentName: string;
   serviceName?: string;
   architecture?: string;
+  serverlessType?: 'aws.lambda' | 'azure.functions';
 }) {
-  const faasId = `arn:aws:lambda:us-west-2:001:function:${functionName}`;
+  const faasId =
+    serverlessType === 'aws.lambda'
+      ? `arn:aws:lambda:us-west-2:001:function:${functionName}`
+      : `/subscriptions/abcd/resourceGroups/1234/providers/Microsoft.Web/sites/test-function-app/functions/${functionName}`;
   return new ServerlessFunction({
     'service.name': serviceName || faasId,
     'faas.id': faasId,

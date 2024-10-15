@@ -19,11 +19,16 @@ import { spacesPluginMock } from '@kbn/spaces-plugin/public/mocks';
 import { useKibana } from '../../../../common/lib/kibana';
 jest.mock('../../../../common/lib/kibana');
 
-jest.mock('../../../../common/lib/config_api', () => ({
-  triggersActionsUiConfig: jest
+jest.mock('@kbn/alerts-ui-shared/src/common/apis/fetch_ui_config', () => ({
+  fetchUiConfig: jest
     .fn()
     .mockResolvedValue({ minimumScheduleInterval: { value: '1m', enforce: false } }),
 }));
+
+jest.mock('../../../../common/get_experimental_features', () => ({
+  getIsExperimentalFeatureEnabled: jest.fn().mockReturnValue(true),
+}));
+
 describe('rule_details_route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -494,6 +499,7 @@ function mockRule(overloads: Partial<Rule> = {}): Rule {
       status: 'unknown',
       lastExecutionDate: new Date('2020-08-20T19:23:38Z'),
     },
+    revision: 0,
     ...overloads,
   };
 }

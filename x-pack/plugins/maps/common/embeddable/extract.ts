@@ -7,10 +7,10 @@
 
 import { EmbeddableRegistryDefinition } from '@kbn/embeddable-plugin/common';
 import { MapEmbeddablePersistableState } from './types';
-import { MapSavedObjectAttributes } from '../map_saved_object_type';
+import type { MapAttributes } from '../content_management';
 import { extractReferences } from '../migrations/references';
 
-export const extract: EmbeddableRegistryDefinition['extract'] = (state) => {
+export const extract: NonNullable<EmbeddableRegistryDefinition['extract']> = (state) => {
   const typedState = state as MapEmbeddablePersistableState;
 
   // by-reference embeddable
@@ -21,7 +21,7 @@ export const extract: EmbeddableRegistryDefinition['extract'] = (state) => {
 
   // by-value embeddable
   const { attributes, references } = extractReferences({
-    attributes: typedState.attributes as MapSavedObjectAttributes,
+    attributes: typedState.attributes as MapAttributes,
   });
 
   return {

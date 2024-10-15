@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
+import type { FC } from 'react';
+import React from 'react';
 import { EuiIcon, EuiSelect, EuiToolTip } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { usePageUrlState } from '@kbn/ml-url-state';
@@ -87,12 +88,13 @@ export const SelectIntervalUI: FC<SelectIntervalUIProps> = ({ interval, onChange
 
   return (
     <EuiSelect
-      prepend={i18n.translate('xpack.ml.explorer.intervalLabel', {
+      data-test-subj="mlAnomalyIntervalControls"
+      prepend={i18n.translate('xpack.ml.controls.selectInterval.intervalLabel', {
         defaultMessage: 'Interval',
       })}
       append={
         <EuiToolTip
-          content={i18n.translate('xpack.ml.explorer.intervalTooltip', {
+          content={i18n.translate('xpack.ml.controls.selectInterval.intervalTooltip', {
             defaultMessage:
               'Show only the highest severity anomaly for each interval (such as hour or day) or show all anomalies in the selected time period.',
           })}
@@ -101,10 +103,12 @@ export const SelectIntervalUI: FC<SelectIntervalUIProps> = ({ interval, onChange
         </EuiToolTip>
       }
       compressed
-      id="selectInterval"
       options={OPTIONS}
       value={interval.val}
       onChange={handleOnChange}
+      aria-label={i18n.translate('xpack.ml.controls.selectInterval.ariaLabel', {
+        defaultMessage: 'Select interval',
+      })}
     />
   );
 };

@@ -8,7 +8,9 @@
 import React from 'react';
 
 import type { EcsSecurityExtension as Ecs } from '@kbn/securitysolution-ecs';
-import type { RowRenderer, RowRendererId } from '../../../../../../../common/types';
+import { EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
+import type { RowRenderer } from '../../../../../../../common/types';
+import type { RowRendererId } from '../../../../../../../common/api/timeline';
 
 export const combineRenderers = ({
   a,
@@ -32,9 +34,13 @@ export const combineRenderers = ({
     isDraggable: boolean;
     scopeId: string;
   }) => (
-    <>
-      {a.isInstance(data) && a.renderRow({ contextId, data, isDraggable, scopeId })}
-      {b.isInstance(data) && b.renderRow({ contextId, data, isDraggable, scopeId })}
-    </>
+    <EuiFlexGroup direction="column" gutterSize="m">
+      {a.isInstance(data) && (
+        <EuiFlexItem> {a.renderRow({ contextId, data, isDraggable, scopeId })}</EuiFlexItem>
+      )}
+      {b.isInstance(data) && (
+        <EuiFlexItem>{b.renderRow({ contextId, data, isDraggable, scopeId })}</EuiFlexItem>
+      )}
+    </EuiFlexGroup>
   ),
 });

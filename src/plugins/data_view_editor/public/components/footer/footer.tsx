@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -17,9 +18,15 @@ import {
   EuiButton,
 } from '@elastic/eui';
 
+export enum SubmittingType {
+  savingAsAdHoc = 'savingAsAdHoc',
+  persisting = 'persisting',
+}
+
 interface FooterProps {
   onCancel: () => void;
   onSubmit: (isAdHoc?: boolean) => void;
+  submittingType: SubmittingType | undefined;
   submitDisabled: boolean;
   isEdit: boolean;
   isPersisted: boolean;
@@ -53,12 +60,14 @@ const exploreButtonLabel = i18n.translate('indexPatternEditor.editor.flyoutExplo
 export const Footer = ({
   onCancel,
   onSubmit,
+  submittingType,
   submitDisabled,
   isEdit,
   allowAdHoc,
   isPersisted,
   canSave,
 }: FooterProps) => {
+  const isEditingAdHoc = isEdit && !isPersisted;
   const submitPersisted = () => {
     onSubmit(false);
   };
@@ -89,6 +98,7 @@ export const Footer = ({
                   onClick={submitAdHoc}
                   data-test-subj="exploreIndexPatternButton"
                   disabled={submitDisabled}
+                  isLoading={submittingType === SubmittingType.savingAsAdHoc}
                   title={i18n.translate('indexPatternEditor.editor.flyoutExploreButtonTitle', {
                     defaultMessage: 'Use this data view without creating a saved object',
                   })}
@@ -98,7 +108,7 @@ export const Footer = ({
               </EuiFlexItem>
             )}
 
-            {(canSave || (isEdit && !isPersisted)) && (
+            {(canSave || isEditingAdHoc) && (
               <EuiFlexItem grow={false}>
                 <EuiButton
                   color="primary"
@@ -106,6 +116,10 @@ export const Footer = ({
                   data-test-subj="saveIndexPatternButton"
                   fill
                   disabled={submitDisabled}
+                  isLoading={
+                    submittingType === SubmittingType.persisting ||
+                    (submittingType === SubmittingType.savingAsAdHoc && isEditingAdHoc)
+                  }
                 >
                   {isEdit
                     ? isPersisted

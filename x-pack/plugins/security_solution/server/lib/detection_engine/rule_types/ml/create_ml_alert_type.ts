@@ -5,35 +5,34 @@
  * 2.0.
  */
 
-import { validateNonExact } from '@kbn/securitysolution-io-ts-utils';
 import { ML_RULE_TYPE_ID } from '@kbn/securitysolution-rules';
+import { DEFAULT_APP_CATEGORIES } from '@kbn/core-application-common';
+
 import { SERVER_APP_ID } from '../../../../../common/constants';
 
-import type { MachineLearningRuleParams } from '../../rule_schema';
-import { machineLearningRuleParams } from '../../rule_schema';
-import { mlExecutor } from '../../signals/executors/ml';
-import type { CreateRuleOptions, SecurityAlertType } from '../types';
+import { MachineLearningRuleParams } from '../../rule_schema';
+import { getIsAlertSuppressionActive } from '../utils/get_is_alert_suppression_active';
+import { mlExecutor } from './ml';
+import type { CreateRuleOptions, SecurityAlertType, WrapSuppressedHits } from '../types';
+import { wrapSuppressedAlerts } from '../utils/wrap_suppressed_alerts';
 
 export const createMlAlertType = (
   createOptions: CreateRuleOptions
 ): SecurityAlertType<MachineLearningRuleParams, {}, {}, 'default'> => {
-  const { ml } = createOptions;
+  const { experimentalFeatures, ml, licensing, scheduleNotificationResponseActionsService } =
+    createOptions;
   return {
     id: ML_RULE_TYPE_ID,
     name: 'Machine Learning Rule',
     validate: {
       params: {
         validate: (object: unknown) => {
-          const [validated, errors] = validateNonExact(object, machineLearningRuleParams);
-          if (errors != null) {
-            throw new Error(errors);
-          }
-          if (validated == null) {
-            throw new Error('Validation of rule params failed');
-          }
-          return validated;
+          return MachineLearningRuleParams.parse(object);
         },
       },
+    },
+    schemas: {
+      params: { type: 'zod', schema: MachineLearningRuleParams },
     },
     actionGroups: [
       {
@@ -47,6 +46,7 @@ export const createMlAlertType = (
     },
     minimumLicenseRequired: 'basic',
     isExportable: false,
+    category: DEFAULT_APP_CATEGORIES.security.id,
     producer: SERVER_APP_ID,
     async executor(execOptions) {
       const {
@@ -59,10 +59,39 @@ export const createMlAlertType = (
           wrapHits,
           exceptionFilter,
           unprocessedExceptions,
+          mergeStrategy,
+          alertTimestampOverride,
+          publicBaseUrl,
+          alertWithSuppression,
+          primaryTimestamp,
+          secondaryTimestamp,
+          intendedTimestamp,
         },
         services,
+        spaceId,
         state,
       } = execOptions;
+
+      const isAlertSuppressionActive = await getIsAlertSuppressionActive({
+        alertSuppression: completeRule.ruleParams.alertSuppression,
+        licensing,
+      });
+
+      const wrapSuppressedHits: WrapSuppressedHits = (events, buildReasonMessage) =>
+        wrapSuppressedAlerts({
+          events,
+          spaceId,
+          completeRule,
+          mergeStrategy,
+          indicesToQuery: [],
+          buildReasonMessage,
+          alertTimestampOverride,
+          ruleExecutionLogger,
+          publicBaseUrl,
+          primaryTimestamp,
+          secondaryTimestamp,
+          intendedTimestamp,
+        });
 
       const result = await mlExecutor({
         completeRule,
@@ -75,6 +104,12 @@ export const createMlAlertType = (
         wrapHits,
         exceptionFilter,
         unprocessedExceptions,
+        wrapSuppressedHits,
+        alertTimestampOverride,
+        alertWithSuppression,
+        isAlertSuppressionActive,
+        experimentalFeatures,
+        scheduleNotificationResponseActionsService,
       });
       return { ...result, state };
     },

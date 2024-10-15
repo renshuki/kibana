@@ -13,7 +13,6 @@ import { EuiFlexGroup, EuiFlexItem, EuiHorizontalRule, EuiSpacer } from '@elasti
 import { getEsQueryConfig } from '@kbn/data-plugin/common';
 
 import { buildEsQuery } from '@kbn/es-query';
-import { CellActions, CellActionsMode } from '@kbn/cell-actions';
 import { AlertsByStatus } from '../../../../overview/components/detection_response/alerts_by_status';
 import { useSignalIndex } from '../../../../detections/containers/detection_engine/alerts/use_signal_index';
 import { InputsModelId } from '../../../../common/store/inputs/constants';
@@ -29,6 +28,7 @@ import { networkToCriteria } from '../../../../common/components/ml/criteria/net
 import { scoreIntervalToDateTime } from '../../../../common/components/ml/score/score_interval_to_datetime';
 import { manageQuery } from '../../../../common/components/page/manage_query';
 import { FlowTargetSelectConnected } from '../../components/flow_target_select_connected';
+import type { IpOverviewProps } from '../../components/details';
 import { IpOverview } from '../../components/details';
 import { SiemSearchBar } from '../../../../common/components/search_bar';
 import { SecuritySolutionPageWrapper } from '../../../../common/components/page_wrapper';
@@ -41,10 +41,10 @@ import { setNetworkDetailsTablesActivePageToZero } from '../../store/actions';
 import { SpyRoute } from '../../../../common/utils/route/spy_routes';
 import { networkModel } from '../../store';
 import { SecurityPageName } from '../../../../app/types';
-import { useSourcererDataView } from '../../../../common/containers/sourcerer';
+import { useSourcererDataView } from '../../../../sourcerer/containers';
 import { useInvalidFilterQuery } from '../../../../common/hooks/use_invalid_filter_query';
-import { LandingPageComponent } from '../../../../common/components/landing_page';
-import { TabNavigationWithBreadcrumbs } from '../../../../common/components/navigation/tab_navigation_with_breadcrumbs';
+import { EmptyPrompt } from '../../../../common/components/empty_prompt';
+import { TabNavigation } from '../../../../common/components/navigation/tab_navigation';
 import { getNetworkDetailsPageFilter } from '../../../../common/components/visualization_actions/utils';
 import { hasMlUserPermissions } from '../../../../../common/machine_learning/has_ml_user_permissions';
 import { AlertCountByRuleByStatus } from '../../../../common/components/alert_count_by_status';
@@ -53,9 +53,11 @@ import { useAlertsPrivileges } from '../../../../detections/containers/detection
 import { navTabsNetworkDetails } from './nav_tabs';
 import { NetworkDetailsTabs } from './details_tabs';
 import { useInstalledSecurityJobNameById } from '../../../../common/components/ml/hooks/use_installed_security_jobs';
-import { CELL_ACTIONS_DEFAULT_TRIGGER } from '../../../../../common/constants';
-
-export { getTrailingBreadcrumbs } from './utils';
+import {
+  SecurityCellActions,
+  CellActionsMode,
+  SecurityCellActionsTrigger,
+} from '../../../../common/components/cell_actions';
 
 const NetworkDetailsManage = manageQuery(IpOverview);
 
@@ -81,7 +83,7 @@ const NetworkDetailsComponent: React.FC = () => {
   const globalFilters = useDeepEqualSelector(getGlobalFiltersQuerySelector);
 
   const type = networkModel.NetworkType.details;
-  const narrowDateRange = useCallback(
+  const narrowDateRange = useCallback<IpOverviewProps['narrowDateRange']>(
     (score, interval) => {
       const fromTo = scoreIntervalToDateTime(score, interval);
       dispatch(
@@ -102,7 +104,8 @@ const NetworkDetailsComponent: React.FC = () => {
     dispatch(setNetworkDetailsTablesActivePageToZero());
   }, [detailName, dispatch]);
 
-  const { indicesExist, indexPattern, selectedPatterns } = useSourcererDataView();
+  const { indicesExist, indexPattern, selectedPatterns, sourcererDataView } =
+    useSourcererDataView();
 
   const ip = decodeIpv6(detailName);
   const networkDetailsFilter = useMemo(() => getNetworkDetailsPageFilter(ip), [ip]);
@@ -121,6 +124,11 @@ const NetworkDetailsComponent: React.FC = () => {
       return [undefined, e];
     }
   }, [globalFilters, indexPattern, networkDetailsFilter, query, uiSettings]);
+
+  const additionalFilters = useMemo(
+    () => (rawFilteredQuery ? [rawFilteredQuery] : []),
+    [rawFilteredQuery]
+  );
 
   const stringifiedAdditionalFilters = JSON.stringify(rawFilteredQuery);
   useInvalidFilterQuery({
@@ -163,7 +171,7 @@ const NetworkDetailsComponent: React.FC = () => {
       {indicesExist ? (
         <>
           <FiltersGlobal>
-            <SiemSearchBar indexPattern={indexPattern} id={InputsModelId.global} />
+            <SiemSearchBar sourcererDataView={sourcererDataView} id={InputsModelId.global} />
           </FiltersGlobal>
 
           <SecuritySolutionPageWrapper>
@@ -178,14 +186,17 @@ const NetworkDetailsComponent: React.FC = () => {
                 />
               }
               title={
-                <CellActions
-                  field={{ type: 'ip', value: ip, name: `${flowTarget}.ip` }}
-                  mode={CellActionsMode.HOVER}
+                <SecurityCellActions
+                  data={{
+                    value: ip,
+                    field: `${flowTarget}.ip`,
+                  }}
+                  mode={CellActionsMode.HOVER_DOWN}
                   visibleCellActions={5}
-                  triggerId={CELL_ACTIONS_DEFAULT_TRIGGER}
+                  triggerId={SecurityCellActionsTrigger.DEFAULT}
                 >
                   {ip}
-                </CellActions>
+                </SecurityCellActions>
               }
             >
               <FlowTargetSelectConnected flowTarget={flowTarget} />
@@ -221,14 +232,14 @@ const NetworkDetailsComponent: React.FC = () => {
                     <AlertsByStatus
                       signalIndexName={signalIndexName}
                       entityFilter={entityFilter}
-                      additionalFilters={rawFilteredQuery ? [rawFilteredQuery] : []}
+                      additionalFilters={additionalFilters}
                     />
                   </EuiFlexItem>
                   <EuiFlexItem>
                     <AlertCountByRuleByStatus
                       entityFilter={entityFilter}
                       signalIndexName={signalIndexName}
-                      additionalFilters={rawFilteredQuery ? [rawFilteredQuery] : []}
+                      additionalFilters={additionalFilters}
                     />
                   </EuiFlexItem>
                 </EuiFlexGroup>
@@ -236,7 +247,7 @@ const NetworkDetailsComponent: React.FC = () => {
               </>
             )}
 
-            <TabNavigationWithBreadcrumbs
+            <TabNavigation
               navTabs={navTabsNetworkDetails(ip, hasMlUserPermissions(capabilities), flowTarget)}
             />
             <EuiSpacer />
@@ -255,7 +266,7 @@ const NetworkDetailsComponent: React.FC = () => {
           </SecuritySolutionPageWrapper>
         </>
       ) : (
-        <LandingPageComponent />
+        <EmptyPrompt />
       )}
 
       <SpyRoute pageName={SecurityPageName.network} />

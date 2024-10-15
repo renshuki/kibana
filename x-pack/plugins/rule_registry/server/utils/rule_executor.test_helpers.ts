@@ -21,6 +21,7 @@ import { searchSourceCommonMock } from '@kbn/data-plugin/common/search/search_so
 import { Logger } from '@kbn/logging';
 import { SharePluginStart } from '@kbn/share-plugin/server';
 import { dataViewPluginMocks } from '@kbn/data-views-plugin/public/mocks';
+import { DEFAULT_FLAPPING_SETTINGS } from '@kbn/alerting-plugin/common/rules_settings';
 
 export const createDefaultAlertExecutorOptions = <
   Params extends RuleTypeParams = never,
@@ -50,10 +51,11 @@ export const createDefaultAlertExecutorOptions = <
   shouldWriteAlerts?: boolean;
 }): RuleExecutorOptions<Params, State, InstanceState, InstanceContext, ActionGroupIds> => ({
   startedAt,
+  startedAtOverridden: false,
   rule: {
     id: alertId,
     updatedBy: null,
-    tags: [],
+    tags: ['rule-tag1', 'rule-tag2'],
     name: ruleName,
     createdBy: 'CREATED_BY',
     actions: [],
@@ -65,26 +67,36 @@ export const createDefaultAlertExecutorOptions = <
     createdAt,
     updatedAt,
     notifyWhen: null,
+    revision: 0,
     ruleTypeId: 'RULE_TYPE_ID',
     ruleTypeName: 'RULE_TYPE_NAME',
+    muteAll: false,
+    snoozeSchedule: [],
   },
   params,
   spaceId: 'SPACE_ID',
   services: {
     alertFactory: alertsMock.createRuleExecutorServices<InstanceState, InstanceContext>()
       .alertFactory,
+    alertsClient: null,
+    getDataViews: async () => dataViewPluginMocks.createStartContract(),
+    getMaintenanceWindowIds: async () => ['test-id-1', 'test-id-2'],
+    getSearchSourceClient: async () => searchSourceCommonMock,
     savedObjectsClient: savedObjectsClientMock.create(),
-    uiSettingsClient: uiSettingsServiceMock.createClient(),
     scopedClusterClient: elasticsearchServiceMock.createScopedClusterClient(),
-    shouldWriteAlerts: () => shouldWriteAlerts,
-    shouldStopExecution: () => false,
-    searchSourceClient: searchSourceCommonMock,
     share: {} as SharePluginStart,
-    dataViews: dataViewPluginMocks.createStartContract(),
+    shouldStopExecution: () => false,
+    shouldWriteAlerts: () => shouldWriteAlerts,
+    uiSettingsClient: uiSettingsServiceMock.createClient(),
   },
   state,
   previousStartedAt: null,
   namespace: undefined,
   executionId: 'b33f65d7-6e8b-4aae-8d20-c93613deb33f',
   logger,
+  flappingSettings: DEFAULT_FLAPPING_SETTINGS,
+  getTimeRange: () => {
+    const date = new Date(Date.now()).toISOString();
+    return { dateStart: date, dateEnd: date };
+  },
 });

@@ -11,12 +11,18 @@ import { isString } from 'lodash/fp';
 import React, { useCallback, useMemo } from 'react';
 import styled from 'styled-components';
 
-import { TimelineType } from '../../../../../common/types/timeline';
+import type { PrimitiveOrArrayOfPrimitives } from '../../../../common/lib/kuery';
+import {
+  type DataProviderType,
+  DataProviderTypeEnum,
+  type TimelineType,
+  TimelineTypeEnum,
+} from '../../../../../common/api/timeline';
 import { getEmptyString } from '../../../../common/components/empty_value';
 import { ProviderContainer } from '../../../../common/components/drag_and_drop/provider_container';
 
 import type { QueryOperator } from './data_provider';
-import { DataProviderType, EXISTS_OPERATOR, IS_ONE_OF_OPERATOR } from './data_provider';
+import { EXISTS_OPERATOR, IS_ONE_OF_OPERATOR } from './data_provider';
 
 import * as i18n from './translations';
 
@@ -37,7 +43,7 @@ const ProviderBadgeStyled = styled(EuiBadge)<ProviderBadgeStyledType>`
   &.globalFilterItem {
     white-space: nowrap;
     min-width: ${({ $timelineType }) =>
-      $timelineType === TimelineType.template ? '140px' : 'none'};
+      $timelineType === TimelineTypeEnum.template ? '140px' : 'none'};
     display: flex;
 
     &.globalFilterItem-isDisabled {
@@ -82,7 +88,7 @@ const ConvertFieldBadge = styled(ProviderFieldBadge)`
 `;
 
 const TemplateFieldBadgeComponent: React.FC<TemplateFieldBadgeProps> = ({ type, toggleType }) => {
-  if (type !== DataProviderType.template) {
+  if (type !== DataProviderTypeEnum.template) {
     return (
       <ConvertFieldBadge onClick={toggleType}>{i18n.CONVERT_TO_TEMPLATE_FIELD}</ConvertFieldBadge>
     );
@@ -103,7 +109,7 @@ interface ProviderBadgeProps {
   togglePopover: () => void;
   toggleType: () => void;
   displayValue: string;
-  val: string | number | Array<string | number>;
+  val: PrimitiveOrArrayOfPrimitives;
   operator: QueryOperator;
   type: DataProviderType;
   timelineType: TimelineType;
@@ -200,10 +206,10 @@ export const ProviderBadge = React.memo<ProviderBadgeProps>(
             {content}
           </ProviderBadgeStyled>
 
-          {/* Add a UI feature to let users know the is one of operator doesnt work with timeline templates: 
+          {/* Add a UI feature to let users know the is one of operator doesnt work with timeline templates:
           https://github.com/elastic/kibana/issues/142437 */}
 
-          {timelineType === TimelineType.template && operator !== IS_ONE_OF_OPERATOR && (
+          {timelineType === TimelineTypeEnum.template && operator !== IS_ONE_OF_OPERATOR && (
             <TemplateFieldBadge toggleType={toggleType} type={type} />
           )}
         </>

@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, memo } from 'react';
+import type { FC } from 'react';
+import React, { memo } from 'react';
 import { EuiCallOut, EuiButton, EuiFlexGroup, EuiFlexItem, EuiSpacer } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
@@ -45,7 +46,7 @@ export const CreateResultCallout: FC<CreateResultCalloutProps> = memo(
               />
             }
             color="danger"
-            iconType="alert"
+            iconType="warning"
           />
         )}
         {saveState === SAVE_STATE.PARTIAL_FAILURE && (
@@ -57,7 +58,7 @@ export const CreateResultCallout: FC<CreateResultCalloutProps> = memo(
               />
             }
             color="warning"
-            iconType="alert"
+            iconType="warning"
           />
         )}
         <EuiSpacer size="l" />

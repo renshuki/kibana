@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { CoreSetup, Plugin } from '@kbn/core/server';
@@ -15,6 +16,7 @@ import { controlGroupContainerPersistableStateServiceFactory } from './control_g
 import { optionsListPersistableStateServiceFactory } from './options_list/options_list_embeddable_factory';
 import { rangeSliderPersistableStateServiceFactory } from './range_slider/range_slider_embeddable_factory';
 import { timeSliderPersistableStateServiceFactory } from './time_slider/time_slider_embeddable_factory';
+import { setupOptionsListClusterSettingsRoute } from './options_list/options_list_cluster_settings_route';
 
 interface SetupDeps {
   embeddable: EmbeddableSetup;
@@ -30,7 +32,7 @@ export class ControlsPlugin implements Plugin<object, object, SetupDeps> {
     embeddable.registerEmbeddableFactory(optionsListPersistableStateServiceFactory());
     embeddable.registerEmbeddableFactory(rangeSliderPersistableStateServiceFactory());
     embeddable.registerEmbeddableFactory(timeSliderPersistableStateServiceFactory());
-
+    setupOptionsListClusterSettingsRoute(core);
     setupOptionsListSuggestionsRoute(core, unifiedSearch.autocomplete.getAutocompleteSettings);
     return {};
   }

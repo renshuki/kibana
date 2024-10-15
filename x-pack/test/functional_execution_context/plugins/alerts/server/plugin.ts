@@ -9,9 +9,10 @@ import apmAgent from 'elastic-apm-node';
 import type { Plugin, CoreSetup } from '@kbn/core/server';
 import { PluginSetupContract as AlertingPluginSetup } from '@kbn/alerting-plugin/server/plugin';
 import { EncryptedSavedObjectsPluginStart } from '@kbn/encrypted-saved-objects-plugin/server';
-import { PluginSetupContract as FeaturesPluginSetup } from '@kbn/features-plugin/server';
+import { FeaturesPluginSetup } from '@kbn/features-plugin/server';
 import { SpacesPluginStart } from '@kbn/spaces-plugin/server';
 import { SecurityPluginStart } from '@kbn/security-plugin/server';
+import { KibanaFeatureScope } from '@kbn/features-plugin/common';
 
 export interface FixtureSetupDeps {
   features: FeaturesPluginSetup;
@@ -29,10 +30,11 @@ export class FixturePlugin implements Plugin<void, void, FixtureSetupDeps, Fixtu
 
   public setup(core: CoreSetup<FixtureStartDeps>, { features, alerting }: FixtureSetupDeps) {
     features.registerKibanaFeature({
-      id: 'alertsFixture',
+      id: 'fecAlertsTestPlugin',
       name: 'Alerts',
       app: ['alerts', 'kibana'],
       category: { id: 'foo', label: 'foo' },
+      scope: [KibanaFeatureScope.Spaces, KibanaFeatureScope.Security],
       alerting: ['test.executionContext'],
       privileges: {
         all: {
@@ -73,7 +75,8 @@ export class FixturePlugin implements Plugin<void, void, FixtureSetupDeps, Fixtu
           name: 'Default',
         },
       ],
-      producer: 'alertsFixture',
+      category: 'kibana',
+      producer: 'fecAlertsTestPlugin',
       defaultActionGroupId: 'default',
       minimumLicenseRequired: 'basic',
       isExportable: true,
@@ -81,6 +84,9 @@ export class FixturePlugin implements Plugin<void, void, FixtureSetupDeps, Fixtu
         const [coreStart] = await core.getStartServices();
         await coreStart.elasticsearch.client.asInternalUser.ping();
         return { state: {} };
+      },
+      validate: {
+        params: { validate: (params) => params },
       },
     });
 
@@ -94,16 +100,6 @@ export class FixturePlugin implements Plugin<void, void, FixtureSetupDeps, Fixtu
         },
       },
       async (ctx, req, res) => {
-        // Kibana might set transactiopnSampleRate < 1.0 on CI, so we need to
-        // enforce transaction creation to prevent the test from failing.
-        const transaction = apmAgent.startTransaction();
-        const subscription = req.events.completed$.subscribe(() => {
-          setTimeout(() => {
-            transaction?.end();
-            subscription.unsubscribe();
-          }, 1_000);
-        });
-
         const coreCtx = await ctx.core;
         await coreCtx.elasticsearch.client.asInternalUser.ping();
 

@@ -7,8 +7,6 @@
 
 import { extname } from 'path';
 
-import { uniq } from 'lodash';
-import { safeLoad } from 'js-yaml';
 import { isBinaryFile } from 'isbinaryfile';
 import mime from 'mime-types';
 import { v5 as uuidv5 } from 'uuid';
@@ -20,19 +18,14 @@ import type {
   InstallablePackage,
   InstallSource,
   PackageAssetReference,
-  RegistryDataStream,
 } from '../../../../common/types';
-import { pkgToPkgKey } from '../registry';
+import { PackageInvalidArchiveError, PackageNotFoundError } from '../../../errors';
 
 import { appContextService } from '../../app_context';
 
-import { getArchiveEntry, setArchiveEntry, setArchiveFilelist, setPackageInfo } from '.';
+import { setPackageInfo } from '.';
 import type { ArchiveEntry } from '.';
-import {
-  parseAndVerifyPolicyTemplates,
-  parseAndVerifyStreams,
-  parseTopLevelElasticsearchEntry,
-} from './parse';
+import { filterAssetPathForParseAndVerifyArchive, parseAndVerifyArchive } from './parse';
 
 const ONE_BYTE = 1024 * 1024;
 // could be anything, picked this from https://github.com/elastic/elastic-agent-client/issues/17
@@ -78,13 +71,13 @@ export async function archiveEntryToESDocument(opts: {
 
   // validation: filesize? asset type? anything else
   if (dataUtf8.length > currentMaxAssetBytes) {
-    throw new Error(
+    throw new PackageInvalidArchiveError(
       `File at ${path} is larger than maximum allowed size of ${currentMaxAssetBytes}`
     );
   }
 
   if (dataBase64.length > currentMaxAssetBytes) {
-    throw new Error(
+    throw new PackageInvalidArchiveError(
       `After base64 encoding file at ${path} is larger than maximum allowed size of ${currentMaxAssetBytes}`
     );
   }
@@ -111,17 +104,18 @@ export async function removeArchiveEntries(opts: {
   );
 }
 
-export async function saveArchiveEntries(opts: {
+export async function saveArchiveEntriesFromAssetsMap(opts: {
   savedObjectsClient: SavedObjectsClientContract;
   paths: string[];
+  assetsMap: Map<string, Buffer | undefined>;
   packageInfo: InstallablePackage;
   installSource: InstallSource;
 }) {
-  const { savedObjectsClient, paths, packageInfo, installSource } = opts;
+  const { savedObjectsClient, paths, packageInfo, assetsMap, installSource } = opts;
   const bulkBody = await Promise.all(
     paths.map((path) => {
-      const buffer = getArchiveEntry(path);
-      if (!buffer) throw new Error(`Could not find ArchiveEntry at ${path}`);
+      const buffer = assetsMap.get(path);
+      if (!buffer) throw new PackageNotFoundError(`Could not find ArchiveEntry at ${path}`);
       const { name, version } = packageInfo;
       return archiveEntryToBulkCreateObject({ path, buffer, name, version, installSource });
     })
@@ -188,7 +182,6 @@ export const getEsPackage = async (
   savedObjectsClient: SavedObjectsClientContract
 ) => {
   const logger = appContextService.getLogger();
-  const pkgKey = pkgToPkgKey({ name: pkgName, version: pkgVersion });
   const bulkRes = await savedObjectsClient.bulkGet<PackageAsset>(
     references.map((reference) => ({
       ...reference,
@@ -216,87 +209,26 @@ export const getEsPackage = async (
     return undefined;
   }
 
-  const paths: string[] = [];
+  const parseAndVerifyAssetsMap: Record<string, Buffer> = {};
+  const assetsMap = new Map<string, Buffer | undefined>();
   const entries: ArchiveEntry[] = assets.map(packageAssetToArchiveEntry);
+  const paths: string[] = [];
   entries.forEach(({ path, buffer }) => {
     if (path && buffer) {
-      setArchiveEntry(path, buffer);
+      assetsMap.set(path, buffer);
       paths.push(path);
+    }
+    if (buffer && filterAssetPathForParseAndVerifyArchive(path)) {
+      parseAndVerifyAssetsMap[path] = buffer;
     }
   });
 
-  // create the packageInfo
-  // TODO: this is mostly copied from validtion.ts, needed in case package does not exist in storage yet or is missing from cache
-  // we don't want to reach out to the registry again so recreate it here.  should check whether it exists in packageInfoCache first
-  const manifestPath = `${pkgName}-${pkgVersion}/manifest.yml`;
-  const soResManifest = await savedObjectsClient.get<PackageAsset>(
-    ASSETS_SAVED_OBJECT_TYPE,
-    assetPathToObjectId(manifestPath)
-  );
-  const packageInfo = safeLoad(soResManifest.attributes.data_utf8);
-  if (packageInfo.elasticsearch) {
-    packageInfo.elasticsearch = parseTopLevelElasticsearchEntry(packageInfo.elasticsearch);
-  }
-  try {
-    const readmePath = `docs/README.md`;
-    await savedObjectsClient.get<PackageAsset>(
-      ASSETS_SAVED_OBJECT_TYPE,
-      assetPathToObjectId(`${pkgName}-${pkgVersion}/${readmePath}`)
-    );
-    packageInfo.readme = `/package/${pkgName}/${pkgVersion}/${readmePath}`;
-  } catch (err) {
-    // read me doesn't exist
-  }
-
-  let dataStreamPaths: string[] = [];
-  const dataStreams: RegistryDataStream[] = [];
-  paths
-    .filter((path) => path.startsWith(`${pkgKey}/data_stream/`))
-    .forEach((path) => {
-      const parts = path.split('/');
-      if (parts.length > 2 && parts[2]) dataStreamPaths.push(parts[2]);
-    });
-
-  dataStreamPaths = uniq(dataStreamPaths);
-
-  await Promise.all(
-    dataStreamPaths.map(async (dataStreamPath) => {
-      const dataStreamManifestPath = `${pkgKey}/data_stream/${dataStreamPath}/manifest.yml`;
-      const soResDataStreamManifest = await savedObjectsClient.get<PackageAsset>(
-        ASSETS_SAVED_OBJECT_TYPE,
-        assetPathToObjectId(dataStreamManifestPath)
-      );
-      const dataStreamManifest = safeLoad(soResDataStreamManifest.attributes.data_utf8);
-      const {
-        ingest_pipeline: ingestPipeline,
-        dataset,
-        streams: manifestStreams,
-        ...dataStreamManifestProps
-      } = dataStreamManifest;
-      const streams = parseAndVerifyStreams(manifestStreams, dataStreamPath);
-
-      dataStreams.push({
-        dataset: dataset || `${pkgName}.${dataStreamPath}`,
-        package: pkgName,
-        ingest_pipeline: ingestPipeline,
-        path: dataStreamPath,
-        streams,
-        ...dataStreamManifestProps,
-      });
-    })
-  );
-  packageInfo.policy_templates = parseAndVerifyPolicyTemplates(packageInfo);
-  packageInfo.data_streams = dataStreams;
-  packageInfo.assets = paths.map((path) => {
-    return path.replace(`${pkgName}-${pkgVersion}`, `/package/${pkgName}/${pkgVersion}`);
-  });
-
-  // Add asset references to cache
-  setArchiveFilelist({ name: pkgName, version: pkgVersion }, paths);
+  const packageInfo = parseAndVerifyArchive(paths, parseAndVerifyAssetsMap);
   setPackageInfo({ name: pkgName, version: pkgVersion, packageInfo });
 
   return {
-    paths,
     packageInfo,
+    paths,
+    assetsMap,
   };
 };

@@ -10,6 +10,8 @@ import { schema } from '@kbn/config-schema';
 import { isEqual } from 'lodash/fp';
 import type { ExceptionListItemSchema } from '@kbn/securitysolution-io-ts-list-types';
 import { OperatingSystem } from '@kbn/securitysolution-utils';
+
+import type { FeatureKeys } from '../../../endpoint/services';
 import type { EndpointAuthz } from '../../../../common/endpoint/types/authz';
 import type { EndpointAppContextService } from '../../../endpoint/endpoint_app_context_services';
 import type { ExceptionItemLikeOptions } from '../types';
@@ -19,7 +21,7 @@ import {
   isArtifactByPolicy,
 } from '../../../../common/endpoint/service/artifacts';
 import { EndpointArtifactExceptionValidationError } from './errors';
-import type { FeatureKeys } from '../../../endpoint/services/feature_usage/service';
+import { EndpointExceptionsValidationError } from './endpoint_exception_errors';
 
 export const BasicEndpointExceptionDataSchema = schema.object(
   {
@@ -71,6 +73,14 @@ export class BaseValidator {
       (!this.isItemByPolicy(item) && !featureKey.endsWith('_BY_POLICY'))
     ) {
       this.endpointAppContext.getFeatureUsageService().notifyUsage(featureKey);
+    }
+  }
+
+  protected async validateHasEndpointExceptionsPrivileges(
+    privilege: keyof EndpointAuthz
+  ): Promise<void> {
+    if (!(await this.endpointAuthzPromise)[privilege]) {
+      throw new EndpointExceptionsValidationError('Endpoint exceptions authorization failure', 403);
     }
   }
 
@@ -130,15 +140,15 @@ export class BaseValidator {
    */
   protected async validateByPolicyItem(item: ExceptionItemLikeOptions): Promise<void> {
     if (this.isItemByPolicy(item)) {
-      const { packagePolicy, internalReadonlySoClient } =
-        this.endpointAppContext.getInternalFleetServices();
+      const { packagePolicy, savedObjects } = this.endpointAppContext.getInternalFleetServices();
       const policyIds = getPolicyIdsFromArtifact(item);
+      const soClient = savedObjects.createInternalScopedSoClient();
 
       if (policyIds.length === 0) {
         return;
       }
 
-      const policiesFromFleet = await packagePolicy.getByIDs(internalReadonlySoClient, policyIds, {
+      const policiesFromFleet = await packagePolicy.getByIDs(soClient, policyIds, {
         ignoreMissing: true,
       });
 

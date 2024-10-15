@@ -17,7 +17,64 @@
     "objects": []
   },
   "common": {
-    "classes": [],
+    "classes": [
+      {
+        "parentPluginId": "@kbn/typed-react-router-config",
+        "id": "def-common.NotFoundRouteException",
+        "type": "Class",
+        "tags": [],
+        "label": "NotFoundRouteException",
+        "description": [],
+        "signature": [
+          {
+            "pluginId": "@kbn/typed-react-router-config",
+            "scope": "common",
+            "docId": "kibKbnTypedReactRouterConfigPluginApi",
+            "section": "def-common.NotFoundRouteException",
+            "text": "NotFoundRouteException"
+          },
+          " extends Error"
+        ],
+        "path": "packages/kbn-typed-react-router-config/src/create_router.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
+          {
+            "parentPluginId": "@kbn/typed-react-router-config",
+            "id": "def-common.NotFoundRouteException.Unnamed",
+            "type": "Function",
+            "tags": [],
+            "label": "Constructor",
+            "description": [],
+            "signature": [
+              "any"
+            ],
+            "path": "packages/kbn-typed-react-router-config/src/create_router.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "children": [
+              {
+                "parentPluginId": "@kbn/typed-react-router-config",
+                "id": "def-common.NotFoundRouteException.Unnamed.$1",
+                "type": "string",
+                "tags": [],
+                "label": "message",
+                "description": [],
+                "signature": [
+                  "string"
+                ],
+                "path": "packages/kbn-typed-react-router-config/src/create_router.ts",
+                "deprecated": false,
+                "trackAdoption": false,
+                "isRequired": true
+              }
+            ],
+            "returnComment": []
+          }
+        ],
+        "initialIsOpen": false
+      }
+    ],
     "functions": [
       {
         "parentPluginId": "@kbn/typed-react-router-config",
@@ -84,7 +141,7 @@
             "section": "def-common.Route",
             "text": "Route"
           },
-          ">; element: React.ReactElement<any, string | React.JSXElementConstructor<any>>; children: React.ReactElement<any, string | React.JSXElementConstructor<any>>; }) => JSX.Element"
+          ">; element: React.ReactElement<any, string | React.JSXElementConstructor<any>>; children: React.ReactElement<any, string | React.JSXElementConstructor<any>>; }) => React.JSX.Element"
         ],
         "path": "packages/kbn-typed-react-router-config/src/use_current_route.tsx",
         "deprecated": false,
@@ -189,7 +246,7 @@
         "label": "OutletContextProvider",
         "description": [],
         "signature": [
-          "({\n  element,\n  children,\n}: { element: React.ReactElement<any, string | React.JSXElementConstructor<any>>; children: React.ReactNode; }) => JSX.Element"
+          "({\n  element,\n  children,\n}: { element: React.ReactElement<any, string | React.JSXElementConstructor<any>>; children: React.ReactNode; }) => React.JSX.Element"
         ],
         "path": "packages/kbn-typed-react-router-config/src/outlet.tsx",
         "deprecated": false,
@@ -228,7 +285,7 @@
                 "label": "children",
                 "description": [],
                 "signature": [
-                  "boolean | React.ReactChild | React.ReactFragment | React.ReactPortal | null | undefined"
+                  "string | number | boolean | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | null | undefined"
                 ],
                 "path": "packages/kbn-typed-react-router-config/src/outlet.tsx",
                 "deprecated": false,
@@ -264,7 +321,7 @@
             "section": "def-common.RouteMap",
             "text": "RouteMap"
           },
-          ">; children: React.ReactNode; }) => JSX.Element"
+          ">; children: React.ReactNode; }) => React.JSX.Element"
         ],
         "path": "packages/kbn-typed-react-router-config/src/use_router.tsx",
         "deprecated": false,
@@ -318,7 +375,7 @@
                 "label": "children",
                 "description": [],
                 "signature": [
-                  "boolean | React.ReactChild | React.ReactFragment | React.ReactPortal | null | undefined"
+                  "string | number | boolean | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | null | undefined"
                 ],
                 "path": "packages/kbn-typed-react-router-config/src/use_router.tsx",
                 "deprecated": false,
@@ -338,7 +395,7 @@
         "label": "RouteRenderer",
         "description": [],
         "signature": [
-          "() => JSX.Element"
+          "() => React.JSX.Element"
         ],
         "path": "packages/kbn-typed-react-router-config/src/route_renderer.tsx",
         "deprecated": false,
@@ -373,7 +430,7 @@
           },
           ">; history: ",
           "History",
-          "<unknown>; children: React.ReactNode; }) => JSX.Element"
+          "<unknown>; children?: React.ReactNode; }) => React.JSX.Element"
         ],
         "path": "packages/kbn-typed-react-router-config/src/router_provider.tsx",
         "deprecated": false,
@@ -442,7 +499,7 @@
                 "label": "children",
                 "description": [],
                 "signature": [
-                  "boolean | React.ReactChild | React.ReactFragment | React.ReactPortal | null | undefined"
+                  "string | number | boolean | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | null | undefined"
                 ],
                 "path": "packages/kbn-typed-react-router-config/src/router_provider.tsx",
                 "deprecated": false,
@@ -754,7 +811,7 @@
             "label": "pre",
             "description": [],
             "signature": [
-              "React.ReactElement<any, any> | undefined"
+              "React.ReactElement<any, string | React.JSXElementConstructor<any>> | undefined"
             ],
             "path": "packages/kbn-typed-react-router-config/src/types/index.ts",
             "deprecated": false,

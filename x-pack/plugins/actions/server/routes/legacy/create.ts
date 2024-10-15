@@ -13,10 +13,15 @@ import { ILicenseState } from '../../lib';
 import { BASE_ACTION_API_PATH } from '../../../common';
 import { verifyAccessAndContext } from '../verify_access_and_context';
 import { trackLegacyRouteUsage } from '../../lib/track_legacy_route_usage';
+import { connectorResponseSchemaV1 } from '../../../common/routes/connector/response';
 
 export const bodySchema = schema.object({
-  name: schema.string(),
-  actionTypeId: schema.string(),
+  name: schema.string({
+    meta: { description: 'The display name for the connector.' },
+  }),
+  actionTypeId: schema.string({
+    meta: { description: 'The connector type identifier.' },
+  }),
   config: schema.recordOf(schema.string(), schema.any(), { defaultValue: {} }),
   secrets: schema.recordOf(schema.string(), schema.any(), { defaultValue: {} }),
 });
@@ -29,8 +34,22 @@ export const createActionRoute = (
   router.post(
     {
       path: `${BASE_ACTION_API_PATH}/action`,
+      options: {
+        access: 'public',
+        summary: `Create a connector`,
+        tags: ['oas-tag:connectors'],
+        deprecated: true,
+      },
       validate: {
-        body: bodySchema,
+        request: {
+          body: bodySchema,
+        },
+        response: {
+          200: {
+            description: 'Indicates a successful call.',
+            body: () => connectorResponseSchemaV1,
+          },
+        },
       },
     },
     router.handleLegacyErrors(

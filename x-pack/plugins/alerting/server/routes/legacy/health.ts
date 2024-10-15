@@ -18,12 +18,19 @@ export function healthRoute(
   router: AlertingRouter,
   licenseState: ILicenseState,
   encryptedSavedObjects: EncryptedSavedObjectsPluginSetup,
-  usageCounter?: UsageCounter
+  usageCounter?: UsageCounter,
+  isServerless?: boolean
 ) {
   router.get(
     {
       path: '/api/alerts/_health',
       validate: false,
+      options: {
+        access: isServerless ? 'internal' : 'public',
+        summary: 'Get the alerting framework health',
+        tags: ['oas-tag:alerting'],
+        deprecated: true,
+      },
     },
     router.handleLegacyErrors(async function (context, req, res) {
       verifyApiAccess(licenseState);
@@ -34,7 +41,7 @@ export function healthRoute(
       try {
         const alertingContext = await context.alerting;
         // Verify that user has access to at least one rule type
-        const ruleTypes = Array.from(await alertingContext.getRulesClient().listAlertTypes());
+        const ruleTypes = Array.from(await alertingContext.getRulesClient().listRuleTypes());
         if (ruleTypes.length > 0) {
           const alertingFrameworkHealth = await alertingContext.getFrameworkHealth();
 

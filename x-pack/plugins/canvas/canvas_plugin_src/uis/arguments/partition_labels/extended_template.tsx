@@ -25,7 +25,7 @@ import {
   EuiText,
 } from '@elastic/eui';
 import { ExpressionAstExpression } from '@kbn/expressions-plugin/common';
-import { set } from 'lodash';
+import { set } from '@kbn/safer-lodash-set';
 import { defaultExpression } from './default_expression';
 import { Fields } from './types';
 import { getFieldPath, getFieldValue } from './utils';
@@ -46,9 +46,9 @@ const PERCENT_DECIMALS_FIELD = 'percentDecimals';
 
 export const ExtendedTemplate: FunctionComponent<Props> = ({ onValueChange, argValue }) => {
   const showLabels = getFieldValue(argValue, SHOW_FIELD);
-  const showValues = getFieldValue(argValue, VALUES_FIELD);
-  const valueFormat = getFieldValue(argValue, VALUES_FORMAT_FIELD);
-  const percentDecimals = getFieldValue(argValue, PERCENT_DECIMALS_FIELD);
+  const showValues = getFieldValue(argValue, VALUES_FIELD) as boolean;
+  const valueFormat = getFieldValue(argValue, VALUES_FORMAT_FIELD) as string;
+  const percentDecimals = getFieldValue(argValue, PERCENT_DECIMALS_FIELD) as string;
 
   const positions: EuiSelectOption[] = [
     { text: strings.getPositionDefaultLabel(), value: 'default' },
@@ -110,7 +110,7 @@ export const ExtendedTemplate: FunctionComponent<Props> = ({ onValueChange, argV
       <EuiFormRow label={strings.getPositionLabel()} display="columnCompressed">
         <EuiSelect
           compressed
-          value={getFieldValue(argValue, POSITION_FIELD)}
+          value={getFieldValue(argValue, POSITION_FIELD) as string}
           options={positions}
           onChange={onCommonFieldChange(POSITION_FIELD)}
         />

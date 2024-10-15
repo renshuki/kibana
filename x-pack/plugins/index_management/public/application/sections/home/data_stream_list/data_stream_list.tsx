@@ -5,19 +5,19 @@
  * 2.0.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { RouteComponentProps } from 'react-router-dom';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { i18n } from '@kbn/i18n';
 import {
   EuiFlexGroup,
   EuiFlexItem,
-  EuiSwitch,
   EuiText,
-  EuiIconTip,
   EuiSpacer,
-  EuiPageContent_Deprecated as EuiPageContent,
+  EuiPageSection,
   EuiEmptyPrompt,
+  EuiCallOut,
+  EuiButton,
   EuiLink,
 } from '@elastic/eui';
 import { ScopedHistory } from '@kbn/core/public';
@@ -32,15 +32,18 @@ import {
   APP_WRAPPER_CLASS,
   useExecutionContext,
 } from '../../../../shared_imports';
+import { Section } from '../../../../../common/constants';
 import { useAppContext } from '../../../app_context';
 import { useLoadDataStreams } from '../../../services/api';
+import { breadcrumbService, IndexManagementBreadcrumb } from '../../../services/breadcrumbs';
 import { documentationService } from '../../../services/documentation';
-import { Section } from '../home';
 import { DataStreamTable } from './data_stream_table';
 import { DataStreamDetailPanel } from './data_stream_detail_panel';
 import { filterDataStreams, isSelectedDataStreamHidden } from '../../../lib/data_streams';
-import { FilterListButton, Filters } from '../components';
+import { Filters } from '../components';
+import { useStateWithLocalStorage } from '../../../hooks/use_state_with_localstorage';
 
+const SHOW_PROJECT_LEVEL_RETENTION = 'showProjectLevelRetention';
 export type DataStreamFilterName = 'managed' | 'hidden';
 interface MatchParams {
   dataStreamName?: string;
@@ -57,14 +60,19 @@ export const DataStreamList: React.FunctionComponent<RouteComponentProps<MatchPa
   const decodedDataStreamName = attemptToURIDecode(dataStreamName);
 
   const {
+    config: { enableProjectLevelRetentionChecks },
     core: { getUrlForApp, executionContext },
-    plugins: { isFleetEnabled },
+    plugins: { isFleetEnabled, cloud },
   } = useAppContext();
 
   useExecutionContext(executionContext, {
     type: 'application',
     page: 'indexManagementDataStreamsTab',
   });
+
+  useEffect(() => {
+    breadcrumbService.setBreadcrumbs(IndexManagementBreadcrumb.dataStreams);
+  }, []);
 
   const [isIncludeStatsChecked, setIsIncludeStatsChecked] = useState(false);
   const {
@@ -76,10 +84,13 @@ export const DataStreamList: React.FunctionComponent<RouteComponentProps<MatchPa
     includeStats: isIncludeStatsChecked,
   });
 
+  const [projectLevelRetentionCallout, setprojectLevelRetentionCallout] =
+    useStateWithLocalStorage<boolean>(SHOW_PROJECT_LEVEL_RETENTION, true);
+
   const [filters, setFilters] = useState<Filters<DataStreamFilterName>>({
     managed: {
       name: i18n.translate('xpack.idxMgmt.dataStreamList.viewManagedLabel', {
-        defaultMessage: 'Fleet-managed data streams',
+        defaultMessage: 'Managed data streams',
       }),
       checked: 'on',
     },
@@ -120,10 +131,10 @@ export const DataStreamList: React.FunctionComponent<RouteComponentProps<MatchPa
     return (
       <EuiFlexGroup alignItems="center" justifyContent="spaceBetween">
         <EuiFlexItem>
-          <EuiText color="subdued">
+          <EuiText color="subdued" css={{ maxWidth: '80%' }}>
             <FormattedMessage
               id="xpack.idxMgmt.dataStreamList.dataStreamsDescription"
-              defaultMessage="Data streams store time-series data across multiple indices. {learnMoreLink}"
+              defaultMessage="Data streams store time-series data across multiple indices and can be created from index templates. {learnMoreLink}"
               values={{
                 learnMoreLink: (
                   <EuiLink
@@ -141,38 +152,16 @@ export const DataStreamList: React.FunctionComponent<RouteComponentProps<MatchPa
           </EuiText>
         </EuiFlexItem>
 
-        <EuiFlexItem grow={false}>
-          <EuiFlexGroup gutterSize="s">
-            <EuiFlexItem grow={false}>
-              <EuiSwitch
-                label={i18n.translate(
-                  'xpack.idxMgmt.dataStreamListControls.includeStatsSwitchLabel',
-                  {
-                    defaultMessage: 'Include stats',
-                  }
-                )}
-                checked={isIncludeStatsChecked}
-                onChange={(e) => setIsIncludeStatsChecked(e.target.checked)}
-                data-test-subj="includeStatsSwitch"
+        {enableProjectLevelRetentionChecks && (
+          <EuiFlexItem grow={false}>
+            <EuiLink href={cloud?.deploymentUrl} target="_blank">
+              <FormattedMessage
+                id="xpack.idxMgmt.dataStreamList.projectlevelRetention.linkText"
+                defaultMessage="Project data retention"
               />
-            </EuiFlexItem>
-
-            <EuiFlexItem grow={false}>
-              <EuiIconTip
-                content={i18n.translate(
-                  'xpack.idxMgmt.dataStreamListControls.includeStatsSwitchToolTip',
-                  {
-                    defaultMessage: 'Including stats can increase reload times',
-                  }
-                )}
-                position="top"
-              />
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <FilterListButton<DataStreamFilterName> filters={filters} onChange={setFilters} />
-        </EuiFlexItem>
+            </EuiLink>
+          </EuiFlexItem>
+        )}
       </EuiFlexGroup>
     );
   };
@@ -221,7 +210,7 @@ export const DataStreamList: React.FunctionComponent<RouteComponentProps<MatchPa
             {' ' /* We need this space to separate these two sentences. */}
             {isFleetEnabled ? (
               <FormattedMessage
-                id="xpack.idxMgmt.dataStreamList.emptyPrompt.noDataStreamsCtaIngestManagerMessage"
+                id="xpack.idxMgmt.dataStreamList.emptyPrompt.noDataStreamsCtaFleetMessage"
                 defaultMessage="Get started with data streams in {link}."
                 values={{
                   link: (
@@ -230,7 +219,7 @@ export const DataStreamList: React.FunctionComponent<RouteComponentProps<MatchPa
                       href={getUrlForApp('fleet')}
                     >
                       {i18n.translate(
-                        'xpack.idxMgmt.dataStreamList.emptyPrompt.noDataStreamsCtaIngestManagerLink',
+                        'xpack.idxMgmt.dataStreamList.emptyPrompt.noDataStreamsCtaFleetLink',
                         {
                           defaultMessage: 'Fleet',
                         }
@@ -270,7 +259,38 @@ export const DataStreamList: React.FunctionComponent<RouteComponentProps<MatchPa
   } else {
     activateHiddenFilter(isSelectedDataStreamHidden(dataStreams!, decodedDataStreamName));
     content = (
-      <EuiPageContent hasShadow={false} paddingSize="none" data-test-subj="dataStreamList">
+      <EuiPageSection paddingSize="none" data-test-subj="dataStreamList">
+        {enableProjectLevelRetentionChecks && projectLevelRetentionCallout && (
+          <>
+            <EuiCallOut
+              onDismiss={() => setprojectLevelRetentionCallout(false)}
+              data-test-subj="projectLevelRetentionCallout"
+              title={i18n.translate(
+                'xpack.idxMgmt.dataStreamList.projectLevelRetentionCallout.titleText',
+                {
+                  defaultMessage:
+                    'You can now configure data stream retention settings for your entire project',
+                }
+              )}
+            >
+              <p>
+                <FormattedMessage
+                  id="xpack.idxMgmt.dataStreamList.projectLevelRetentionCallout.descriptionText"
+                  defaultMessage="Optionally define a maximum and default retention period to manage your compliance and storage size needs."
+                />
+              </p>
+
+              <EuiButton href={cloud?.deploymentUrl} fill data-test-subj="cloudLinkButton">
+                <FormattedMessage
+                  id="xpack.idxMgmt.dataStreamList.projectLevelRetentionCallout.buttonText"
+                  defaultMessage="Get started"
+                />
+              </EuiButton>
+            </EuiCallOut>
+            <EuiSpacer size="m" />
+          </>
+        )}
+
         {renderHeader()}
         <EuiSpacer size="l" />
 
@@ -282,10 +302,13 @@ export const DataStreamList: React.FunctionComponent<RouteComponentProps<MatchPa
           }
           dataStreams={filteredDataStreams}
           reload={reload}
+          viewFilters={filters}
+          onViewFilterChange={setFilters}
           history={history as ScopedHistory}
           includeStats={isIncludeStatsChecked}
+          setIncludeStats={setIsIncludeStatsChecked}
         />
-      </EuiPageContent>
+      </EuiPageSection>
     );
   }
 

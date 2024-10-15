@@ -4,8 +4,10 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
+import { schema } from '@kbn/config-schema';
 
 import type { FleetAuthz } from '../../../common';
+import { API_VERSIONS } from '../../../common/constants';
 
 import { getRouteRequiredAuthz, type FleetAuthzRouter } from '../../services/security';
 
@@ -21,23 +23,43 @@ import {
   GetAgentStatusRequestSchema,
   GetAgentDataRequestSchema,
   PostNewAgentActionRequestSchema,
-  PutAgentReassignRequestSchema,
+  PutAgentReassignRequestSchemaDeprecated,
+  PostAgentReassignRequestSchema,
   PostBulkAgentReassignRequestSchema,
   PostAgentUpgradeRequestSchema,
   PostBulkAgentUpgradeRequestSchema,
-  PostCancelActionRequestSchema,
   GetActionStatusRequestSchema,
   PostRequestDiagnosticsActionRequestSchema,
   PostBulkRequestDiagnosticsActionRequestSchema,
   ListAgentUploadsRequestSchema,
   GetAgentUploadFileRequestSchema,
+  PostRetrieveAgentsByActionsRequestSchema,
+  DeleteAgentUploadFileRequestSchema,
+  GetTagsResponseSchema,
 } from '../../types';
 import * as AgentService from '../../services/agents';
 import type { FleetConfigType } from '../..';
 
-import { PostBulkUpdateAgentTagsRequestSchema } from '../../types/rest_spec/agent';
+import {
+  DeleteAgentResponseSchema,
+  DeleteAgentUploadFileResponseSchema,
+  GetActionStatusResponseSchema,
+  GetAgentDataResponseSchema,
+  GetAgentResponseSchema,
+  GetAgentStatusResponseSchema,
+  GetAgentsResponseSchema,
+  GetAvailableAgentVersionsResponseSchema,
+  ListAgentUploadsResponseSchema,
+  PostBulkActionResponseSchema,
+  PostBulkUpdateAgentTagsRequestSchema,
+  PostCancelActionRequestSchema,
+  PostNewAgentActionResponseSchema,
+  PostRetrieveAgentsByActionsResponseSchema,
+} from '../../types/rest_spec/agent';
 
 import { calculateRouteAuthz } from '../../services/security/security';
+
+import { genericErrorResponse } from '../schema/errors';
 
 import {
   getAgentsHandler,
@@ -46,14 +68,17 @@ import {
   updateAgentHandler,
   deleteAgentHandler,
   getAgentStatusForAgentPolicyHandler,
-  putAgentsReassignHandler,
-  postBulkAgentsReassignHandler,
+  putAgentsReassignHandlerDeprecated,
+  postBulkAgentReassignHandler,
   getAgentDataHandler,
   bulkUpdateAgentTagsHandler,
   getAvailableVersionsHandler,
   getActionStatusHandler,
   getAgentUploadsHandler,
   getAgentUploadFileHandler,
+  deleteAgentUploadFileHandler,
+  postAgentReassignHandler,
+  postRetrieveAgentsByActionsHandler,
 } from './handlers';
 import {
   postNewAgentActionHandlerBuilder,
@@ -68,274 +93,746 @@ import {
 
 export const registerAPIRoutes = (router: FleetAuthzRouter, config: FleetConfigType) => {
   // Get one
-  router.get(
-    {
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.INFO_PATTERN,
-      validate: GetOneAgentRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    getAgentHandler
-  );
+      description: `Get agent by ID`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetOneAgentRequestSchema,
+          response: {
+            200: {
+              body: () => GetAgentResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getAgentHandler
+    );
+
   // Update
-  router.put(
-    {
+  router.versioned
+    .put({
       path: AGENT_API_ROUTES.UPDATE_PATTERN,
-      validate: UpdateAgentRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    updateAgentHandler
-  );
+      description: `Update agent by ID`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: UpdateAgentRequestSchema,
+          response: {
+            200: {
+              body: () => GetAgentResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      updateAgentHandler
+    );
+
   // Bulk Update Tags
-  router.post(
-    {
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.BULK_UPDATE_AGENT_TAGS_PATTERN,
-      validate: PostBulkUpdateAgentTagsRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    bulkUpdateAgentTagsHandler
-  );
+      description: `Bulk update agent tags`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostBulkUpdateAgentTagsRequestSchema,
+          response: {
+            200: {
+              body: () => PostBulkActionResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      bulkUpdateAgentTagsHandler
+    );
+
   // Delete
-  router.delete(
-    {
+  router.versioned
+    .delete({
       path: AGENT_API_ROUTES.DELETE_PATTERN,
-      validate: DeleteAgentRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    deleteAgentHandler
-  );
+      description: `Delete agent by ID`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: DeleteAgentRequestSchema,
+          response: {
+            200: {
+              body: () => DeleteAgentResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      deleteAgentHandler
+    );
+
   // List
-  router.get(
-    {
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.LIST_PATTERN,
-      validate: GetAgentsRequestSchema,
+
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    getAgentsHandler
-  );
+      description: `List agents`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetAgentsRequestSchema,
+          response: {
+            200: {
+              body: () => GetAgentsResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getAgentsHandler
+    );
+
   // List Agent Tags
-  router.get(
-    {
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.LIST_TAGS_PATTERN,
-      validate: GetTagsRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    getAgentTagsHandler
-  );
+      description: `List agent tags`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetTagsRequestSchema,
+          response: {
+            200: {
+              body: () => GetTagsResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getAgentTagsHandler
+    );
 
   // Agent actions
-  router.post(
-    {
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.ACTIONS_PATTERN,
-      validate: PostNewAgentActionRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    postNewAgentActionHandlerBuilder({
-      getAgent: AgentService.getAgentById,
-      cancelAgentAction: AgentService.cancelAgentAction,
-      createAgentAction: AgentService.createAgentAction,
-      getAgentActions: AgentService.getAgentActions,
+      description: `Create agent action`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
     })
-  );
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostNewAgentActionRequestSchema,
+          response: {
+            200: {
+              body: () => PostNewAgentActionResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postNewAgentActionHandlerBuilder({
+        getAgent: AgentService.getAgentById,
+        cancelAgentAction: AgentService.cancelAgentAction,
+        createAgentAction: AgentService.createAgentAction,
+        getAgentActions: AgentService.getAgentActions,
+      })
+    );
 
-  router.post(
-    {
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.CANCEL_ACTIONS_PATTERN,
-      validate: PostCancelActionRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    postCancelActionHandlerBuilder({
-      getAgent: AgentService.getAgentById,
-      cancelAgentAction: AgentService.cancelAgentAction,
-      createAgentAction: AgentService.createAgentAction,
-      getAgentActions: AgentService.getAgentActions,
+      description: `Cancel agent action`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
     })
-  );
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostCancelActionRequestSchema,
+          response: {
+            200: {
+              body: () => PostNewAgentActionResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postCancelActionHandlerBuilder({
+        getAgent: AgentService.getAgentById,
+        cancelAgentAction: AgentService.cancelAgentAction,
+        createAgentAction: AgentService.createAgentAction,
+        getAgentActions: AgentService.getAgentActions,
+      })
+    );
 
-  router.post(
-    {
+  // Get agents by Action_Ids
+  router.versioned
+    .post({
+      path: AGENT_API_ROUTES.LIST_PATTERN,
+      fleetAuthz: {
+        fleet: { readAgents: true },
+      },
+      description: `List agents by action ids`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostRetrieveAgentsByActionsRequestSchema,
+          response: {
+            200: {
+              body: () => PostRetrieveAgentsByActionsResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postRetrieveAgentsByActionsHandler
+    );
+
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.UNENROLL_PATTERN,
-      validate: PostAgentUnenrollRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    postAgentUnenrollHandler
-  );
+      description: `Unenroll agent`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: { request: PostAgentUnenrollRequestSchema, response: {} },
+      },
+      postAgentUnenrollHandler
+    );
 
-  router.put(
-    {
+  router.versioned
+    .put({
       path: AGENT_API_ROUTES.REASSIGN_PATTERN,
-      validate: PutAgentReassignRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    putAgentsReassignHandler
-  );
+      deprecated: true,
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: { request: PutAgentReassignRequestSchemaDeprecated },
+      },
+      putAgentsReassignHandlerDeprecated
+    );
 
-  router.post(
-    {
+  router.versioned
+    .post({
+      path: AGENT_API_ROUTES.REASSIGN_PATTERN,
+      fleetAuthz: {
+        fleet: { allAgents: true },
+      },
+      description: `Reassign agent`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostAgentReassignRequestSchema,
+          response: {
+            200: {
+              body: () => schema.object({}),
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postAgentReassignHandler
+    );
+
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.REQUEST_DIAGNOSTICS_PATTERN,
-      validate: PostRequestDiagnosticsActionRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    requestDiagnosticsHandler
-  );
+      description: `Request agent diagnostics`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostRequestDiagnosticsActionRequestSchema,
+          response: {
+            200: {
+              body: () => PostBulkActionResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      requestDiagnosticsHandler
+    );
 
-  router.post(
-    {
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.BULK_REQUEST_DIAGNOSTICS_PATTERN,
-      validate: PostBulkRequestDiagnosticsActionRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    bulkRequestDiagnosticsHandler
-  );
+      description: `Bulk request diagnostics from agents`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostBulkRequestDiagnosticsActionRequestSchema,
+          response: {
+            200: {
+              body: () => PostBulkActionResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      bulkRequestDiagnosticsHandler
+    );
 
-  router.get(
-    {
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.LIST_UPLOADS_PATTERN,
-      validate: ListAgentUploadsRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    getAgentUploadsHandler
-  );
+      description: `List agent uploads`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: ListAgentUploadsRequestSchema,
+          response: {
+            200: {
+              body: () => ListAgentUploadsResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getAgentUploadsHandler
+    );
 
-  router.get(
-    {
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.GET_UPLOAD_FILE_PATTERN,
-      validate: GetAgentUploadFileRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    getAgentUploadFileHandler
-  );
+      description: `Get file uploaded by agent`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetAgentUploadFileRequestSchema,
+          response: {
+            200: {
+              body: () => schema.stream(), // Readable
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getAgentUploadFileHandler
+    );
+
+  router.versioned
+    .delete({
+      path: AGENT_API_ROUTES.DELETE_UPLOAD_FILE_PATTERN,
+      fleetAuthz: {
+        fleet: { allAgents: true },
+      },
+      description: `Delete file uploaded by agent`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: DeleteAgentUploadFileRequestSchema,
+          response: {
+            200: {
+              body: () => DeleteAgentUploadFileResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      deleteAgentUploadFileHandler
+    );
 
   // Get agent status for policy
-  router.get(
-    {
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.STATUS_PATTERN,
-      validate: GetAgentStatusRequestSchema,
       fleetAuthz: (fleetAuthz: FleetAuthz): boolean =>
         calculateRouteAuthz(
           fleetAuthz,
           getRouteRequiredAuthz('get', AGENT_API_ROUTES.STATUS_PATTERN)
         ).granted,
-    },
-    getAgentStatusForAgentPolicyHandler
-  );
-  router.get(
-    {
+      description: `Get agent status summary`,
+      options: {
+        tags: ['oas-tag:Elastic Agent status'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetAgentStatusRequestSchema,
+          response: {
+            200: {
+              body: () => GetAgentStatusResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getAgentStatusForAgentPolicyHandler
+    );
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.STATUS_PATTERN_DEPRECATED,
-      validate: GetAgentStatusRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    getAgentStatusForAgentPolicyHandler
-  );
+      deprecated: true,
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: { request: GetAgentStatusRequestSchema },
+      },
+      getAgentStatusForAgentPolicyHandler
+    );
   // Agent data
-  router.get(
-    {
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.DATA_PATTERN,
-      validate: GetAgentDataRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    getAgentDataHandler
-  );
+      description: `Get incoming agent data`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetAgentDataRequestSchema,
+          response: {
+            200: {
+              body: () => GetAgentDataResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getAgentDataHandler
+    );
 
   // upgrade agent
-  router.post(
-    {
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.UPGRADE_PATTERN,
-      validate: PostAgentUpgradeRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    postAgentUpgradeHandler
-  );
+      description: `Upgrade agent`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostAgentUpgradeRequestSchema,
+          response: {
+            200: {
+              body: () => schema.object({}),
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postAgentUpgradeHandler
+    );
   // bulk upgrade
-  router.post(
-    {
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.BULK_UPGRADE_PATTERN,
-      validate: PostBulkAgentUpgradeRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    postBulkAgentsUpgradeHandler
-  );
+      description: `Bulk upgrade agents`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostBulkAgentUpgradeRequestSchema,
+          response: {
+            200: {
+              body: () => PostBulkActionResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postBulkAgentsUpgradeHandler
+    );
 
   // Current actions
-  router.get(
-    {
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.ACTION_STATUS_PATTERN,
-      validate: GetActionStatusRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    getActionStatusHandler
-  );
+      description: `Get agent action status`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetActionStatusRequestSchema,
+          response: {
+            200: {
+              body: () => GetActionStatusResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getActionStatusHandler
+    );
 
   // Bulk reassign
-  router.post(
-    {
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.BULK_REASSIGN_PATTERN,
-      validate: PostBulkAgentReassignRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    postBulkAgentsReassignHandler
-  );
+      description: `Bulk reassign agents`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostBulkAgentReassignRequestSchema,
+          response: {
+            200: {
+              body: () => PostBulkActionResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postBulkAgentReassignHandler
+    );
 
   // Bulk unenroll
-  router.post(
-    {
+  router.versioned
+    .post({
       path: AGENT_API_ROUTES.BULK_UNENROLL_PATTERN,
-      validate: PostBulkAgentUnenrollRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    postBulkAgentsUnenrollHandler
-  );
+      description: `Bulk unenroll agents`,
+      options: {
+        tags: ['oas-tag:Elastic Agent actions'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostBulkAgentUnenrollRequestSchema,
+          response: {
+            200: {
+              body: () => PostBulkActionResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postBulkAgentsUnenrollHandler
+    );
 
   // Available versions for upgrades
-  router.get(
-    {
+  router.versioned
+    .get({
       path: AGENT_API_ROUTES.AVAILABLE_VERSIONS_PATTERN,
-      validate: false,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readAgents: true },
       },
-    },
-    getAvailableVersionsHandler
-  );
+      description: `Get available agent versions`,
+      options: {
+        tags: ['oas-tag:Elastic Agents'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: {},
+          response: {
+            200: {
+              body: () => GetAvailableAgentVersionsResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getAvailableVersionsHandler
+    );
 };

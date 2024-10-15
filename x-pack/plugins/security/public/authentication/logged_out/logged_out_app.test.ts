@@ -4,7 +4,6 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-
 jest.mock('./logged_out_page');
 
 import type { AppMount } from '@kbn/core/public';
@@ -54,9 +53,9 @@ describe('loggedOutApp', () => {
     const mockRenderApp = jest.requireMock('./logged_out_page').renderLoggedOutPage;
     expect(mockRenderApp).toHaveBeenCalledTimes(1);
     expect(mockRenderApp).toHaveBeenCalledWith(
-      coreStartMock.i18n,
-      { element: appMountParams.element, theme$: appMountParams.theme$ },
-      { basePath: coreStartMock.http.basePath }
+      coreStartMock,
+      { element: appMountParams.element },
+      { basePath: coreStartMock.http.basePath, customBranding: coreStartMock.customBranding }
     );
   });
 });

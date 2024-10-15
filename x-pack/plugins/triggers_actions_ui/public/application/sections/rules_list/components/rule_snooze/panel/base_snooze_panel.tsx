@@ -77,11 +77,18 @@ export const BaseSnoozePanel: React.FunctionComponent<BaseSnoozePanelProps> = ({
 
   const { euiTheme } = useEuiTheme();
 
-  const onChangeValue = useCallback(
-    ({ target }) => setIntervalValue(target.value),
+  const onChangeValue: React.ChangeEventHandler<HTMLInputElement> = useCallback(
+    ({ target }) => {
+      const value = Number(target.value);
+
+      if (!isNaN(value)) {
+        setIntervalValue(value);
+      }
+    },
     [setIntervalValue]
   );
-  const onChangeUnit = useCallback(
+
+  const onChangeUnit: React.ChangeEventHandler<HTMLSelectElement> = useCallback(
     ({ target }) => setIntervalUnit(target.value),
     [setIntervalUnit]
   );
@@ -213,6 +220,7 @@ export const BaseSnoozePanel: React.FunctionComponent<BaseSnoozePanelProps> = ({
                         style={{
                           paddingLeft: '9px',
                           paddingRight: '9px',
+                          height: '36px',
                           // Replicate euiPanel--accent vs euiPanel--subdued
                           // Applying these classNames by themselves doesn't work due to a CSS-in-JS issue with EuiPanel
                           color: isActive ? '#a8376a' : euiTheme.colors.subduedText,
@@ -429,7 +437,7 @@ export const BaseSnoozePanel: React.FunctionComponent<BaseSnoozePanelProps> = ({
               id="xpack.triggersActionsUI.sections.rulesList.removeAllSnoozeSchedules"
               defaultMessage="Remove {count, plural, one {schedule} other {# schedules}}?"
               values={{
-                count: scheduledSnoozes.length,
+                count: scheduledSnoozes.filter((s) => s.id).length,
               }}
             />
           }

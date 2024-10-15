@@ -12,6 +12,7 @@ import { mockHandlerArguments } from '../_mock_handler_arguments';
 import { SavedObjectsErrorHelpers } from '@kbn/core/server';
 import { rulesClientMock } from '../../rules_client.mock';
 import { trackLegacyRouteUsage } from '../../lib/track_legacy_route_usage';
+import { RULE_SAVED_OBJECT_TYPE } from '../../saved_objects';
 
 const rulesClient = rulesClientMock.create();
 jest.mock('../../lib/license_api_access', () => ({
@@ -37,7 +38,7 @@ describe('getAlertStateRoute', () => {
         meta: {
           lastScheduledActions: {
             group: 'first_group',
-            date: new Date(),
+            date: new Date().toISOString(),
           },
         },
       },
@@ -54,6 +55,7 @@ describe('getAlertStateRoute', () => {
     const [config, handler] = router.get.mock.calls[0];
 
     expect(config.path).toMatchInlineSnapshot(`"/api/alerts/alert/{id}/state"`);
+    expect(config.options?.access).toBe('public');
 
     rulesClient.getAlertState.mockResolvedValueOnce(mockedAlertState);
 
@@ -79,6 +81,18 @@ describe('getAlertStateRoute', () => {
     `);
 
     expect(res.ok).toHaveBeenCalled();
+  });
+
+  it('should have internal access for serverless', async () => {
+    const licenseState = licenseStateMock.create();
+    const router = httpServiceMock.createRouter();
+
+    getAlertStateRoute(router, licenseState, undefined, true);
+
+    const [config] = router.get.mock.calls[0];
+
+    expect(config.path).toMatchInlineSnapshot(`"/api/alerts/alert/{id}/state"`);
+    expect(config.options?.access).toBe('internal');
   });
 
   it('returns NO-CONTENT when alert exists but has no task state yet', async () => {
@@ -129,7 +143,9 @@ describe('getAlertStateRoute', () => {
 
     rulesClient.getAlertState = jest
       .fn()
-      .mockResolvedValueOnce(SavedObjectsErrorHelpers.createGenericNotFoundError('alert', '1'));
+      .mockResolvedValueOnce(
+        SavedObjectsErrorHelpers.createGenericNotFoundError(RULE_SAVED_OBJECT_TYPE, '1')
+      );
 
     const [context, req, res] = mockHandlerArguments(
       { rulesClient },

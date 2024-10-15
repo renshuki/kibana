@@ -9,10 +9,15 @@ import { i18n } from '@kbn/i18n';
 import { KibanaFeatureConfig } from '@kbn/features-plugin/common';
 import { DEFAULT_APP_CATEGORIES } from '@kbn/core/server';
 import { TRANSFORM_RULE_TYPE } from '@kbn/transform-plugin/common';
+import {
+  ML_ANOMALY_DETECTION_RULE_TYPE_ID,
+  OBSERVABILITY_THRESHOLD_RULE_TYPE_ID,
+  STACK_ALERTS_FEATURE_ID,
+} from '@kbn/rule-data-utils';
+import { ES_QUERY_ID as ElasticsearchQuery } from '@kbn/rule-data-utils';
+import { KibanaFeatureScope } from '@kbn/features-plugin/common';
 import { ID as IndexThreshold } from './rule_types/index_threshold/rule_type';
-import { GEO_CONTAINMENT_ID as GeoContainment } from './rule_types/geo_containment/alert_type';
-import { ES_QUERY_ID as ElasticsearchQuery } from './rule_types/es_query/constants';
-import { STACK_ALERTS_FEATURE_ID } from '../common';
+import { GEO_CONTAINMENT_ID as GeoContainment } from './rule_types/geo_containment';
 
 const TransformHealth = TRANSFORM_RULE_TYPE.TRANSFORM_HEALTH;
 
@@ -23,10 +28,18 @@ export const BUILT_IN_ALERTS_FEATURE: KibanaFeatureConfig = {
   }),
   app: [],
   category: DEFAULT_APP_CATEGORIES.management,
+  scope: [KibanaFeatureScope.Spaces, KibanaFeatureScope.Security],
   management: {
     insightsAndAlerting: ['triggersActions'],
   },
-  alerting: [IndexThreshold, GeoContainment, ElasticsearchQuery, TransformHealth],
+  alerting: [
+    IndexThreshold,
+    GeoContainment,
+    ElasticsearchQuery,
+    TransformHealth,
+    OBSERVABILITY_THRESHOLD_RULE_TYPE_ID,
+    ML_ANOMALY_DETECTION_RULE_TYPE_ID,
+  ],
   privileges: {
     all: {
       app: [],
@@ -36,17 +49,31 @@ export const BUILT_IN_ALERTS_FEATURE: KibanaFeatureConfig = {
       },
       alerting: {
         rule: {
-          all: [IndexThreshold, GeoContainment, ElasticsearchQuery, TransformHealth],
+          all: [
+            IndexThreshold,
+            GeoContainment,
+            ElasticsearchQuery,
+            TransformHealth,
+            OBSERVABILITY_THRESHOLD_RULE_TYPE_ID,
+            ML_ANOMALY_DETECTION_RULE_TYPE_ID,
+          ],
         },
         alert: {
-          all: [IndexThreshold, GeoContainment, ElasticsearchQuery, TransformHealth],
+          all: [
+            IndexThreshold,
+            GeoContainment,
+            ElasticsearchQuery,
+            TransformHealth,
+            OBSERVABILITY_THRESHOLD_RULE_TYPE_ID,
+            ML_ANOMALY_DETECTION_RULE_TYPE_ID,
+          ],
         },
       },
       savedObject: {
         all: [],
         read: [],
       },
-      api: [],
+      api: ['rac'],
       ui: [],
     },
     read: {
@@ -57,17 +84,31 @@ export const BUILT_IN_ALERTS_FEATURE: KibanaFeatureConfig = {
       },
       alerting: {
         rule: {
-          read: [IndexThreshold, GeoContainment, ElasticsearchQuery, TransformHealth],
+          read: [
+            IndexThreshold,
+            GeoContainment,
+            ElasticsearchQuery,
+            TransformHealth,
+            OBSERVABILITY_THRESHOLD_RULE_TYPE_ID,
+            ML_ANOMALY_DETECTION_RULE_TYPE_ID,
+          ],
         },
         alert: {
-          read: [IndexThreshold, GeoContainment, ElasticsearchQuery, TransformHealth],
+          read: [
+            IndexThreshold,
+            GeoContainment,
+            ElasticsearchQuery,
+            TransformHealth,
+            OBSERVABILITY_THRESHOLD_RULE_TYPE_ID,
+            ML_ANOMALY_DETECTION_RULE_TYPE_ID,
+          ],
         },
       },
       savedObject: {
         all: [],
         read: [],
       },
-      api: [],
+      api: ['rac'],
       ui: [],
     },
   },

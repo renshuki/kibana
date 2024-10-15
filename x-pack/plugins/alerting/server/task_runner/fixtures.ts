@@ -6,10 +6,23 @@
  */
 
 import { TaskStatus } from '@kbn/task-manager-plugin/server';
-import { Rule, RuleTypeParams, RecoveredActionGroup, RuleMonitoring } from '../../common';
+import { SavedObject } from '@kbn/core/server';
+import { ALERTING_CASES_SAVED_OBJECT_INDEX } from '@kbn/core-saved-objects-server';
+import {
+  Rule,
+  RuleTypeParams,
+  RecoveredActionGroup,
+  RuleMonitoring,
+  RuleLastRunOutcomeOrderMap,
+  RuleLastRunOutcomes,
+  SanitizedRule,
+  SanitizedRuleAction,
+} from '../../common';
 import { getDefaultMonitoring } from '../lib/monitoring';
 import { UntypedNormalizedRuleType } from '../rule_type_registry';
 import { EVENT_LOG_ACTIONS } from '../plugin';
+import { AlertHit, RawRule } from '../types';
+import { RULE_SAVED_OBJECT_TYPE } from '../saved_objects';
 
 interface GeneratorParams {
   [key: string]: string | number | boolean | undefined | object[] | boolean[] | object;
@@ -24,17 +37,6 @@ export const DATE_1970_5_MIN = '1969-12-31T23:55:00.000Z';
 export const DATE_9999 = '9999-12-31T12:34:56.789Z';
 export const MOCK_DURATION = '86400000000000';
 
-export const SAVED_OBJECT = {
-  id: '1',
-  type: 'alert',
-  attributes: {
-    apiKey: Buffer.from('123:abc').toString('base64'),
-    consumer: 'bar',
-    enabled: true,
-  },
-  references: [],
-};
-
 export const RULE_ACTIONS = [
   {
     actionTypeId: 'action',
@@ -43,6 +45,7 @@ export const RULE_ACTIONS = [
     params: {
       foo: true,
     },
+    uuid: '111-111',
   },
   {
     actionTypeId: 'action',
@@ -51,6 +54,7 @@ export const RULE_ACTIONS = [
     params: {
       isResolved: true,
     },
+    uuid: '222-222',
   },
 ];
 
@@ -61,7 +65,7 @@ const defaultHistory = [
   },
 ];
 
-export const generateSavedObjectParams = ({
+export const generateRuleUpdateParams = ({
   error = null,
   warning = null,
   status = 'ok',
@@ -74,65 +78,70 @@ export const generateSavedObjectParams = ({
   error?: null | { reason: string; message: string };
   warning?: null | { reason: string; message: string };
   status?: string;
-  outcome?: string;
+  outcome?: RuleLastRunOutcomes;
   nextRun?: string | null;
   successRatio?: number;
   history?: RuleMonitoring['run']['history'];
   alertsCount?: Record<string, number>;
 }) => [
-  'alert',
-  '1',
   {
-    monitoring: {
-      run: {
-        calculated_metrics: {
-          success_ratio: successRatio,
-        },
-        history,
-        last_run: {
-          timestamp: '1970-01-01T00:00:00.000Z',
-          metrics: {
-            gap_duration_s: null,
-            total_alerts_created: null,
-            total_alerts_detected: null,
-            total_indexing_duration_ms: null,
-            total_search_duration_ms: null,
+    id: `alert:1`,
+    index: ALERTING_CASES_SAVED_OBJECT_INDEX,
+    doc: {
+      alert: {
+        monitoring: {
+          run: {
+            calculated_metrics: {
+              success_ratio: successRatio,
+            },
+            history,
+            last_run: {
+              timestamp: '1970-01-01T00:00:00.000Z',
+              metrics: {
+                duration: 0,
+                gap_duration_s: null,
+                total_alerts_created: null,
+                total_alerts_detected: null,
+                total_indexing_duration_ms: null,
+                total_search_duration_ms: null,
+              },
+            },
           },
         },
+        executionStatus: {
+          error,
+          lastDuration: 0,
+          lastExecutionDate: '1970-01-01T00:00:00.000Z',
+          status,
+          warning,
+        },
+        lastRun: {
+          outcome,
+          outcomeOrder: RuleLastRunOutcomeOrderMap[outcome],
+          outcomeMsg:
+            (error?.message && [error?.message]) ||
+            (warning?.message && [warning?.message]) ||
+            null,
+          warning: error?.reason || warning?.reason || null,
+          alertsCount: {
+            active: 0,
+            ignored: 0,
+            new: 0,
+            recovered: 0,
+            ...(alertsCount || {}),
+          },
+        },
+        nextRun,
+        running: false,
       },
     },
-    executionStatus: {
-      error,
-      lastDuration: 0,
-      lastExecutionDate: '1970-01-01T00:00:00.000Z',
-      status,
-      warning,
-    },
-    lastRun: {
-      outcome,
-      outcomeMsg:
-        (error?.message && [error?.message]) || (warning?.message && [warning?.message]) || null,
-      warning: error?.reason || warning?.reason || null,
-      alertsCount: {
-        active: 0,
-        ignored: 0,
-        new: 0,
-        recovered: 0,
-        ...(alertsCount || {}),
-      },
-    },
-    nextRun,
-    running: false,
   },
-  { refresh: false, namespace: undefined },
+  { ignore: [404] },
 ];
 
 export const GENERIC_ERROR_MESSAGE = 'GENERIC ERROR MESSAGE';
 
-export const getSummarizedAlertsMock = jest.fn();
-
 export const ruleType: jest.Mocked<UntypedNormalizedRuleType> = {
-  getSummarizedAlerts: getSummarizedAlertsMock,
   id: RULE_TYPE_ID,
   name: 'My test rule',
   actionGroups: [{ id: 'default', name: 'Default' }, RecoveredActionGroup],
@@ -141,10 +150,19 @@ export const ruleType: jest.Mocked<UntypedNormalizedRuleType> = {
   isExportable: true,
   recoveryActionGroup: RecoveredActionGroup,
   executor: jest.fn(),
+  category: 'test',
   producer: 'alerts',
   cancelAlertsOnRuleTimeout: true,
   ruleTaskTimeout: '5m',
   autoRecoverAlerts: true,
+  validate: {
+    params: { validate: (params) => params },
+  },
+  alerts: {
+    context: 'test',
+    mappings: { fieldMap: { field: { type: 'keyword', required: false } } },
+  },
+  validLegacyConsumers: [],
 };
 
 export const mockRunNowResponse = {
@@ -182,6 +200,7 @@ export const mockedRuleTypeSavedObject: Rule<RuleTypeParams> = {
       params: {
         foo: true,
       },
+      uuid: '111-111',
     },
     {
       group: RecoveredActionGroup.id,
@@ -190,6 +209,7 @@ export const mockedRuleTypeSavedObject: Rule<RuleTypeParams> = {
       params: {
         isResolved: true,
       },
+      uuid: '222-222',
     },
   ],
   executionStatus: {
@@ -197,6 +217,84 @@ export const mockedRuleTypeSavedObject: Rule<RuleTypeParams> = {
     lastExecutionDate: new Date('2020-08-20T19:23:38Z'),
   },
   monitoring: getDefaultMonitoring('2020-08-20T19:23:38Z'),
+  revision: 0,
+};
+
+export const mockedRawRuleSO: SavedObject<RawRule> = {
+  id: '1',
+  type: RULE_SAVED_OBJECT_TYPE,
+  references: [],
+  attributes: {
+    legacyId: '1',
+    consumer: 'bar',
+    createdAt: mockDate.toString(),
+    updatedAt: mockDate.toString(),
+    throttle: null,
+    muteAll: false,
+    notifyWhen: 'onActiveAlert',
+    enabled: true,
+    alertTypeId: ruleType.id,
+    apiKey: 'MTIzOmFiYw==',
+    apiKeyOwner: 'elastic',
+    schedule: { interval: '10s' },
+    name: RULE_NAME,
+    tags: ['rule-', '-tags'],
+    createdBy: 'rule-creator',
+    updatedBy: 'rule-updater',
+    mutedInstanceIds: [],
+    params: {
+      bar: true,
+    },
+    actions: [
+      {
+        group: 'default',
+        actionTypeId: 'action',
+        params: {
+          foo: true,
+        },
+        uuid: '111-111',
+        actionRef: '1',
+      },
+      {
+        group: RecoveredActionGroup.id,
+        actionTypeId: 'action',
+        params: {
+          isResolved: true,
+        },
+        uuid: '222-222',
+        actionRef: '2',
+      },
+    ],
+    executionStatus: {
+      status: 'unknown',
+      lastExecutionDate: new Date('2020-08-20T19:23:38Z').toString(),
+      error: null,
+      warning: null,
+    },
+    monitoring: getDefaultMonitoring('2020-08-20T19:23:38Z'),
+    revision: 0,
+  },
+};
+
+export const mockedRule: SanitizedRule<typeof mockedRawRuleSO.attributes.params> = {
+  id: mockedRawRuleSO.id,
+  ...mockedRawRuleSO.attributes,
+  nextRun: undefined,
+  createdAt: new Date(mockedRawRuleSO.attributes.createdAt),
+  updatedAt: new Date(mockedRawRuleSO.attributes.updatedAt),
+  executionStatus: {
+    ...mockedRawRuleSO.attributes.executionStatus,
+    lastExecutionDate: new Date(mockedRawRuleSO.attributes.executionStatus.lastExecutionDate),
+    error: undefined,
+    warning: undefined,
+  },
+  actions: mockedRawRuleSO.attributes.actions.map((action) => {
+    return {
+      ...action,
+      id: action.uuid,
+    } as SanitizedRuleAction;
+  }),
+  isSnoozedUntil: undefined,
 };
 
 export const mockTaskInstance = () => ({
@@ -219,7 +317,13 @@ export const mockTaskInstance = () => ({
   ownerId: null,
 });
 
-export const generateAlertOpts = ({ action, group, state, id }: GeneratorParams = {}) => {
+export const generateAlertOpts = ({
+  action,
+  group,
+  state,
+  id,
+  maintenanceWindowIds,
+}: GeneratorParams = {}) => {
   id = id ?? '1';
   let message: string = '';
   switch (action) {
@@ -236,16 +340,19 @@ export const generateAlertOpts = ({ action, group, state, id }: GeneratorParams 
   return {
     action,
     id,
+    uuid: expect.any(String),
     message,
     state,
     ...(group ? { group } : {}),
     flapping: false,
+    ...(maintenanceWindowIds ? { maintenanceWindowIds } : {}),
   };
 };
 
-export const generateActionOpts = ({ id, alertGroup, alertId }: GeneratorParams = {}) => ({
+export const generateActionOpts = ({ id, alertGroup, alertId, uuid }: GeneratorParams = {}) => ({
   id: id ?? '1',
   typeId: 'action',
+  uuid: uuid ?? '111-111',
   alertId: alertId ?? '1',
   alertGroup: alertGroup ?? 'default',
 });
@@ -258,6 +365,7 @@ export const generateRunnerResult = ({
   alertInstances = {},
   alertRecoveredInstances = {},
   summaryActions = {},
+  taskRunError,
 }: GeneratorParams = {}) => {
   return {
     monitoring: {
@@ -269,6 +377,7 @@ export const generateRunnerResult = ({
         history: history.map((success) => ({ success, timestamp: 0 })),
         last_run: {
           metrics: {
+            duration: 0,
             gap_duration_s: null,
             total_alerts_created: null,
             total_alerts_detected: null,
@@ -286,27 +395,34 @@ export const generateRunnerResult = ({
       ...(state && { alertInstances }),
       ...(state && { alertRecoveredInstances }),
       ...(state && { alertTypeState: {} }),
-      ...(state && { previousStartedAt: new Date('1970-01-01T00:00:00.000Z') }),
+      ...(state && { previousStartedAt: new Date('1970-01-01T00:00:00.000Z').toISOString() }),
       ...(state && { summaryActions }),
     },
+    taskRunError,
   };
 };
 
 export const generateEnqueueFunctionInput = ({
   id = '1',
+  uuid = '111-111',
   isBulk = false,
   isResolved,
   foo,
+  actionTypeId,
 }: {
+  uuid?: string;
   id: string;
   isBulk?: boolean;
   isResolved?: boolean;
   foo?: boolean;
+  actionTypeId?: string;
 }) => {
   const input = {
+    actionTypeId: actionTypeId || 'action',
     apiKey: 'MTIzOmFiYw==',
     executionId: '5f6aa57d-3e22-484e-bae8-cbed868f4d28',
     id,
+    uuid,
     params: {
       ...(isResolved !== undefined ? { isResolved } : {}),
       ...(foo !== undefined ? { foo } : {}),
@@ -316,14 +432,14 @@ export const generateEnqueueFunctionInput = ({
       {
         id: '1',
         namespace: undefined,
-        type: 'alert',
+        type: RULE_SAVED_OBJECT_TYPE,
         typeId: RULE_TYPE_ID,
       },
     ],
     source: {
       source: {
         id: '1',
-        type: 'alert',
+        type: RULE_SAVED_OBJECT_TYPE,
       },
       type: 'SAVED_OBJECT',
     },
@@ -333,21 +449,24 @@ export const generateEnqueueFunctionInput = ({
 };
 
 export const generateAlertInstance = (
-  { id, duration, start, flappingHistory, actions }: GeneratorParams = {
+  { id, duration, start, flappingHistory, actions, maintenanceWindowIds }: GeneratorParams = {
     id: 1,
     flappingHistory: [false],
   }
 ) => ({
   [String(id)]: {
     meta: {
+      uuid: expect.any(String),
       lastScheduledActions: {
-        date: new Date(DATE_1970),
+        date: new Date(DATE_1970).toISOString(),
         group: 'default',
         ...(actions && { actions }),
       },
       flappingHistory,
       flapping: false,
+      maintenanceWindowIds: maintenanceWindowIds || [],
       pendingRecoveredCount: 0,
+      activeCount: 1,
     },
     state: {
       bar: false,
@@ -358,26 +477,35 @@ export const generateAlertInstance = (
 });
 
 export const mockAAD = {
-  'kibana.alert.rule.category': 'Metric threshold',
-  'kibana.alert.rule.consumer': 'alerts',
-  'kibana.alert.rule.execution.uuid': 'c35db7cc-5bf7-46ea-b43f-b251613a5b72',
-  'kibana.alert.rule.name': 'test-rule',
-  'kibana.alert.rule.producer': 'infrastructure',
-  'kibana.alert.rule.rule_type_id': 'metrics.alert.threshold',
-  'kibana.alert.rule.uuid': '0de91960-7643-11ed-b719-bb9db8582cb6',
-  'kibana.space_ids': ['default'],
-  'kibana.alert.rule.tags': [],
   '@timestamp': '2022-12-07T15:38:43.472Z',
-  'kibana.alert.reason': 'system.cpu is 90% in the last 1 min for all hosts. Alert when > 50%.',
-  'kibana.alert.duration.us': 100000,
-  'kibana.alert.time_range': { gte: '2022-01-01T12:00:00.000Z' },
-  'kibana.alert.instance.id': '*',
-  'kibana.alert.start': '2022-12-07T15:23:13.488Z',
-  'kibana.alert.uuid': '2d3e8fe5-3e8b-4361-916e-9eaab0bf2084',
-  'kibana.alert.status': 'active',
-  'kibana.alert.workflow_status': 'open',
-  'event.kind': 'signal',
-  'event.action': 'active',
-  'kibana.version': '8.7.0',
-  'kibana.alert.flapping': false,
-};
+  event: {
+    kind: 'signal',
+    action: 'active',
+  },
+  kibana: {
+    version: '8.7.0',
+    space_ids: ['default'],
+    alert: {
+      instance: { id: '*' },
+      uuid: '2d3e8fe5-3e8b-4361-916e-9eaab0bf2084',
+      status: 'active',
+      workflow_status: 'open',
+      reason: 'system.cpu is 90% in the last 1 min for all hosts. Alert when > 50%.',
+      time_range: { gte: '2022-01-01T12:00:00.000Z' },
+      start: '2022-12-07T15:23:13.488Z',
+      duration: { us: 100000 },
+      flapping: false,
+      rule: {
+        category: 'Metric threshold',
+        consumer: 'alerts',
+        execution: { uuid: 'c35db7cc-5bf7-46ea-b43f-b251613a5b72' },
+        name: 'test-rule',
+        producer: 'infrastructure',
+        revision: 0,
+        rule_type_id: 'metrics.alert.threshold',
+        uuid: '0de91960-7643-11ed-b719-bb9db8582cb6',
+        tags: [],
+      },
+    },
+  },
+} as unknown as AlertHit;

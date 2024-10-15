@@ -4,13 +4,18 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
+import { v4 as uuidv4 } from 'uuid';
+import type { GetLensAttributes } from '../../types';
 
-import type { GetLensAttributes, LensAttributes } from '../../types';
+const layerId = uuidv4();
+// Exported for testing purposes
+export const stackByFieldAccessorId = '34919782-4546-43a5-b668-06ac934d3acd';
 
 export const getEventsHistogramLensAttributes: GetLensAttributes = (
-  stackByField = 'event.action'
-) =>
-  ({
+  stackByField,
+  extraOptions = {}
+) => {
+  return {
     title: 'Events',
     description: '',
     visualizationType: 'lnsXY',
@@ -20,19 +25,21 @@ export const getEventsHistogramLensAttributes: GetLensAttributes = (
         legend: {
           isVisible: true,
           position: 'right',
+          legendSize: 'xlarge',
+          legendStats: ['currentAndLastValue'],
         },
         valueLabels: 'hide',
         preferredSeriesType: 'bar_stacked',
         layers: [
           {
-            layerId: '0039eb0c-9a1a-4687-ae54-0f4e239bec75',
+            layerId,
             accessors: ['e09e0380-0740-4105-becc-0a4ca12e3944'],
             position: 'top',
             seriesType: 'bar_stacked',
             showGridlines: false,
             layerType: 'data',
             xAccessor: 'aac9d7d0-13a3-480a-892b-08207a787926',
-            splitAccessor: '34919782-4546-43a5-b668-06ac934d3acd',
+            splitAccessor: stackByField ? stackByFieldAccessorId : undefined,
           },
         ],
         yRightExtent: {
@@ -51,11 +58,11 @@ export const getEventsHistogramLensAttributes: GetLensAttributes = (
         query: '',
         language: 'kuery',
       },
-      filters: [],
+      filters: extraOptions.filters ?? [],
       datasourceStates: {
         formBased: {
           layers: {
-            '0039eb0c-9a1a-4687-ae54-0f4e239bec75': {
+            [layerId]: {
               columns: {
                 'aac9d7d0-13a3-480a-892b-08207a787926': {
                   label: '@timestamp',
@@ -66,6 +73,7 @@ export const getEventsHistogramLensAttributes: GetLensAttributes = (
                   scale: 'interval',
                   params: {
                     interval: 'auto',
+                    includeEmptyRows: true,
                   },
                 },
                 'e09e0380-0740-4105-becc-0a4ca12e3944': {
@@ -75,31 +83,34 @@ export const getEventsHistogramLensAttributes: GetLensAttributes = (
                   isBucketed: false,
                   scale: 'ratio',
                   sourceField: '___records___',
+                  params: { emptyAsNull: true },
                 },
-                '34919782-4546-43a5-b668-06ac934d3acd': {
-                  label: `Top values of ${stackByField}`,
-                  dataType: 'string',
-                  operationType: 'terms',
-                  scale: 'ordinal',
-                  sourceField: `${stackByField}`,
-                  isBucketed: true,
-                  params: {
-                    size: 10,
-                    orderBy: {
-                      type: 'column',
-                      columnId: 'e09e0380-0740-4105-becc-0a4ca12e3944',
-                    },
-                    orderDirection: 'desc',
-                    otherBucket: true,
-                    missingBucket: false,
-                    parentFormat: {
-                      id: 'terms',
+                ...(stackByField && {
+                  [stackByFieldAccessorId]: {
+                    label: `Top values of ${stackByField}`,
+                    dataType: 'string',
+                    operationType: 'terms',
+                    scale: 'ordinal',
+                    sourceField: `${stackByField}`,
+                    isBucketed: true,
+                    params: {
+                      size: 10,
+                      orderBy: {
+                        type: 'column',
+                        columnId: 'e09e0380-0740-4105-becc-0a4ca12e3944',
+                      },
+                      orderDirection: 'desc',
+                      otherBucket: true,
+                      missingBucket: false,
+                      parentFormat: {
+                        id: 'terms',
+                      },
                     },
                   },
-                },
+                }),
               },
               columnOrder: [
-                '34919782-4546-43a5-b668-06ac934d3acd',
+                ...(stackByField ? [stackByFieldAccessorId] : []),
                 'aac9d7d0-13a3-480a-892b-08207a787926',
                 'e09e0380-0740-4105-becc-0a4ca12e3944',
               ],
@@ -113,7 +124,8 @@ export const getEventsHistogramLensAttributes: GetLensAttributes = (
       {
         type: 'index-pattern',
         id: '{dataViewId}',
-        name: 'indexpattern-datasource-layer-0039eb0c-9a1a-4687-ae54-0f4e239bec75',
+        name: `indexpattern-datasource-layer-${layerId}`,
       },
     ],
-  } as LensAttributes);
+  };
+};

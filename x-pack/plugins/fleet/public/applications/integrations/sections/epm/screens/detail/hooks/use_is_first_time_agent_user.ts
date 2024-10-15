@@ -5,50 +5,54 @@
  * 2.0.
  */
 
-import { useEffect, useState } from 'react';
-
-import { sendGetAgentPolicies, sendGetAgents } from '../../../../../hooks';
-import { policyHasFleetServer } from '../../../../../services';
+import {
+  FLEET_SERVER_PACKAGE,
+  LEGACY_PACKAGE_POLICY_SAVED_OBJECT_TYPE,
+} from '../../../../../../../../common/constants';
+import { useAuthz, useGetAgentsQuery, useGetPackagePoliciesQuery } from '../../../../../hooks';
 
 interface UseIsFirstTimeAgentUserResponse {
-  isLoading: boolean;
   isFirstTimeAgentUser?: boolean;
+  isLoading?: boolean;
 }
 
-export const useIsFirstTimeAgentUser = (): UseIsFirstTimeAgentUserResponse => {
-  const [result, setResult] = useState<UseIsFirstTimeAgentUserResponse>({ isLoading: true });
-  useEffect(() => {
-    if (!result.isLoading) {
-      return;
+export const useIsFirstTimeAgentUserQuery = (): UseIsFirstTimeAgentUserResponse => {
+  const authz = useAuthz();
+  const {
+    data: packagePolicies,
+    isLoading: areAgentPoliciesLoading,
+    isFetched: areAgentsFetched,
+  } = useGetPackagePoliciesQuery(
+    {
+      kuery: `${LEGACY_PACKAGE_POLICY_SAVED_OBJECT_TYPE}.package.name:${FLEET_SERVER_PACKAGE}`,
+    },
+    {
+      enabled: authz.fleet.readAgentPolicies,
     }
+  );
 
-    const getIsFirstTimeAgentUser = async () => {
-      const { data: agentPoliciesData } = await sendGetAgentPolicies({
-        full: true,
-      });
+  const policyIds = [...new Set(packagePolicies?.items.flatMap((item) => item.policy_ids) ?? [])];
 
-      // now get all agents that are NOT part of a fleet server policy
-      const serverPolicyIdsQuery = (agentPoliciesData?.items || [])
-        .filter((item) => policyHasFleetServer(item))
-        .map((p) => `policy_id:${p.id}`)
-        .join(' or ');
+  // now get all agents that are NOT part of a fleet server policy
+  const serverPolicyIdsQuery = policyIds.map((policyId) => `policy_id:"${policyId}"`).join(' or ');
 
-      // get agents that are not unenrolled and not fleet server
-      const kuery =
-        `not (_exists_:"unenrolled_at")` +
-        (serverPolicyIdsQuery.length ? ` and not (${serverPolicyIdsQuery})` : '');
+  // get agents that are not unenrolled and not fleet server
+  const kuery =
+    `not (_exists_:"unenrolled_at")` +
+    (serverPolicyIdsQuery.length ? ` and not (${serverPolicyIdsQuery})` : '');
 
-      const { data: agentStatusData } = await sendGetAgents({
-        page: 1,
-        perPage: 1, // we only need to know if there is at least one non-fleet agent
-        showInactive: true,
-        kuery,
-      });
-      setResult({ isLoading: false, isFirstTimeAgentUser: agentStatusData?.total === 0 });
-    };
+  const { data: agents, isLoading: areAgentsLoading } = useGetAgentsQuery(
+    {
+      page: 1,
+      perPage: 1, // we only need to know if there is at least one non-fleet agent
+      showInactive: true,
+      kuery,
+    },
+    { enabled: areAgentsFetched } // don't run the query until agent policies are loaded
+  );
 
-    getIsFirstTimeAgentUser();
-  }, [result]);
-
-  return result;
+  return {
+    isLoading: authz.fleet.readAgentPolicies && (areAgentPoliciesLoading || areAgentsLoading),
+    isFirstTimeAgentUser: authz.fleet.readAgentPolicies && agents?.data?.total === 0,
+  };
 };

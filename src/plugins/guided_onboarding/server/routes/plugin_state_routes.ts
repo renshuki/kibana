@@ -1,14 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { IRouter, SavedObjectsClient } from '@kbn/core/server';
 import { schema } from '@kbn/config-schema';
 import { GuideState } from '@kbn/guided-onboarding';
+import { guideStateSavedObjectsType, pluginStateSavedObjectsType } from '../saved_objects';
 import { getPluginState, updatePluginStatus } from '../helpers/plugin_state_utils';
 import { API_BASE_PATH } from '../../common';
 import { updateGuideState } from '../helpers';
@@ -21,7 +23,9 @@ export const registerGetPluginStateRoute = (router: IRouter) => {
     },
     async (context, request, response) => {
       const coreContext = await context.core;
-      const savedObjectsClient = coreContext.savedObjects.client as SavedObjectsClient;
+      const savedObjectsClient = coreContext.savedObjects.getClient({
+        includedHiddenTypes: [pluginStateSavedObjectsType, guideStateSavedObjectsType],
+      }) as SavedObjectsClient;
       const pluginState = await getPluginState(savedObjectsClient);
       return response.ok({
         body: {
@@ -50,6 +54,8 @@ export const registerPutPluginStateRoute = (router: IRouter) => {
                   id: schema.string(),
                 })
               ),
+              // params are dynamic values
+              params: schema.maybe(schema.object({}, { unknowns: 'allow' })),
             })
           ),
         }),
@@ -59,7 +65,9 @@ export const registerPutPluginStateRoute = (router: IRouter) => {
       const { status, guide } = request.body as { status?: string; guide?: GuideState };
 
       const coreContext = await context.core;
-      const savedObjectsClient = coreContext.savedObjects.client as SavedObjectsClient;
+      const savedObjectsClient = coreContext.savedObjects.getClient({
+        includedHiddenTypes: [pluginStateSavedObjectsType, guideStateSavedObjectsType],
+      }) as SavedObjectsClient;
 
       if (status) {
         await updatePluginStatus(savedObjectsClient, status);

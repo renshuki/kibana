@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -19,7 +20,7 @@ describe('EmptyViewerState', () => {
       <EmptyViewerState
         isReadOnly={false}
         viewerStatus={ViewerStatus.ERROR}
-        onCreateExceptionListItem={jest.fn()}
+        onEmptyButtonStateClick={jest.fn()}
       />
     );
 
@@ -34,7 +35,7 @@ describe('EmptyViewerState', () => {
       <EmptyViewerState
         isReadOnly={false}
         viewerStatus={ViewerStatus.ERROR}
-        onCreateExceptionListItem={jest.fn()}
+        onEmptyButtonStateClick={jest.fn()}
         title="Error title"
         body="Error body"
       />
@@ -49,7 +50,7 @@ describe('EmptyViewerState', () => {
       <EmptyViewerState
         isReadOnly={false}
         viewerStatus={ViewerStatus.LOADING}
-        onCreateExceptionListItem={jest.fn()}
+        onEmptyButtonStateClick={jest.fn()}
       />
     );
 
@@ -60,7 +61,7 @@ describe('EmptyViewerState', () => {
       <EmptyViewerState
         isReadOnly={false}
         viewerStatus={ViewerStatus.EMPTY_SEARCH}
-        onCreateExceptionListItem={jest.fn()}
+        onEmptyButtonStateClick={jest.fn()}
       />
     );
 
@@ -77,7 +78,7 @@ describe('EmptyViewerState', () => {
       <EmptyViewerState
         isReadOnly={false}
         viewerStatus={ViewerStatus.EMPTY_SEARCH}
-        onCreateExceptionListItem={jest.fn()}
+        onEmptyButtonStateClick={jest.fn()}
         title="Empty search title"
         body="Empty search body"
       />
@@ -92,7 +93,7 @@ describe('EmptyViewerState', () => {
       <EmptyViewerState
         isReadOnly={false}
         viewerStatus={ViewerStatus.EMPTY}
-        onCreateExceptionListItem={jest.fn()}
+        onEmptyButtonStateClick={jest.fn()}
         body="There are no endpoint exceptions."
         buttonText="Add endpoint exception"
       />
@@ -108,7 +109,7 @@ describe('EmptyViewerState', () => {
       <EmptyViewerState
         isReadOnly={false}
         viewerStatus={ViewerStatus.EMPTY}
-        onCreateExceptionListItem={jest.fn()}
+        onEmptyButtonStateClick={jest.fn()}
       />
     );
 
@@ -125,7 +126,7 @@ describe('EmptyViewerState', () => {
       <EmptyViewerState
         isReadOnly={false}
         viewerStatus={ViewerStatus.EMPTY}
-        onCreateExceptionListItem={jest.fn()}
+        onEmptyButtonStateClick={jest.fn()}
         listType={ListTypeText.ENDPOINT}
       />
     );
@@ -143,7 +144,7 @@ describe('EmptyViewerState', () => {
       <EmptyViewerState
         isReadOnly={true}
         viewerStatus={ViewerStatus.EMPTY}
-        onCreateExceptionListItem={jest.fn()}
+        onEmptyButtonStateClick={jest.fn()}
         listType={ListTypeText.ENDPOINT}
       />
     );

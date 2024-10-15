@@ -1,28 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { ExpressionFunction } from '@kbn/expressions-plugin/common';
 import { PresentationUtilPlugin } from './plugin';
-import { pluginServices } from './services';
 
-export type {
-  PresentationCapabilitiesService,
-  PresentationDashboardsService,
-  PresentationLabsService,
-} from './services';
-
-export type {
-  KibanaPluginServiceFactory,
-  PluginServiceFactory,
-  PluginServiceProviders,
-  KibanaPluginServiceParams,
-} from './services/create';
-export { PluginServices, PluginServiceProvider, PluginServiceRegistry } from './services/create';
+export type { PresentationLabsService } from './services/presentation_labs_service';
 
 export type { PresentationUtilPluginSetup, PresentationUtilPluginStart } from './types';
 export type { SaveModalDashboardProps } from './components/types';
@@ -36,41 +24,26 @@ export {
   withSuspense,
   LazyDataViewPicker,
   LazyFieldPicker,
+  FloatingActions,
+  type DashboardDrilldownOptions,
+  DashboardDrilldownOptionsComponent,
+  DEFAULT_DASHBOARD_DRILLDOWN_OPTIONS,
 } from './components';
 
 export {
-  useReduxEmbeddableContext,
-  lazyLoadReduxEmbeddablePackage,
+  lazyLoadReduxToolsPackage,
   cleanFiltersForSerialize,
   type ReduxEmbeddableState,
   type ReduxEmbeddableTools,
-  type ReduxEmbeddablePackage,
-} from './redux_embeddables';
+  type ReduxTools,
+  type ReduxToolsPackage,
+} from './redux_tools';
 
 export type {
   ExpressionInputEditorRef,
   ExpressionInputProps,
   OnExpressionInputEditorDidMount,
 } from './components/types';
-
-/** @deprecated QuickButtonProps - use `IconButtonGroupProps` from `@kbn/shared-ux-button-toolbar` */
-export type { QuickButtonProps } from './components/solution_toolbar';
-
-export {
-  /** @deprecated AddFromLibraryButton  - use `AddFromLibraryButton` from `@kbn/shared-ux-button-toolbar` */
-  AddFromLibraryButton,
-  /** @deprecated PrimaryActionButton  - use `PrimaryButton` from `@kbn/shared-ux-button-toolbar` */
-  PrimaryActionButton,
-  /** @deprecated SolutionToolbarPopover  - use `ToolbarPopover` from `@kbn/shared-ux-button-toolbar` */
-  PrimaryActionPopover,
-  /** @deprecated QuickButtonGroup  - use `IconButtonGroup` from `@kbn/shared-ux-button-toolbar` */
-  QuickButtonGroup,
-  SolutionToolbar,
-  /** @deprecated SolutionToolbarButton  - use `PrimaryButton` from `@kbn/shared-ux-button-toolbar` */
-  SolutionToolbarButton,
-  /** @deprecated SolutionToolbarPopover  - use `ToolbarPopover` from `@kbn/shared-ux-button-toolbar` */
-  SolutionToolbarPopover,
-} from './components/solution_toolbar';
 
 /**
  * Register a set of Expression Functions with the Presentation Utility ExpressionInput.  This allows
@@ -88,7 +61,3 @@ export const registerExpressionsLanguage = async (expressionFunctions: Expressio
 export function plugin() {
   return new PresentationUtilPlugin();
 }
-
-export const useLabs = () => (() => pluginServices.getHooks().labs.useService())();
-
-export const getContextProvider = () => pluginServices.getContextProvider();

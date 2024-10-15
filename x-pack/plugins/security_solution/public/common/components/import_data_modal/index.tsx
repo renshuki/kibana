@@ -5,6 +5,8 @@
  * 2.0.
  */
 
+import React, { useCallback, useMemo, useState } from 'react';
+import type { EuiFilePickerProps } from '@elastic/eui';
 import {
   EuiButton,
   EuiButtonEmpty,
@@ -17,8 +19,9 @@ import {
   EuiModalHeaderTitle,
   EuiSpacer,
   EuiText,
+  htmlIdGenerator,
 } from '@elastic/eui';
-import React, { useCallback, useState } from 'react';
+import type { WarningSchema } from '../../../../common/api/detection_engine';
 
 import type {
   ImportDataResponse,
@@ -27,6 +30,7 @@ import type {
 import { useAppToasts } from '../../hooks/use_app_toasts';
 import * as i18n from './translations';
 import { showToasterMessage } from './utils';
+import { ActionConnectorWarnings } from './action_connectors_warning';
 
 interface ImportDataModalProps {
   checkBoxLabel: string;
@@ -43,6 +47,7 @@ interface ImportDataModalProps {
   subtitle: string;
   successMessage: (totalCount: number) => string;
   title: string;
+  showActionConnectorsCheckBox?: boolean;
 }
 
 /**
@@ -59,6 +64,7 @@ export const ImportDataModalComponent = ({
   importData,
   showCheckBox = true,
   showExceptionsCheckBox = false,
+  showActionConnectorsCheckBox = false,
   showModal,
   submitBtnText,
   subtitle,
@@ -69,15 +75,37 @@ export const ImportDataModalComponent = ({
   const [isImporting, setIsImporting] = useState(false);
   const [overwrite, setOverwrite] = useState(false);
   const [overwriteExceptions, setOverwriteExceptions] = useState(false);
+  const [overwriteActionConnectors, setOverwriteActionConnectors] = useState(false);
   const { addError, addSuccess } = useAppToasts();
+  const [actionConnectorsWarnings, setActionConnectorsWarnings] = useState<WarningSchema[] | []>(
+    []
+  );
+  const descriptionElementId = useMemo(() => htmlIdGenerator()(), []);
 
+  const [importedActionConnectorsCount, setImportedActionConnectorsCount] = useState<
+    number | undefined
+  >(0);
   const cleanupAndCloseModal = useCallback(() => {
-    setIsImporting(false);
-    setSelectedFiles(null);
     closeModal();
     setOverwrite(false);
     setOverwriteExceptions(false);
-  }, [setIsImporting, setSelectedFiles, closeModal, setOverwrite, setOverwriteExceptions]);
+    setOverwriteActionConnectors(false);
+    setActionConnectorsWarnings([]);
+  }, [closeModal, setOverwrite, setOverwriteExceptions]);
+
+  const onImportComplete = useCallback(
+    (callCleanup: boolean) => {
+      setIsImporting(false);
+      setSelectedFiles(null);
+      importComplete();
+
+      if (callCleanup) {
+        importComplete();
+        cleanupAndCloseModal();
+      }
+    },
+    [cleanupAndCloseModal, importComplete]
+  );
 
   const importDataCallback = useCallback(async () => {
     if (selectedFiles != null) {
@@ -85,25 +113,28 @@ export const ImportDataModalComponent = ({
       const abortCtrl = new AbortController();
 
       try {
-        const importResponse = await importData({
+        const { action_connectors_warnings: warnings, ...importResponse } = await importData({
           fileToImport: selectedFiles[0],
           overwrite,
           overwriteExceptions,
+          overwriteActionConnectors,
           signal: abortCtrl.signal,
         });
+        const connectorsCount = importResponse.action_connectors_success_count;
+        setActionConnectorsWarnings(warnings as WarningSchema[]);
+        setImportedActionConnectorsCount(connectorsCount);
 
         showToasterMessage({
           importResponse,
           exceptionsIncluded: showExceptionsCheckBox,
+          actionConnectorsIncluded: showActionConnectorsCheckBox,
           successMessage,
           errorMessage,
           errorMessageDetailed: failedDetailed,
           addError,
           addSuccess,
         });
-
-        importComplete();
-        cleanupAndCloseModal();
+        onImportComplete(!warnings?.length);
       } catch (error) {
         cleanupAndCloseModal();
         addError(error, { title: errorMessage(1) });
@@ -114,13 +145,15 @@ export const ImportDataModalComponent = ({
     importData,
     overwrite,
     overwriteExceptions,
+    overwriteActionConnectors,
     showExceptionsCheckBox,
     successMessage,
     errorMessage,
     failedDetailed,
     addError,
     addSuccess,
-    importComplete,
+    showActionConnectorsCheckBox,
+    onImportComplete,
     cleanupAndCloseModal,
   ]);
 
@@ -136,6 +169,17 @@ export const ImportDataModalComponent = ({
     setOverwriteExceptions((shouldOverwrite) => !shouldOverwrite);
   }, []);
 
+  const handleActionConnectorsCheckboxClick = useCallback(() => {
+    setOverwriteActionConnectors((shouldOverwrite) => !shouldOverwrite);
+  }, []);
+
+  const handleFilePickerChange: EuiFilePickerProps['onChange'] = useCallback(
+    (files: FileList | null) => {
+      setSelectedFiles(files && files.length > 0 ? files : null);
+    },
+    []
+  );
+
   return (
     <>
       {showModal && (
@@ -146,7 +190,7 @@ export const ImportDataModalComponent = ({
 
           <EuiModalBody>
             <EuiText size="s">
-              <h4>{description}</h4>
+              <h4 id={descriptionElementId}>{description}</h4>
             </EuiText>
 
             <EuiSpacer size="s" />
@@ -155,30 +199,46 @@ export const ImportDataModalComponent = ({
               accept=".ndjson"
               id="rule-file-picker"
               initialPromptText={subtitle}
-              onChange={(files: FileList | null) => {
-                setSelectedFiles(files && files.length > 0 ? files : null);
-              }}
+              onChange={handleFilePickerChange}
               display={'large'}
               fullWidth={true}
               isLoading={isImporting}
+              aria-labelledby={descriptionElementId}
             />
             <EuiSpacer size="s" />
+
+            <ActionConnectorWarnings
+              actionConnectorsWarnings={actionConnectorsWarnings}
+              importedActionConnectorsCount={importedActionConnectorsCount}
+            />
+
+            <EuiSpacer size="s" />
+
             {showCheckBox && (
               <>
                 <EuiCheckbox
-                  data-test-subj="import-data-modal-checkbox-label"
-                  id="import-data-modal-checkbox-label"
+                  data-test-subj="importDataModalCheckboxLabel"
+                  id="importDataModalCheckboxLabel"
                   label={checkBoxLabel}
                   checked={overwrite}
                   onChange={handleCheckboxClick}
                 />
                 {showExceptionsCheckBox && (
                   <EuiCheckbox
-                    data-test-subj="import-data-modal-exceptions-checkbox-label"
-                    id="import-data-modal-exceptions-checkbox-label"
+                    data-test-subj="importDataModalExceptionsCheckboxLabel"
+                    id="importDataModalExceptionsCheckboxLabel"
                     label={i18n.OVERWRITE_EXCEPTIONS_LABEL}
                     checked={overwriteExceptions}
                     onChange={handleExceptionsCheckboxClick}
+                  />
+                )}
+                {showActionConnectorsCheckBox && (
+                  <EuiCheckbox
+                    data-test-subj="importDataModalActionConnectorsCheckbox"
+                    id="importDataModalActionConnectorsCheckbox"
+                    label={i18n.OVERWRITE_ACTION_CONNECTORS_LABEL}
+                    checked={overwriteActionConnectors}
+                    onChange={handleActionConnectorsCheckboxClick}
                   />
                 )}
               </>

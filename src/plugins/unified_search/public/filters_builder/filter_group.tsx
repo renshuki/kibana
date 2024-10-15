@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useContext } from 'react';
@@ -17,7 +18,7 @@ import {
   useEuiPaddingSize,
 } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
-import { type Filter, BooleanRelation } from '@kbn/es-query';
+import { BooleanRelation, type Filter } from '@kbn/es-query';
 import { cx } from '@emotion/css';
 import type { Path } from './types';
 import { getBooleanRelationType } from '../utils';
@@ -44,6 +45,7 @@ export interface FilterGroupProps {
   /** @internal used for recursive rendering **/
   renderedLevel?: number;
   reverseBackground?: boolean;
+  filtersCount?: number;
 }
 
 /** @internal **/
@@ -75,19 +77,28 @@ export const FilterGroup = ({
   path,
   reverseBackground = false,
   renderedLevel = 0,
+  filtersCount,
 }: FilterGroupProps) => {
   const {
     globalParams: { maxDepth, hideOr },
   } = useContext(FiltersBuilderContextType);
 
   const pathInArray = getPathInArray(path);
-  const isDepthReached = maxDepth <= pathInArray.length;
+  const isDepthReached = maxDepth <= pathInArray.length && renderedLevel > 0;
   const orDisabled = hideOr || (isDepthReached && booleanRelation === BooleanRelation.AND);
   const andDisabled = isDepthReached && booleanRelation === BooleanRelation.OR;
 
-  const removeDisabled = pathInArray.length <= 1 && filters.length === 1;
+  const removeDisabled =
+    pathInArray.length <= 1 &&
+    filters !== undefined &&
+    Array.isArray(filters) &&
+    filters.length === 1;
   const shouldNormalizeFirstLevel =
-    !path && filters.length === 1 && getBooleanRelationType(filters[0]);
+    !path &&
+    filters &&
+    Array.isArray(filters) &&
+    filters.length === 1 &&
+    getBooleanRelationType(filters[0]);
 
   if (shouldNormalizeFirstLevel) {
     reverseBackground = true;
@@ -96,38 +107,42 @@ export const FilterGroup = ({
 
   const color = reverseBackground ? 'plain' : 'subdued';
 
-  const renderedFilters = filters.map((filter, index, arrayRef) => {
-    const showDelimiter = booleanRelation && index + 1 < arrayRef.length;
-    return (
-      <EuiFlexGroup
-        key={index}
-        direction="column"
-        gutterSize={shouldNormalizeFirstLevel ? 'none' : 'xs'}
-        responsive={false}
-      >
-        <EuiFlexItem>
-          <FilterItem
-            filter={filter}
-            draggable={arrayRef.length !== 1}
-            path={`${path}${path ? '.' : ''}${index}`}
-            reverseBackground={reverseBackground}
-            disableOr={orDisabled}
-            disableAnd={andDisabled}
-            disableRemove={removeDisabled}
-            color={color}
-            index={index}
-            renderedLevel={renderedLevel}
-          />
-        </EuiFlexItem>
-
-        {showDelimiter && (
+  const renderedFilters =
+    filters &&
+    Array.isArray(filters) &&
+    filters.map((filter, index, arrayRef) => {
+      const showDelimiter = booleanRelation && index + 1 < arrayRef.length;
+      return (
+        <EuiFlexGroup
+          key={index}
+          direction="column"
+          gutterSize={shouldNormalizeFirstLevel ? 'none' : 'xs'}
+          responsive={false}
+        >
           <EuiFlexItem>
-            <Delimiter color={color} booleanRelation={booleanRelation} />
+            <FilterItem
+              filter={filter}
+              draggable={arrayRef.length !== 1}
+              path={`${path}${path ? '.' : ''}${index}`}
+              reverseBackground={reverseBackground}
+              disableOr={orDisabled}
+              disableAnd={andDisabled}
+              disableRemove={removeDisabled}
+              color={color}
+              index={index}
+              renderedLevel={renderedLevel}
+              filtersCount={filtersCount}
+            />
           </EuiFlexItem>
-        )}
-      </EuiFlexGroup>
-    );
-  });
+
+          {showDelimiter && (
+            <EuiFlexItem>
+              <Delimiter color={color} booleanRelation={booleanRelation} />
+            </EuiFlexItem>
+          )}
+        </EuiFlexGroup>
+      );
+    });
 
   return shouldNormalizeFirstLevel ? (
     <>{renderedFilters}</>

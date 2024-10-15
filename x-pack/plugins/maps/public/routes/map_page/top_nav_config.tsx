@@ -9,7 +9,6 @@ import React from 'react';
 import { i18n } from '@kbn/i18n';
 import { Adapters } from '@kbn/inspector-plugin/public';
 import {
-  checkForDuplicateTitle,
   SavedObjectSaveModalOrigin,
   OnSaveProps,
   showSaveModal,
@@ -22,16 +21,13 @@ import { ScopedHistory } from '@kbn/core/public';
 import {
   getNavigateToApp,
   getMapsCapabilities,
-  getIsAllowByValueEmbeddables,
   getInspector,
-  getSavedObjectsClient,
   getCoreOverlays,
   getSavedObjectsTagging,
-  getPresentationUtilContext,
 } from '../../kibana_services';
-import { MAP_SAVED_OBJECT_TYPE } from '../../../common/constants';
+import { MAP_EMBEDDABLE_NAME } from '../../../common/constants';
 import { SavedMap } from './saved_map';
-import { getMapEmbeddableDisplayName } from '../../../common/i18n_getters';
+import { checkForDuplicateTitle } from '../../content_management';
 
 const SavedObjectSaveModalDashboard = withSuspense(LazySavedObjectSaveModalDashboard);
 
@@ -58,7 +54,7 @@ export function getTopNavConfig({
     {
       id: 'mapSettings',
       label: i18n.translate('xpack.maps.topNav.openSettingsButtonLabel', {
-        defaultMessage: `Map settings`,
+        defaultMessage: `Settings`,
       }),
       description: i18n.translate('xpack.maps.topNav.openSettingsDescription', {
         defaultMessage: `Open map settings`,
@@ -153,16 +149,17 @@ export function getTopNavConfig({
         }
       },
       run: () => {
-        let selectedTags = savedMap.getTags();
-        function onTagsSelected(newTags: string[]) {
-          selectedTags = newTags;
+        let tags = savedMap.getTags();
+        function onTagsSelected(nextTags: string[]) {
+          tags = nextTags;
         }
 
         const savedObjectsTagging = getSavedObjectsTagging();
         const tagSelector = savedObjectsTagging ? (
           <savedObjectsTagging.ui.components.SavedObjectSaveModalTagSelector
-            initialSelection={selectedTags}
+            initialSelection={tags}
             onTagsSelected={onTagsSelected}
+            markOptional
           />
         ) : undefined;
 
@@ -180,13 +177,11 @@ export function getTopNavConfig({
                   title: props.newTitle,
                   copyOnSave: props.newCopyOnSave,
                   lastSavedTitle: savedMap.getSavedObjectId() ? savedMap.getTitle() : '',
-                  getEsType: () => MAP_SAVED_OBJECT_TYPE,
-                  getDisplayName: getMapEmbeddableDisplayName,
+                  isTitleDuplicateConfirmed: props.isTitleDuplicateConfirmed,
+                  getDisplayName: () => MAP_EMBEDDABLE_NAME,
+                  onTitleDuplicate: props.onTitleDuplicate,
                 },
-                props.isTitleDuplicateConfirmed,
-                props.onTitleDuplicate,
                 {
-                  savedObjectsClient: getSavedObjectsClient(),
                   overlays: getCoreOverlays(),
                 }
               );
@@ -197,7 +192,7 @@ export function getTopNavConfig({
 
             await savedMap.save({
               ...props,
-              newTags: selectedTags,
+              tags,
               saveByReference: props.addToLibrary,
               history,
             });
@@ -214,11 +209,10 @@ export function getTopNavConfig({
             defaultMessage: 'map',
           }),
         };
-        const PresentationUtilContext = getPresentationUtilContext();
 
         let saveModal;
 
-        if (savedMap.hasOriginatingApp() || !getIsAllowByValueEmbeddables()) {
+        if (savedMap.hasOriginatingApp()) {
           saveModal = (
             <SavedObjectSaveModalOrigin
               {...saveModalProps}
@@ -243,12 +237,19 @@ export function getTopNavConfig({
             <SavedObjectSaveModalDashboard
               {...saveModalProps}
               canSaveByReference={true} // we know here that we have save capabilities.
+              mustCopyOnSaveMessage={
+                savedMap.isManaged()
+                  ? i18n.translate('xpack.maps.topNav.mustCopyOnSaveMessage', {
+                      defaultMessage: 'Elastic manages this map. Save any changes to a new map.',
+                    })
+                  : undefined
+              }
               tagOptions={tagSelector}
             />
           );
         }
 
-        showSaveModal(saveModal, PresentationUtilContext);
+        showSaveModal(saveModal);
       },
     });
 

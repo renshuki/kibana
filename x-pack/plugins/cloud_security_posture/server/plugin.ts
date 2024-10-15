@@ -6,26 +6,31 @@
  */
 
 import type {
-  KibanaRequest,
-  RequestHandlerContext,
   PluginInitializerContext,
   CoreSetup,
   CoreStart,
   Plugin,
   Logger,
+  SavedObjectsClientContract,
 } from '@kbn/core/server';
 import type { DeepReadonly } from 'utility-types';
 import type {
   PostDeletePackagePoliciesResponse,
   PackagePolicy,
   NewPackagePolicy,
+  UpdatePackagePolicy,
 } from '@kbn/fleet-plugin/common';
 import type {
   TaskManagerSetupContract,
   TaskManagerStartContract,
 } from '@kbn/task-manager-plugin/server';
+import type {
+  CspBenchmarkRule,
+  CspSettings,
+} from '@kbn/cloud-security-posture-common/schema/rules/latest';
 import { isCspPackage } from '../common/utils/helpers';
 import { isSubscriptionAllowed } from '../common/utils/subscription';
+import { cleanupCredentials } from '../common/utils/helpers';
 import type {
   CspServerPluginSetup,
   CspServerPluginStart,
@@ -34,13 +39,10 @@ import type {
   CspServerPluginStartServices,
 } from './types';
 import { setupRoutes } from './routes/setup_routes';
-import { setupSavedObjects } from './saved_objects';
+import { cspBenchmarkRule, cspSettings } from './saved_objects';
 import { initializeCspIndices } from './create_indices/create_indices';
 import { initializeCspTransforms } from './create_transforms/create_transforms';
-import {
-  isCspPackagePolicyInstalled,
-  onPackagePolicyPostCreateCallback,
-} from './fleet_integration/fleet_integration';
+import { isCspPackagePolicyInstalled } from './fleet_integration/fleet_integration';
 import { CLOUD_SECURITY_POSTURE_PACKAGE_NAME } from '../common/constants';
 import {
   removeFindingsStatsTask,
@@ -48,6 +50,7 @@ import {
   setupFindingsStatsTask,
 } from './tasks/findings_stats_task';
 import { registerCspmUsageCollector } from './lib/telemetry/collectors/register';
+import { CloudSecurityPostureConfig } from './config';
 
 export class CspPlugin
   implements
@@ -59,6 +62,7 @@ export class CspPlugin
     >
 {
   private readonly logger: Logger;
+  private readonly config: CloudSecurityPostureConfig;
   private isCloudEnabled?: boolean;
 
   /**
@@ -68,15 +72,17 @@ export class CspPlugin
    */
   #isInitialized: boolean = false;
 
-  constructor(initializerContext: PluginInitializerContext) {
+  constructor(initializerContext: PluginInitializerContext<CloudSecurityPostureConfig>) {
     this.logger = initializerContext.logger.get();
+    this.config = initializerContext.config.get();
   }
 
   public setup(
     core: CoreSetup<CspServerPluginStartDeps, CspServerPluginStart>,
     plugins: CspServerPluginSetupDeps
   ): CspServerPluginSetup {
-    setupSavedObjects(core.savedObjects);
+    core.savedObjects.registerType<CspBenchmarkRule>(cspBenchmarkRule);
+    core.savedObjects.registerType<CspSettings>(cspSettings);
 
     setupRoutes({
       core,
@@ -86,7 +92,7 @@ export class CspPlugin
 
     const coreStartServices = core.getStartServices();
     this.setupCspTasks(plugins.taskManager, coreStartServices, this.logger);
-    registerCspmUsageCollector(this.logger, plugins.usageCollection);
+    registerCspmUsageCollector(this.logger, coreStartServices, plugins.usageCollection);
 
     this.isCloudEnabled = plugins.cloud.isCloudEnabled;
 
@@ -94,76 +100,102 @@ export class CspPlugin
   }
 
   public start(core: CoreStart, plugins: CspServerPluginStartDeps): CspServerPluginStart {
-    plugins.fleet.fleetSetupCompleted().then(async () => {
-      const packageInfo = await plugins.fleet.packageService.asInternalUser.getInstallation(
-        CLOUD_SECURITY_POSTURE_PACKAGE_NAME
-      );
+    plugins.fleet
+      .fleetSetupCompleted()
+      .then(async () => {
+        const packageInfo = await plugins.fleet.packageService.asInternalUser.getInstallation(
+          CLOUD_SECURITY_POSTURE_PACKAGE_NAME
+        );
 
-      // If package is installed we want to make sure all needed assets are installed
-      if (packageInfo) {
-        // noinspection ES6MissingAwait
-        this.initialize(core, plugins.taskManager);
-      }
-
-      plugins.fleet.registerExternalCallback(
-        'packagePolicyCreate',
-        async (
-          packagePolicy: NewPackagePolicy,
-          _context: RequestHandlerContext,
-          _request: KibanaRequest
-        ): Promise<NewPackagePolicy> => {
-          const license = await plugins.licensing.refresh();
-          if (isCspPackage(packagePolicy.package?.name)) {
-            if (!isSubscriptionAllowed(this.isCloudEnabled, license)) {
-              throw new Error(
-                'To use this feature you must upgrade your subscription or start a trial'
-              );
-            }
-          }
-
-          return packagePolicy;
+        // If package is installed we want to make sure all needed assets are installed
+        if (packageInfo) {
+          this.initialize(core, plugins.taskManager).catch(() => {});
         }
-      );
 
-      plugins.fleet.registerExternalCallback(
-        'packagePolicyPostCreate',
-        async (
-          packagePolicy: PackagePolicy,
-          context: RequestHandlerContext,
-          _: KibanaRequest
-        ): Promise<PackagePolicy> => {
-          if (isCspPackage(packagePolicy.package?.name)) {
-            await this.initialize(core, plugins.taskManager);
-            const soClient = (await context.core).savedObjects.client;
-            await onPackagePolicyPostCreateCallback(this.logger, packagePolicy, soClient);
+        plugins.fleet.registerExternalCallback(
+          'packagePolicyCreate',
+          async (packagePolicy: NewPackagePolicy): Promise<NewPackagePolicy> => {
+            const license = await plugins.licensing.getLicense();
+            if (isCspPackage(packagePolicy.package?.name)) {
+              if (!isSubscriptionAllowed(this.isCloudEnabled, license)) {
+                throw new Error(
+                  'To use this feature you must upgrade your subscription or start a trial'
+                );
+              }
+
+              if (!isSingleEnabledInput(packagePolicy.inputs)) {
+                throw new Error('Only one enabled input is allowed per policy');
+              }
+            }
 
             return packagePolicy;
           }
+        );
 
-          return packagePolicy;
-        }
-      );
+        plugins.fleet.registerExternalCallback(
+          'packagePolicyCreate',
+          async (
+            packagePolicy: NewPackagePolicy,
+            soClient: SavedObjectsClientContract
+          ): Promise<NewPackagePolicy> => {
+            if (isCspPackage(packagePolicy.package?.name)) {
+              return cleanupCredentials(packagePolicy);
+            }
 
-      plugins.fleet.registerExternalCallback(
-        'packagePolicyPostDelete',
-        async (deletedPackagePolicies: DeepReadonly<PostDeletePackagePoliciesResponse>) => {
-          for (const deletedPackagePolicy of deletedPackagePolicies) {
-            if (isCspPackage(deletedPackagePolicy.package?.name)) {
-              const soClient = core.savedObjects.createInternalRepository();
-              const packagePolicyService = plugins.fleet.packagePolicyService;
-              const isPackageExists = await isCspPackagePolicyInstalled(
-                packagePolicyService,
-                soClient,
-                this.logger
-              );
-              if (!isPackageExists) {
-                await this.uninstallResources(plugins.taskManager, this.logger);
+            return packagePolicy;
+          }
+        );
+
+        plugins.fleet.registerExternalCallback(
+          'packagePolicyUpdate',
+          async (
+            packagePolicy: UpdatePackagePolicy,
+            soClient: SavedObjectsClientContract
+          ): Promise<UpdatePackagePolicy> => {
+            if (isCspPackage(packagePolicy.package?.name)) {
+              return cleanupCredentials(packagePolicy);
+            }
+
+            return packagePolicy;
+          }
+        );
+
+        plugins.fleet.registerExternalCallback(
+          'packagePolicyPostCreate',
+          async (
+            packagePolicy: PackagePolicy,
+            soClient: SavedObjectsClientContract
+          ): Promise<PackagePolicy> => {
+            if (isCspPackage(packagePolicy.package?.name)) {
+              await this.initialize(core, plugins.taskManager);
+              return packagePolicy;
+            }
+
+            return packagePolicy;
+          }
+        );
+
+        plugins.fleet.registerExternalCallback(
+          'packagePolicyPostDelete',
+          async (deletedPackagePolicies: DeepReadonly<PostDeletePackagePoliciesResponse>) => {
+            for (const deletedPackagePolicy of deletedPackagePolicies) {
+              if (isCspPackage(deletedPackagePolicy.package?.name)) {
+                const soClient = core.savedObjects.createInternalRepository();
+                const packagePolicyService = plugins.fleet.packagePolicyService;
+                const isPackageExists = await isCspPackagePolicyInstalled(
+                  packagePolicyService,
+                  soClient,
+                  this.logger
+                );
+                if (!isPackageExists) {
+                  await this.uninstallResources(plugins.taskManager, this.logger);
+                }
               }
             }
           }
-        }
-      );
-    });
+        );
+      })
+      .catch(() => {}); // it shouldn't reject, but just in case
 
     return {};
   }
@@ -176,7 +208,7 @@ export class CspPlugin
   async initialize(core: CoreStart, taskManager: TaskManagerStartContract): Promise<void> {
     this.logger.debug('initialize');
     const esClient = core.elasticsearch.client.asInternalUser;
-    await initializeCspIndices(esClient, this.logger);
+    await initializeCspIndices(esClient, this.config, this.logger);
     await initializeCspTransforms(esClient, this.logger);
     await scheduleFindingsStatsTask(taskManager, this.logger);
     this.#isInitialized = true;
@@ -194,3 +226,6 @@ export class CspPlugin
     setupFindingsStatsTask(taskManager, coreStartServices, logger);
   }
 }
+
+const isSingleEnabledInput = (inputs: NewPackagePolicy['inputs']): boolean =>
+  inputs.filter((i) => i.enabled).length === 1;

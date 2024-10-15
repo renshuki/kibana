@@ -1,11 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import moment from 'moment';
+import { getAbsoluteTimeRange } from '../../../query/timefilter/get_time';
 import { TimeRange } from '../../../types';
 
 const ALLOWED_UNITS = ['s', 'm', 'h', 'd', 'w', 'M', 'y'] as const;
@@ -15,7 +18,7 @@ const INVALID_DATE = 'invalid';
 const PREVIOUS_DATE = 'previous';
 const START_AT_ANCHOR = 'startAt';
 
-type AllowedUnit = typeof ALLOWED_UNITS[number];
+type AllowedUnit = (typeof ALLOWED_UNITS)[number];
 type PreviousDateType = typeof PREVIOUS_DATE;
 type InvalidDateType = typeof INVALID_DATE;
 
@@ -135,10 +138,11 @@ export function validateAbsoluteTimeShift(
     return REASON_IDS.invalidDate;
   }
   if (timeRange) {
-    const duration = moment(timeRange.to).diff(moment(timeRange.from));
+    const absTimeRange = getAbsoluteTimeRange(timeRange);
+    const duration = moment(absTimeRange.to).diff(moment(absTimeRange.from));
     if (
-      (anchor === START_AT_ANCHOR && tsMoment.isAfter(timeRange.from)) ||
-      tsMoment.subtract(duration).isAfter(timeRange.from)
+      (anchor === START_AT_ANCHOR && tsMoment.isAfter(absTimeRange.from)) ||
+      tsMoment.subtract(duration).isAfter(absTimeRange.from)
     )
       return REASON_IDS.shiftAfterTimeRange;
   }

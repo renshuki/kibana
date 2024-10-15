@@ -5,83 +5,24 @@
  * 2.0.
  */
 
-import {
-  coreMock,
-  elasticsearchServiceMock,
-  savedObjectsClientMock,
-  loggingSystemMock,
-} from '@kbn/core/server/mocks';
-import type { SecuritySolutionRequestHandlerContext } from '../../types';
-import { createRouteHandlerContext } from '../mocks';
-import {
-  doLogsEndpointActionDsExists,
-  doesLogsEndpointActionsIndexExist,
-} from './yes_no_data_stream';
-
-describe('Accurately answers if index template for data stream exists', () => {
-  let ctxt: ReturnType<typeof createRouteHandlerContext>;
-
-  beforeEach(() => {
-    ctxt = createRouteHandlerContext(
-      elasticsearchServiceMock.createScopedClusterClient(),
-      savedObjectsClientMock.create()
-    );
-  });
-
-  it('Returns FALSE for a non-existent data stream index template', async () => {
-    ctxt.core.elasticsearch.client.asInternalUser.indices.existsIndexTemplate.mockResponseImplementation(
-      () => ({
-        body: false,
-        statusCode: 404,
-      })
-    );
-    const doesItExist = await doLogsEndpointActionDsExists({
-      context: coreMock.createCustomRequestHandlerContext(
-        ctxt
-      ) as SecuritySolutionRequestHandlerContext,
-      logger: loggingSystemMock.create().get('host-isolation'),
-      dataStreamName: '.test-stream.name',
-    });
-    expect(doesItExist).toBeFalsy();
-  });
-
-  it('Returns TRUE for an existing index', async () => {
-    ctxt.core.elasticsearch.client.asInternalUser.indices.existsIndexTemplate.mockResponseImplementation(
-      () => ({
-        body: true,
-        statusCode: 200,
-      })
-    );
-    const doesItExist = await doLogsEndpointActionDsExists({
-      context: coreMock.createCustomRequestHandlerContext(
-        ctxt
-      ) as SecuritySolutionRequestHandlerContext,
-      logger: loggingSystemMock.create().get('host-isolation'),
-      dataStreamName: '.test-stream.name',
-    });
-    expect(doesItExist).toBeTruthy();
-  });
-});
+import type { ElasticsearchClientMock } from '@kbn/core/server/mocks';
+import { elasticsearchServiceMock, loggingSystemMock } from '@kbn/core/server/mocks';
+import { doesLogsEndpointActionsIndexExist } from './yes_no_data_stream';
 
 describe('Accurately answers if index exists', () => {
-  let ctxt: ReturnType<typeof createRouteHandlerContext>;
+  let esClient: ElasticsearchClientMock;
 
   beforeEach(() => {
-    ctxt = createRouteHandlerContext(
-      elasticsearchServiceMock.createScopedClusterClient(),
-      savedObjectsClientMock.create()
-    );
+    esClient = elasticsearchServiceMock.createScopedClusterClient().asInternalUser;
   });
 
   it('Returns FALSE for a non-existent index', async () => {
-    ctxt.core.elasticsearch.client.asInternalUser.indices.exists.mockResponseImplementation(() => ({
+    esClient.indices.exists.mockResponseImplementation(() => ({
       body: false,
       statusCode: 404,
     }));
     const doesItExist = await doesLogsEndpointActionsIndexExist({
-      context: coreMock.createCustomRequestHandlerContext(
-        ctxt
-      ) as SecuritySolutionRequestHandlerContext,
+      esClient,
       logger: loggingSystemMock.create().get('host-isolation'),
       indexName: '.test-index.name-default',
     });
@@ -89,14 +30,12 @@ describe('Accurately answers if index exists', () => {
   });
 
   it('Returns TRUE for an existing index', async () => {
-    ctxt.core.elasticsearch.client.asInternalUser.indices.exists.mockResponseImplementation(() => ({
+    esClient.indices.exists.mockResponseImplementation(() => ({
       body: true,
       statusCode: 200,
     }));
     const doesItExist = await doesLogsEndpointActionsIndexExist({
-      context: coreMock.createCustomRequestHandlerContext(
-        ctxt
-      ) as SecuritySolutionRequestHandlerContext,
+      esClient,
       logger: loggingSystemMock.create().get('host-isolation'),
       indexName: '.test-index.name-default',
     });

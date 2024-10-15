@@ -22,7 +22,11 @@ export const runSharedColumnsTests = (
   tableContent: string,
   values: object = {}
 ) => {
-  const getTable = () => wrapper.find(EuiBasicTable).dive();
+  const simulatedClickEvent = { persist: () => {} }; // Required for EUI action clicks. Can be removed if switching away from Enzyme to RTL
+
+  const getTableBody = () =>
+    // @ts-expect-error upgrade typescript v5.1.6
+    wrapper.find(EuiBasicTable).dive().find('RenderWithEuiTheme').renderProp('children')();
 
   describe('name column', () => {
     it('renders', () => {
@@ -54,7 +58,7 @@ export const runSharedColumnsTests = (
   });
 
   describe('actions column', () => {
-    const getActions = () => getTable().find('ExpandedItemActions');
+    const getActions = () => getTableBody().find('ExpandedItemActions');
     const getActionItems = () => getActions().dive().find('DefaultItemAction');
 
     it('will hide the action buttons if the user cannot manage/delete engines', () => {
@@ -82,7 +86,7 @@ export const runSharedColumnsTests = (
         it('sends the user to the engine overview on click', () => {
           jest.spyOn(engineLinkHelpers, 'navigateToEngine');
           const { navigateToEngine } = engineLinkHelpers;
-          getManageAction().simulate('click');
+          getManageAction().simulate('click', simulatedClickEvent);
 
           expect(navigateToEngine).toHaveBeenCalledWith('test-engine');
         });
@@ -93,7 +97,7 @@ export const runSharedColumnsTests = (
 
         it('clicking the action and confirming deletes the engine', () => {
           jest.spyOn(global, 'confirm').mockReturnValueOnce(true);
-          getDeleteAction().simulate('click');
+          getDeleteAction().simulate('click', simulatedClickEvent);
 
           expect(deleteEngine).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'test-engine' })
@@ -102,7 +106,7 @@ export const runSharedColumnsTests = (
 
         it('clicking the action and not confirming does not delete the engine', () => {
           jest.spyOn(global, 'confirm').mockReturnValueOnce(false);
-          getDeleteAction().simulate('click');
+          getDeleteAction().simulate('click', simulatedClickEvent);
 
           expect(deleteEngine).not.toHaveBeenCalled();
         });

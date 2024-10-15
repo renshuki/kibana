@@ -27,11 +27,28 @@ export const AGENT_ACTIONS_INDEX = '.fleet-actions';
 export const AGENT_ACTIONS_RESULTS_INDEX = '.fleet-actions-results';
 
 export const FleetServerAgentComponentStatuses = [
-  'starting',
-  'configuring',
-  'healthy',
-  'degraded',
-  'failed',
-  'stopping',
-  'stopped',
+  'STARTING',
+  'CONFIGURING',
+  'HEALTHY',
+  'DEGRADED',
+  'FAILED',
+  'STOPPING',
+  'STOPPED',
 ] as const;
+
+export const AgentStatuses = [
+  'offline',
+  'error',
+  'online',
+  'inactive',
+  'enrolling',
+  'unenrolling',
+  'unenrolled',
+  'updating',
+  'degraded',
+] as const;
+
+// Kueries for finding unprivileged and privileged agents
+// Privileged is `not` because the metadata field can be undefined
+export const UNPRIVILEGED_AGENT_KUERY = `${AGENTS_PREFIX}.local_metadata.elastic.agent.unprivileged: true`;
+export const PRIVILEGED_AGENT_KUERY = `not ${AGENTS_PREFIX}.local_metadata.elastic.agent.unprivileged: true`;

@@ -5,11 +5,10 @@
  * 2.0.
  */
 
-import { IUiSettingsClient } from '@kbn/core/public';
+import { CoreSetup } from '@kbn/core/public';
 import type { PaletteRegistry } from '@kbn/coloring';
-import { CustomPaletteState } from '@kbn/charts-plugin/public';
 import type { IAggType } from '@kbn/data-plugin/public';
-import type { Datatable, RenderMode } from '@kbn/expressions-plugin/common';
+import type { Datatable, DatatableColumnMeta, RenderMode } from '@kbn/expressions-plugin/common';
 import type {
   ILensInterpreterRenderHandlers,
   LensCellValueAction,
@@ -21,7 +20,7 @@ import {
   LENS_TOGGLE_ACTION,
   LENS_EDIT_PAGESIZE_ACTION,
 } from './constants';
-import type { FormatFactory } from '../../../../common';
+import type { FormatFactory } from '../../../../common/types';
 import type { DatatableProps, LensGridDirection } from '../../../../common/expressions';
 
 export interface LensSortActionData {
@@ -50,10 +49,10 @@ export type LensPagesizeAction = LensEditEvent<typeof LENS_EDIT_PAGESIZE_ACTION>
 export type DatatableRenderProps = DatatableProps & {
   formatFactory: FormatFactory;
   dispatchEvent: ILensInterpreterRenderHandlers['event'];
-  getType: (name: string) => IAggType;
+  getType: (meta?: DatatableColumnMeta) => IAggType | undefined;
   renderMode: RenderMode;
   paletteService: PaletteRegistry;
-  uiSettings: IUiSettingsClient;
+  theme: CoreSetup['theme'];
   interactive: boolean;
   renderComplete: () => void;
 
@@ -73,8 +72,8 @@ export type DatatableRenderProps = DatatableProps & {
 export interface DataContextType {
   table?: Datatable;
   rowHasRowClickTriggerActions?: boolean[];
-  alignments?: Record<string, 'left' | 'right' | 'center'>;
-  minMaxByColumnId?: Record<string, { min: number; max: number }>;
+  alignments?: Map<string, 'left' | 'right' | 'center'>;
+  minMaxByColumnId?: Map<string, { min: number; max: number }>;
   handleFilterClick?: (
     field: string,
     value: unknown,
@@ -82,9 +81,4 @@ export interface DataContextType {
     rowIndex: number,
     negate?: boolean
   ) => void;
-  getColorForValue?: (
-    value: number | undefined,
-    state: CustomPaletteState,
-    minMax: { min: number; max: number }
-  ) => string | undefined;
 }

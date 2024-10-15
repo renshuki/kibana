@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import React from 'react';
 import { Position } from '@elastic/charts';
 import { EuiFlexGroup, EuiIcon, EuiIconProps, EuiText } from '@elastic/eui';
-import classnames from 'classnames';
 import type {
   IconPosition,
   ReferenceLineDecorationConfig,
@@ -29,13 +30,19 @@ type PartialReferenceLineDecorationConfig = Pick<
 
 type PartialMergedAnnotation = Pick<
   MergedAnnotation,
-  'position' | 'icon' | 'textVisibility' | 'label'
+  'position' | 'icon' | 'textVisibility' | 'label' | 'isGrouped'
 >;
 
 const isExtendedDecorationConfig = (
   config: PartialReferenceLineDecorationConfig | PartialMergedAnnotation | undefined
 ): config is PartialReferenceLineDecorationConfig =>
   (config as PartialReferenceLineDecorationConfig)?.iconPosition ? true : false;
+
+export const isAnnotationConfig = (
+  config: PartialReferenceLineDecorationConfig | PartialMergedAnnotation
+): config is PartialMergedAnnotation => {
+  return 'isGrouped' in config;
+};
 
 // Note: it does not take into consideration whether the reference line is in view or not
 export const getLinesCausedPaddings = (
@@ -52,8 +59,9 @@ export const getLinesCausedPaddings = (
     }
     const { position, icon, textVisibility } = config;
     const iconPosition = isExtendedDecorationConfig(config) ? config.iconPosition : undefined;
+    const isLabelVisible = textVisibility && (isAnnotationConfig(config) ? config.label : true);
 
-    if (position && (hasIcon(icon) || (textVisibility && 'label' in config))) {
+    if (position && (hasIcon(icon) || isLabelVisible)) {
       const placement = getBaseIconPlacement(
         iconPosition,
         axesMap,
@@ -61,7 +69,7 @@ export const getLinesCausedPaddings = (
       );
       paddings[placement] = Math.max(
         paddings[placement] || 0,
-        LINES_MARKER_SIZE * (textVisibility && 'label' in config && config.label ? 2 : 1) // double the padding size if there's text
+        LINES_MARKER_SIZE * (isLabelVisible ? 2 : 1) // double the padding size if there's text
       );
       icons[placement] = (icons[placement] || 0) + (hasIcon(icon) ? 1 : 0);
     }
@@ -173,12 +181,7 @@ export const AnnotationIcon = ({
       {...rest}
       data-test-subj="xyVisAnnotationIcon"
       type={iconConfig.icon || type}
-      className={classnames(
-        { [rotateClassName]: iconConfig.shouldRotate },
-        {
-          lensAnnotationIconFill: renderedInChart && iconConfig.canFill,
-        }
-      )}
+      className={iconConfig.shouldRotate ? rotateClassName : undefined}
     />
   );
 };

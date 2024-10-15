@@ -20,18 +20,17 @@ describe('updateConnectorConfigurationLogic', () => {
     it('calls correct api', async () => {
       const promise = Promise.resolve('result');
       http.post.mockReturnValue(promise);
-      const configuration = { configurationKey: { label: 'hello', value: 'yeahhhh' } };
+      const configuration = { configurationKey: 'yeahhhh' };
       const result = postConnectorConfiguration({
         configuration,
         connectorId: 'anIndexId',
-        indexName: 'anIndexName',
       });
       await nextTick();
       expect(http.post).toHaveBeenCalledWith(
         '/internal/enterprise_search/connectors/anIndexId/configuration',
         { body: JSON.stringify(configuration) }
       );
-      await expect(result).resolves.toEqual({ configuration, indexName: 'anIndexName' });
+      await expect(result).resolves.toEqual({ configuration: 'result' });
     });
   });
 });

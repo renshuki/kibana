@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -12,6 +13,8 @@ import { UI_SETTINGS } from '@kbn/data-plugin/common';
 import { DataView, DataViewField } from '@kbn/data-views-plugin/common';
 import { debounce } from 'lodash';
 
+import { buildQueryFromFilters, Filter } from '@kbn/es-query';
+import { SuggestionsAbstraction } from '../../typeahead/suggestions_component';
 import { IUnifiedSearchPluginServices } from '../../types';
 
 export interface PhraseSuggestorProps {
@@ -19,6 +22,8 @@ export interface PhraseSuggestorProps {
   indexPattern: DataView;
   field: DataViewField;
   timeRangeForSuggestionsOverride?: boolean;
+  filtersForSuggestions?: Filter[];
+  suggestionsAbstraction?: SuggestionsAbstraction;
 }
 
 export interface PhraseSuggestorState {
@@ -58,22 +63,24 @@ export class PhraseSuggestorUI<T extends PhraseSuggestorProps> extends React.Com
     const isVersionFieldType = field?.esTypes?.includes('version');
 
     return (
+      // suggestions don't work for version fields
       shouldSuggestValues &&
       field &&
       field.aggregatable &&
       field.type === 'string' &&
-      !isVersionFieldType // suggestions don't work for version fields
+      !isVersionFieldType
     );
   }
 
   protected onSearchChange = (value: string | number | boolean) => {
+    this.setState({ isLoading: true });
     this.updateSuggestions(`${value}`);
   };
 
   protected updateSuggestions = debounce(async (query: string = '') => {
     if (this.abortController) this.abortController.abort();
     this.abortController = new AbortController();
-    const { indexPattern, field, timeRangeForSuggestionsOverride } = this
+    const { indexPattern, field, timeRangeForSuggestionsOverride, filtersForSuggestions } = this
       .props as PhraseSuggestorProps;
     if (!field || !this.isSuggestingValues()) {
       return;
@@ -85,6 +92,9 @@ export class PhraseSuggestorUI<T extends PhraseSuggestorProps> extends React.Com
       query,
       signal: this.abortController.signal,
       useTimeRange: timeRangeForSuggestionsOverride,
+      boolFilter: buildQueryFromFilters(filtersForSuggestions, undefined).filter,
+      method: filtersForSuggestions?.length ? 'terms_agg' : undefined,
+      querySuggestionKey: this.props.suggestionsAbstraction?.type,
     });
 
     this.setState({ suggestions, isLoading: false });

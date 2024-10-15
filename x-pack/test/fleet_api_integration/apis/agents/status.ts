@@ -7,6 +7,8 @@
 
 import expect from '@kbn/expect';
 
+import { INGEST_SAVED_OBJECT_INDEX } from '@kbn/core-saved-objects-server';
+
 import { AGENTS_INDEX } from '@kbn/fleet-plugin/common';
 import { FtrProviderContext } from '../../../api_integration/ftr_provider_context';
 import { testUsers } from '../test_users';
@@ -22,7 +24,7 @@ export default function ({ getService }: FtrProviderContext) {
       await esArchiver.loadIfNeeded('x-pack/test/functional/es_archives/fleet/agents');
       await es.create({
         id: 'ingest-agent-policies:policy-inactivity-timeout',
-        index: '.kibana',
+        index: INGEST_SAVED_OBJECT_INDEX,
         refresh: 'wait_for',
         document: {
           type: 'ingest-agent-policies',
@@ -38,9 +40,7 @@ export default function ({ getService }: FtrProviderContext) {
             updated_by: 'system',
             inactivity_timeout: 60,
           },
-          migrationVersion: {
-            'ingest-agent-policies': '7.10.0',
-          },
+          typeMigrationVersion: '7.10.0',
         },
       });
       // 2 agents online
@@ -219,6 +219,8 @@ export default function ({ getService }: FtrProviderContext) {
           other: 0,
           total: 8,
           online: 2,
+          active: 8,
+          all: 11,
           error: 2,
           offline: 1,
           updating: 3,
@@ -229,7 +231,7 @@ export default function ({ getService }: FtrProviderContext) {
     });
 
     it('should work with deprecated api', async () => {
-      await supertest.get(`/api/fleet/agent-status`).expect(200);
+      await supertest.get(`/api/fleet/agent-status`).set('kbn-xsrf', 'xxxx').expect(200);
     });
 
     it('should work with adequate package privileges', async () => {
@@ -256,6 +258,87 @@ export default function ({ getService }: FtrProviderContext) {
           message: 'Forbidden',
           statusCode: 403,
         });
+    });
+
+    it('should not perform inactivity check if there are too many agent policies with inactivity timeout', async () => {
+      // the test server is started with --xpack.fleet.developer.maxAgentPoliciesWithInactivityTimeout=10
+      // so we create 11 policies with inactivity timeout then no agents should turn inactive
+
+      const policiesToAdd = new Array(11).fill(0).map((_, i) => `policy-inactivity-timeout-${i}`);
+
+      await Promise.all(
+        policiesToAdd.map((policyId) =>
+          es.create({
+            id: 'ingest-agent-policies:' + policyId,
+            index: INGEST_SAVED_OBJECT_INDEX,
+            refresh: 'wait_for',
+            document: {
+              type: 'ingest-agent-policies',
+              'ingest-agent-policies': {
+                name: policyId,
+                namespace: 'default',
+                description: 'Policy with inactivity timeout',
+                status: 'active',
+                is_default: true,
+                monitoring_enabled: ['logs', 'metrics'],
+                revision: 2,
+                updated_at: '2020-05-07T19:34:42.533Z',
+                updated_by: 'system',
+                inactivity_timeout: 60,
+              },
+              typeMigrationVersion: '7.10.0',
+            },
+          })
+        )
+      );
+      const { body: apiResponse } = await supertest.get(`/api/fleet/agent_status`).expect(200);
+      expect(apiResponse).to.eql({
+        results: {
+          events: 0,
+          other: 0,
+          total: 10,
+          online: 3,
+          active: 10,
+          all: 11,
+          error: 2,
+          offline: 1,
+          updating: 4,
+          inactive: 0,
+          unenrolled: 1,
+        },
+      });
+    });
+
+    it('should get a list of agent policies by kuery', async () => {
+      await supertest
+        .get(`/api/fleet/agent_status?kuery=fleet-agents.status:healthy`)
+        .set('kbn-xsrf', 'xxxx')
+        .send({
+          name: 'TEST',
+          namespace: 'default',
+        })
+        .expect(200);
+    });
+
+    it('should return 200 also if the kuery does not have prefix fleet-agents', async () => {
+      await supertest
+        .get(`/api/fleet/agent_status?kuery=status:unhealthy`)
+        .set('kbn-xsrf', 'xxxx')
+        .expect(200);
+    });
+
+    it('with enableStrictKQLValidation should return 400 if passed kuery has non existing parameters', async () => {
+      await supertest
+        .get(`/api/fleet/agent_status?kuery=fleet-agents.non_existent_parameter:healthy`)
+        .set('kbn-xsrf', 'xxxx')
+        .expect(400);
+    });
+
+    it('with enableStrictKQLValidation should return 400 if passed kuery is not correct', async () => {
+      await supertest
+        .get(`/api/fleet/agent_status?kuery='test%3A'`)
+        .set('kbn-xsrf', 'xxxx')
+        .expect(400);
     });
   });
 }

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 jest.mock('@kbn/core-http-router-server-internal', () => {
@@ -95,6 +96,24 @@ describe('Console Proxy Route', () => {
       const [[{ headers }]] = (requestModule.proxyRequest as jest.Mock).mock.calls;
       expect(headers).toHaveProperty('x-elastic-product-origin');
       expect(headers['x-elastic-product-origin']).toBe('kibana');
+    });
+
+    it('sends es status code and status text as headers', async () => {
+      const response = await handler(
+        {} as any,
+        {
+          headers: {},
+          query: {
+            method: 'POST',
+            path: '/api/console/proxy?path=_aliases&method=GET',
+          },
+        } as any,
+        kibanaResponseFactory
+      );
+
+      const { headers } = response.options;
+      expect(headers).toHaveProperty('x-console-proxy-status-code');
+      expect(headers).toHaveProperty('x-console-proxy-status-text');
     });
   });
 });

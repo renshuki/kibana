@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { EuiLoadingSpinner, EuiProgress, EuiIcon } from '@elastic/eui';
+import { EuiLoadingSpinner, EuiProgress, EuiIcon, EuiImage } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import React from 'react';
 import classNames from 'classnames';
@@ -18,7 +19,9 @@ import './loading_indicator.scss';
 export interface LoadingIndicatorProps {
   loadingCount$: ReturnType<HttpStart['getLoadingCount$']>;
   showAsBar?: boolean;
-  showPlainSpinner?: boolean;
+  customLogo?: string;
+  maxAmount?: number;
+  valueAmount?: string | number;
 }
 
 export class LoadingIndicator extends React.Component<LoadingIndicatorProps, { visible: boolean }> {
@@ -58,36 +61,46 @@ export class LoadingIndicator extends React.Component<LoadingIndicatorProps, { v
   render() {
     const className = classNames(!this.state.visible && 'kbnLoadingIndicator-hidden');
 
-    const testSubj =
-      this.state.visible || this.props.showPlainSpinner
-        ? 'globalLoadingIndicator'
-        : 'globalLoadingIndicator-hidden';
-
-    const ariaHidden = !this.state.visible;
+    const testSubj = this.state.visible
+      ? 'globalLoadingIndicator'
+      : 'globalLoadingIndicator-hidden';
 
     const ariaLabel = i18n.translate('core.ui.loadingIndicatorAriaLabel', {
       defaultMessage: 'Loading content',
     });
 
-    const logo =
-      this.state.visible || this.props.showPlainSpinner ? (
-        <EuiLoadingSpinner
-          size="l"
-          data-test-subj={testSubj}
-          aria-hidden={false}
-          aria-label={ariaLabel}
-        />
-      ) : (
-        <EuiIcon
-          type={'logoElastic'}
-          size="l"
-          data-test-subj={testSubj}
-          className="chrHeaderLogo__cluster"
-          aria-label={i18n.translate('core.ui.chrome.headerGlobalNav.logoAriaLabel', {
-            defaultMessage: 'Elastic Logo',
-          })}
-        />
-      );
+    const logoImage = this.props.customLogo ? (
+      <EuiImage
+        src={this.props.customLogo}
+        data-test-subj={testSubj}
+        size={24}
+        alt="logo"
+        aria-label={i18n.translate('core.ui.chrome.headerGlobalNav.customLogoAriaLabel', {
+          defaultMessage: 'User logo',
+        })}
+      />
+    ) : (
+      <EuiIcon
+        type={'logoElastic'}
+        size="l"
+        data-test-subj={testSubj}
+        className="chrHeaderLogo__cluster"
+        aria-label={i18n.translate('core.ui.chrome.headerGlobalNav.logoAriaLabel', {
+          defaultMessage: 'Elastic Logo',
+        })}
+      />
+    );
+
+    const logo = this.state.visible ? (
+      <EuiLoadingSpinner
+        size="l"
+        data-test-subj={testSubj}
+        aria-hidden={false}
+        aria-label={ariaLabel}
+      />
+    ) : (
+      logoImage
+    );
 
     return !this.props.showAsBar ? (
       logo
@@ -95,8 +108,8 @@ export class LoadingIndicator extends React.Component<LoadingIndicatorProps, { v
       <EuiProgress
         className={className}
         data-test-subj={testSubj}
-        aria-hidden={ariaHidden}
-        aria-label={ariaLabel}
+        max={this.props.maxAmount}
+        value={this.props.valueAmount}
         position="fixed"
         color="accent"
         size="xs"

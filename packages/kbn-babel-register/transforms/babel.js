@@ -1,30 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
-
-const Fs = require('fs');
 
 const { transformCode } = require('@kbn/babel-transform');
 
 /** @type {import('./types').Transform} */
 const babelTransform = (path, source, cache) => {
-  const mtime = `${Fs.statSync(path).mtimeMs}`;
-
-  if (cache.getMtime(path) === mtime) {
-    const code = cache.getCode(path);
-    if (code) {
-      return code;
-    }
+  const key = cache.getKey(path, source);
+  const cached = cache.getCode(key);
+  if (cached) {
+    return cached;
   }
 
   const result = transformCode(path, source);
-
-  cache.update(path, {
-    mtime,
+  cache.update(key, {
     code: result.code,
     map: result.map,
   });

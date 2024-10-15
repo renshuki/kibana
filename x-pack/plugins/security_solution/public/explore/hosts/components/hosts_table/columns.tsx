@@ -7,20 +7,28 @@
 
 import { EuiIcon, EuiLink, EuiText, EuiToolTip } from '@elastic/eui';
 import React from 'react';
-import { CellActions, CellActionsMode } from '@kbn/cell-actions';
+import type { CriticalityLevelWithUnassigned } from '../../../../../common/entity_analytics/asset_criticality/types';
+import { AssetCriticalityBadge } from '../../../../entity_analytics/components/asset_criticality';
+import {
+  SecurityCellActions,
+  CellActionsMode,
+  SecurityCellActionsTrigger,
+} from '../../../../common/components/cell_actions';
 import { getEmptyTagValue } from '../../../../common/components/empty_value';
 import { HostDetailsLink } from '../../../../common/components/links';
 import { FormattedRelativePreferenceDate } from '../../../../common/components/formatted_date';
 import type { HostsTableColumns } from '.';
 import * as i18n from './translations';
 import type { Maybe, RiskSeverity } from '../../../../../common/search_strategy';
-import { VIEW_HOSTS_BY_SEVERITY } from '../host_risk_score_table/translations';
-import { RiskScore } from '../../../components/risk_score/severity/common';
-import { CELL_ACTIONS_DEFAULT_TRIGGER } from '../../../../../common/constants';
+import { RiskScoreEntity } from '../../../../../common/search_strategy';
+import { VIEW_HOSTS_BY_SEVERITY } from '../../../../entity_analytics/components/host_risk_score_table/translations';
+import { RiskScoreLevel } from '../../../../entity_analytics/components/severity/common';
+import { ENTITY_RISK_LEVEL } from '../../../../entity_analytics/components/risk_score/translations';
 
 export const getHostsColumns = (
   showRiskColumn: boolean,
-  dispatchSeverityUpdate: (s: RiskSeverity) => void
+  dispatchSeverityUpdate: (s: RiskSeverity) => void,
+  isAssetCriticalityEnabled: boolean
 ): HostsTableColumns => {
   const columns: HostsTableColumns = [
     {
@@ -32,19 +40,18 @@ export const getHostsColumns = (
       render: (hostName) => {
         if (hostName != null && hostName.length > 0) {
           return (
-            <CellActions
-              mode={CellActionsMode.HOVER}
+            <SecurityCellActions
+              mode={CellActionsMode.HOVER_DOWN}
               visibleCellActions={5}
               showActionTooltips
-              triggerId={CELL_ACTIONS_DEFAULT_TRIGGER}
-              field={{
-                name: 'host.name',
+              triggerId={SecurityCellActionsTrigger.DEFAULT}
+              data={{
                 value: hostName[0],
-                type: 'keyword',
+                field: 'host.name',
               }}
             >
               <HostDetailsLink hostName={hostName[0]} />
-            </CellActions>
+            </SecurityCellActions>
           );
         }
         return getEmptyTagValue();
@@ -89,19 +96,18 @@ export const getHostsColumns = (
       render: (hostOsName) => {
         if (hostOsName != null) {
           return (
-            <CellActions
-              mode={CellActionsMode.HOVER}
+            <SecurityCellActions
+              mode={CellActionsMode.HOVER_DOWN}
               visibleCellActions={5}
               showActionTooltips
-              triggerId={CELL_ACTIONS_DEFAULT_TRIGGER}
-              field={{
-                name: 'host.os.name',
+              triggerId={SecurityCellActionsTrigger.DEFAULT}
+              data={{
                 value: hostOsName[0],
-                type: 'keyword',
+                field: 'host.os.name',
               }}
             >
               {hostOsName}
-            </CellActions>
+            </SecurityCellActions>
           );
         }
         return getEmptyTagValue();
@@ -116,19 +122,18 @@ export const getHostsColumns = (
       render: (hostOsVersion) => {
         if (hostOsVersion != null) {
           return (
-            <CellActions
-              mode={CellActionsMode.HOVER}
+            <SecurityCellActions
+              mode={CellActionsMode.HOVER_DOWN}
               visibleCellActions={5}
               showActionTooltips
-              triggerId={CELL_ACTIONS_DEFAULT_TRIGGER}
-              field={{
-                name: 'host.os.version',
+              triggerId={SecurityCellActionsTrigger.DEFAULT}
+              data={{
                 value: hostOsVersion[0],
-                type: 'keyword',
+                field: 'host.os.version',
               }}
             >
               {hostOsVersion}
-            </CellActions>
+            </SecurityCellActions>
           );
         }
         return getEmptyTagValue();
@@ -139,20 +144,14 @@ export const getHostsColumns = (
   if (showRiskColumn) {
     columns.push({
       field: 'node.risk',
-      name: (
-        <EuiToolTip content={i18n.HOST_RISK_TOOLTIP}>
-          <>
-            {i18n.HOST_RISK} <EuiIcon color="subdued" type="iInCircle" className="eui-alignTop" />
-          </>
-        </EuiToolTip>
-      ),
+      name: ENTITY_RISK_LEVEL(RiskScoreEntity.host),
       truncateText: false,
       mobileOptions: { show: true },
       sortable: false,
       render: (riskScore: RiskSeverity) => {
         if (riskScore != null) {
           return (
-            <RiskScore
+            <RiskScoreLevel
               toolTipContent={
                 <EuiLink onClick={() => dispatchSeverityUpdate(riskScore)}>
                   <EuiText size="xs">{VIEW_HOSTS_BY_SEVERITY(riskScore.toLowerCase())}</EuiText>
@@ -163,6 +162,25 @@ export const getHostsColumns = (
           );
         }
         return getEmptyTagValue();
+      },
+    });
+  }
+
+  if (isAssetCriticalityEnabled) {
+    columns.push({
+      field: 'node.criticality',
+      name: i18n.ASSET_CRITICALITY,
+      truncateText: false,
+      mobileOptions: { show: true },
+      sortable: false,
+      render: (assetCriticality: CriticalityLevelWithUnassigned) => {
+        if (!assetCriticality) return getEmptyTagValue();
+        return (
+          <AssetCriticalityBadge
+            criticalityLevel={assetCriticality}
+            css={{ verticalAlign: 'middle' }}
+          />
+        );
       },
     });
   }

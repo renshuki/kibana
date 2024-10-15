@@ -14,6 +14,8 @@ export interface ElasticsearchError extends Error {
   status?: number;
 }
 
+export type LicenseFetcher = () => Promise<ILicense>;
+
 /**
  * Result from remote request fetching raw feature set.
  * @internal
@@ -72,6 +74,11 @@ export interface LicensingPluginStart {
    * Steam of licensing information {@link ILicense}.
    */
   license$: Observable<ILicense>;
+
+  /**
+   * Retrieves the {@link ILicense | licensing information}
+   */
+  getLicense(): Promise<ILicense>;
 
   /**
    * Triggers licensing information re-fetch.

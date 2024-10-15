@@ -22,13 +22,20 @@ const paramSchema = schema.object({
 export const updateApiKeyRoute = (
   router: AlertingRouter,
   licenseState: ILicenseState,
-  usageCounter?: UsageCounter
+  usageCounter?: UsageCounter,
+  isServerless?: boolean
 ) => {
   router.post(
     {
       path: `${LEGACY_BASE_ALERT_API_PATH}/alert/{id}/_update_api_key`,
       validate: {
         params: paramSchema,
+      },
+      options: {
+        access: isServerless ? 'internal' : 'public',
+        summary: 'Update the API key for an alert',
+        tags: ['oas-tag:alerting'],
+        deprecated: true,
       },
     },
     handleDisabledApiKeysError(
@@ -41,7 +48,7 @@ export const updateApiKeyRoute = (
         const rulesClient = (await context.alerting).getRulesClient();
         const { id } = req.params;
         try {
-          await rulesClient.updateApiKey({ id });
+          await rulesClient.updateRuleApiKey({ id });
           return res.noContent();
         } catch (e) {
           if (e instanceof RuleTypeDisabledError) {

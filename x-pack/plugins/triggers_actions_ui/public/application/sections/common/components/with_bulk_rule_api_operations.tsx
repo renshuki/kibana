@@ -12,52 +12,52 @@ import {
   IExecutionErrorsResult,
   IExecutionKPIResult,
 } from '@kbn/alerting-plugin/common';
+import { AlertingFrameworkHealth } from '@kbn/alerting-types';
+import { fetchAlertingFrameworkHealth as alertingFrameworkHealth } from '@kbn/alerts-ui-shared/src/common/apis/fetch_alerting_framework_health';
+import { resolveRule } from '@kbn/alerts-ui-shared/src/common/apis/resolve_rule';
 import {
   Rule,
   RuleType,
   RuleTaskState,
   RuleSummary,
-  AlertingFrameworkHealth,
   ResolvedRule,
   SnoozeSchedule,
   BulkEditResponse,
   BulkOperationResponse,
   BulkOperationAttributesWithoutHttp,
+  BulkDisableParamsWithoutHttp,
 } from '../../../../types';
-import {
-  muteRules,
-  unmuteRules,
-  muteRule,
-  unmuteRule,
-  muteAlertInstance,
-  unmuteAlertInstance,
-  loadRule,
-  loadRuleState,
-  loadRuleSummary,
-  loadRuleTypes,
-  alertingFrameworkHealth,
-  resolveRule,
-  loadExecutionLogAggregations,
-  loadGlobalExecutionLogAggregations,
+import type {
   LoadExecutionLogAggregationsProps,
   LoadGlobalExecutionLogAggregationsProps,
-  loadActionErrorLog,
   LoadActionErrorLogProps,
-  snoozeRule,
-  bulkSnoozeRules,
   BulkSnoozeRulesProps,
-  unsnoozeRule,
-  loadExecutionKPIAggregations,
   LoadExecutionKPIAggregationsProps,
-  loadGlobalExecutionKPIAggregations,
   LoadGlobalExecutionKPIAggregationsProps,
-  bulkUnsnoozeRules,
   BulkUnsnoozeRulesProps,
-  cloneRule,
-  bulkDeleteRules,
-  bulkEnableRules,
-  bulkDisableRules,
 } from '../../../lib/rule_api';
+import { cloneRule } from '../../../lib/rule_api/clone';
+import { loadRule } from '../../../lib/rule_api/get_rule';
+import { loadRuleSummary } from '../../../lib/rule_api/rule_summary';
+import { muteAlertInstance } from '../../../lib/rule_api/mute_alert';
+import { loadRuleTypes } from '../../../lib/rule_api/rule_types';
+import {
+  loadExecutionLogAggregations,
+  loadGlobalExecutionLogAggregations,
+} from '../../../lib/rule_api/load_execution_log_aggregations';
+import { muteRules, muteRule } from '../../../lib/rule_api/mute';
+import { unmuteRules, unmuteRule } from '../../../lib/rule_api/unmute';
+import { loadRuleState } from '../../../lib/rule_api/state';
+import { loadExecutionKPIAggregations } from '../../../lib/rule_api/load_execution_kpi_aggregations';
+import { loadGlobalExecutionKPIAggregations } from '../../../lib/rule_api/load_global_execution_kpi_aggregations';
+import { loadActionErrorLog } from '../../../lib/rule_api/load_action_error_log';
+import { unmuteAlertInstance } from '../../../lib/rule_api/unmute_alert';
+import { snoozeRule, bulkSnoozeRules } from '../../../lib/rule_api/snooze';
+import { unsnoozeRule, bulkUnsnoozeRules } from '../../../lib/rule_api/unsnooze';
+import { bulkDeleteRules } from '../../../lib/rule_api/bulk_delete';
+import { bulkEnableRules } from '../../../lib/rule_api/bulk_enable';
+import { bulkDisableRules } from '../../../lib/rule_api/bulk_disable';
+
 import { useKibana } from '../../../../common/lib/kibana';
 
 export interface ComponentOpts {
@@ -93,7 +93,7 @@ export interface ComponentOpts {
   cloneRule: (ruleId: string) => Promise<Rule>;
   bulkDeleteRules: (props: BulkOperationAttributesWithoutHttp) => Promise<BulkOperationResponse>;
   bulkEnableRules: (props: BulkOperationAttributesWithoutHttp) => Promise<BulkOperationResponse>;
-  bulkDisableRules: (props: BulkOperationAttributesWithoutHttp) => Promise<BulkOperationResponse>;
+  bulkDisableRules: (props: BulkDisableParamsWithoutHttp) => Promise<BulkOperationResponse>;
 }
 
 export type PropsWithOptionalApiHandlers<T> = Omit<T, keyof ComponentOpts> & Partial<ComponentOpts>;
@@ -177,7 +177,7 @@ export function withBulkRuleOperations<T>(
             http,
           })
         }
-        resolveRule={async (ruleId: Rule['id']) => resolveRule({ http, ruleId })}
+        resolveRule={async (ruleId: Rule['id']) => resolveRule({ http, id: ruleId })}
         getHealth={async () => alertingFrameworkHealth({ http })}
         snoozeRule={async (rule: Rule, snoozeSchedule: SnoozeSchedule) => {
           return await snoozeRule({ http, id: rule.id, snoozeSchedule });
@@ -200,7 +200,7 @@ export function withBulkRuleOperations<T>(
         bulkEnableRules={async (bulkEnableProps: BulkOperationAttributesWithoutHttp) => {
           return await bulkEnableRules({ http, ...bulkEnableProps });
         }}
-        bulkDisableRules={async (bulkDisableProps: BulkOperationAttributesWithoutHttp) => {
+        bulkDisableRules={async (bulkDisableProps: BulkDisableParamsWithoutHttp) => {
           return await bulkDisableRules({ http, ...bulkDisableProps });
         }}
       />

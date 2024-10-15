@@ -117,6 +117,7 @@ const mockRule: Rule = {
     status: 'unknown',
     lastExecutionDate: new Date('2020-08-20T19:23:38Z'),
   },
+  revision: 0,
 };
 
 const loadActionErrorLogMock = jest.fn();
@@ -175,7 +176,7 @@ describe('rule_error_log', () => {
     });
 
     expect(wrapper.find(EuiSuperDatePicker).props().isLoading).toBeFalsy();
-    expect(wrapper.find('.euiTableRow').length).toEqual(10);
+    expect(wrapper.find('tr.euiTableRow').length).toEqual(10);
 
     nowMock.mockRestore();
   });

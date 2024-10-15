@@ -1,10 +1,14 @@
 .spcSpaceSelector {
+  background: transparent;
+}
+
+.spcSelectorBackground {
   @include kibanaFullScreenGraphics;
 }
 
-.spcSpaceSelector__pageContent {
-  position: relative;
-  z-index: 10;
+.spcSelectorBackground__nonMixinAttributes {
+  z-index: -1;
+  pointer-events: none;
 }
 
 // Fix forced focus outline on text that isn't a link to just be an underline

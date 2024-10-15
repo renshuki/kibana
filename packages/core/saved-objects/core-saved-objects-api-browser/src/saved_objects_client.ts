@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { SavedObjectTypeIdTuple } from '@kbn/core-saved-objects-common';
@@ -22,7 +23,6 @@ import type {
   SavedObjectsBulkDeleteResponse,
   SavedObjectsBulkDeleteOptions,
 } from './apis';
-
 import type { SimpleSavedObject } from './simple_saved_object';
 
 /**
@@ -129,7 +129,15 @@ export interface SavedObjectsClientContract {
   bulkGet(objects: SavedObjectTypeIdTuple[]): Promise<SavedObjectsBatchResponse<unknown>>;
 
   /**
-   * Resolves a single object
+   * Resolves a single object.
+   *
+   * After 8.0.0, saved objects are provided a unique ID _across_ spaces.
+   * A subset of existing saved objects may have IDs regenerated while upgrading to 8+.
+   * `.resolve` provides a way for clients with legacy IDs to still retrieve the correct
+   * saved object.
+   *
+   * An example of a client with a "legacy ID" is a bookmarked dashboard in a
+   * non-default space.
    *
    * @param {string} type - the type of the object to resolve
    * @param {string} id - the ID of the object to resolve
@@ -144,7 +152,9 @@ export interface SavedObjectsClientContract {
   resolve<T = unknown>(type: string, id: string): Promise<ResolvedSimpleSavedObject<T>>;
 
   /**
-   * Resolves an array of objects by id, using any legacy URL aliases if they exist
+   * Resolves an array of objects by id.
+   *
+   * See documentation for `.resolve`.
    *
    * @param objects - an array of objects containing id, type
    * @returns The bulk resolve result for the saved objects for the given types and ids.
@@ -172,8 +182,7 @@ export interface SavedObjectsClientContract {
    * @param {object} attributes - the attributes to update
    * @param {object} options {@link SavedObjectsUpdateOptions}
    * @prop {integer} options.version - ensures version matches that of persisted object
-   * @prop {object} options.migrationVersion - The optional migrationVersion of this document
-   * @returns the udpated simple saved object
+   * @returns the updated simple saved object
    * @deprecated See https://github.com/elastic/kibana/issues/149098
    */
   update<T = unknown>(

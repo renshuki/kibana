@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { memo, useMemo } from 'react';
@@ -44,6 +45,12 @@ export const ExceptionItemCardMetaInfo = memo<ExceptionItemCardMetaInfoProps>(
         }),
       [dataTestSubj, rules, securityLinkAnchorComponent]
     );
+
+    const isExpired = useMemo(
+      () => (item.expire_time ? new Date(item.expire_time) <= new Date() : false),
+      [item]
+    );
+
     return (
       <EuiFlexGroup alignItems="center" responsive gutterSize="s" data-test-subj={dataTestSubj}>
         {FormattedDateComponent !== null && (
@@ -77,6 +84,27 @@ export const ExceptionItemCardMetaInfo = memo<ExceptionItemCardMetaInfoProps>(
                 dataTestSubj={`${dataTestSubj || ''}UpdatedBy`}
               />
             </EuiFlexItem>
+            {item.expire_time != null && (
+              <>
+                <EuiFlexItem css={itemCss} grow={false}>
+                  <MetaInfoDetails
+                    label={
+                      isExpired
+                        ? i18n.EXCEPTION_ITEM_CARD_EXPIRED_LABEL
+                        : i18n.EXCEPTION_ITEM_CARD_EXPIRES_LABEL
+                    }
+                    lastUpdate={
+                      <FormattedDateComponent
+                        data-test-subj={`{dataTestSubj||''}formattedDateComponentExpireTime`}
+                        fieldName="expire_time"
+                        value={item.expire_time}
+                      />
+                    }
+                    dataTestSubj={`${dataTestSubj || ''}ExpireTime`}
+                  />
+                </EuiFlexItem>
+              </>
+            )}
           </>
         )}
         <EuiFlexItem>

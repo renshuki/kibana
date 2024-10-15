@@ -10,7 +10,7 @@ import { i18n } from '@kbn/i18n';
 export const VALUE_LISTS_FLYOUT_TITLE = i18n.translate(
   'xpack.securitySolution.lists.importValueListTitle',
   {
-    defaultMessage: 'Import value lists',
+    defaultMessage: 'Manage value lists',
   }
 );
 
@@ -48,8 +48,8 @@ export const CANCEL_BUTTON = i18n.translate(
   }
 );
 
-export const UPLOAD_BUTTON = i18n.translate('xpack.securitySolution.lists.valueListsImportButton', {
-  defaultMessage: 'Import list',
+export const UPLOAD_BUTTON = i18n.translate('xpack.securitySolution.lists.valueListImportButton', {
+  defaultMessage: 'Import value list',
 });
 
 export const UPLOAD_SUCCESS_TITLE = i18n.translate(
@@ -65,7 +65,7 @@ export const UPLOAD_ERROR = i18n.translate('xpack.securitySolution.lists.valueLi
 
 export const uploadSuccessMessage = (fileName: string) =>
   i18n.translate('xpack.securitySolution.lists.valueListsImportSuccess', {
-    defaultMessage: "Value list '{fileName}' was imported",
+    defaultMessage: "Value list ''{fileName}'' was imported",
     values: { fileName },
   });
 

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import supertest from 'supertest';
@@ -18,12 +19,14 @@ import {
   registerUpdateRoute,
   type InternalSavedObjectsRequestHandlerContext,
 } from '@kbn/core-saved-objects-server-internal';
+import { loggerMock } from '@kbn/logging-mocks';
+import { setupConfig } from './routes_test_utils';
 
 type SetupServerReturn = Awaited<ReturnType<typeof setupServer>>;
 
 const testTypes = [
-  { name: 'index-pattern', hide: false },
-  { name: 'hidden-type', hide: true },
+  { name: 'index-pattern', hide: false }, // multi-namespace type
+  { name: 'hidden-type', hide: true }, // hidden
   { name: 'hidden-from-http', hide: false, hideFromHttpApis: true },
 ];
 
@@ -33,6 +36,7 @@ describe('PUT /api/saved_objects/{type}/{id?}', () => {
   let handlerContext: SetupServerReturn['handlerContext'];
   let savedObjectsClient: ReturnType<typeof savedObjectsClientMock.create>;
   let coreUsageStatsClient: jest.Mocked<ICoreUsageStatsClient>;
+  let loggerWarnSpy: jest.SpyInstance;
 
   beforeEach(async () => {
     const clientResponse = {
@@ -60,7 +64,12 @@ describe('PUT /api/saved_objects/{type}/{id?}', () => {
     coreUsageStatsClient = coreUsageStatsClientMock.create();
     coreUsageStatsClient.incrementSavedObjectsUpdate.mockRejectedValue(new Error('Oh no!')); // intentionally throw this error, which is swallowed, so we can assert that the operation does not fail
     const coreUsageData = coreUsageDataServiceMock.createSetupContract(coreUsageStatsClient);
-    registerUpdateRoute(router, { coreUsageData });
+    const logger = loggerMock.create();
+    loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
+
+    const config = setupConfig();
+    const access = 'public';
+    registerUpdateRoute(router, { config, coreUsageData, logger, access });
 
     await server.start();
   });
@@ -83,6 +92,7 @@ describe('PUT /api/saved_objects/{type}/{id?}', () => {
 
     const result = await supertest(httpSetup.server.listener)
       .put('/api/saved_objects/index-pattern/logstash-*')
+      .set('x-elastic-internal-origin', 'kibana')
       .send({
         attributes: {
           title: 'Testing',
@@ -94,12 +104,14 @@ describe('PUT /api/saved_objects/{type}/{id?}', () => {
     expect(result.body).toEqual(clientResponse);
     expect(coreUsageStatsClient.incrementSavedObjectsUpdate).toHaveBeenCalledWith({
       request: expect.anything(),
+      types: ['index-pattern'],
     });
   });
 
   it('calls upon savedObjectClient.update', async () => {
     await supertest(httpSetup.server.listener)
       .put('/api/saved_objects/index-pattern/logstash-*')
+      .set('x-elastic-internal-origin', 'kibana')
       .send({
         attributes: { title: 'Testing' },
         version: 'foo',
@@ -110,17 +122,27 @@ describe('PUT /api/saved_objects/{type}/{id?}', () => {
       'index-pattern',
       'logstash-*',
       { title: 'Testing' },
-      { version: 'foo' }
+      { version: 'foo', migrationVersionCompatibility: 'raw' }
     );
   });
 
   it('returns with status 400 for types hidden from the HTTP APIs', async () => {
     const result = await supertest(httpSetup.server.listener)
       .put('/api/saved_objects/hidden-from-http/hiddenId')
+      .set('x-elastic-internal-origin', 'kibana')
       .send({
         attributes: { title: 'does not matter' },
       })
       .expect(400);
     expect(result.body.message).toContain("Unsupported saved object type: 'hidden-from-http'");
+  });
+
+  it('logs a warning message when called', async () => {
+    await supertest(httpSetup.server.listener)
+      .put('/api/saved_objects/index-pattern/logstash-*')
+      .set('x-elastic-internal-origin', 'kibana')
+      .send({ attributes: { title: 'Logging test' }, version: 'log' })
+      .expect(200);
+    expect(loggerWarnSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,14 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import * as Rx from 'rxjs';
 import { ImageMetadataFactory, getImageMetadata, isImage } from '@kbn/shared-ux-file-util';
-import type { FileKind, FileJSON, BaseFilesClient as FilesClient } from '@kbn/shared-ux-file-types';
+import type {
+  FileKindBrowser,
+  FileJSON,
+  BaseFilesClient as FilesClient,
+} from '@kbn/shared-ux-file-types';
 import { i18nTexts } from './i18n_texts';
 
 import { createStateSubject, type SimpleStateSubject, parseFileName } from './util';
@@ -48,7 +53,7 @@ export class UploadState {
   private subscriptions: Rx.Subscription[];
 
   constructor(
-    private readonly fileKind: FileKind,
+    private readonly fileKind: FileKindBrowser,
     private readonly client: FilesClient,
     private readonly opts: UploadOptions = { allowRepeatedUploads: false },
     private readonly loadImageMetadata: ImageMetadataFactory = getImageMetadata
@@ -93,15 +98,22 @@ export class UploadState {
     return this.uploading$.getValue();
   }
 
-  private validateFiles(files: File[]): undefined | string {
-    if (
-      this.fileKind.maxSizeBytes != null &&
-      files.some((file) => file.size > this.fileKind.maxSizeBytes!)
-    ) {
-      return i18nTexts.fileTooLarge(String(this.fileKind.maxSizeBytes));
+  private readonly validateFile = (file: File): void => {
+    const fileKind = this.fileKind;
+
+    if (fileKind.maxSizeBytes != null && file.size > this.fileKind.maxSizeBytes!) {
+      const message = i18nTexts.fileTooLarge(String(this.fileKind.maxSizeBytes));
+      throw new Error(message);
     }
-    return;
-  }
+
+    if (fileKind.allowedMimeTypes != null && !fileKind.allowedMimeTypes.includes(file.type)) {
+      const message = i18nTexts.mimeTypeNotSupported(
+        file.type,
+        fileKind.allowedMimeTypes.join(', ')
+      );
+      throw new Error(message);
+    }
+  };
 
   public setFiles = (files: File[]): void => {
     if (this.isUploading()) {
@@ -113,14 +125,19 @@ export class UploadState {
       this.error$.next(undefined);
     }
 
-    const validationError = this.validateFiles(files);
+    let error: undefined | Error;
+    try {
+      files.forEach(this.validateFile);
+    } catch (err) {
+      error = err;
+    }
 
     this.files$$.next(
       files.map((file) =>
         createStateSubject<FileState>({
           file,
           status: 'idle',
-          error: validationError ? new Error(validationError) : undefined,
+          error,
         })
       )
     );
@@ -240,7 +257,7 @@ export const createUploadState = ({
   imageMetadataFactory,
   ...options
 }: {
-  fileKind: FileKind;
+  fileKind: FileKindBrowser;
   client: FilesClient;
   imageMetadataFactory?: ImageMetadataFactory;
 } & UploadOptions) => {

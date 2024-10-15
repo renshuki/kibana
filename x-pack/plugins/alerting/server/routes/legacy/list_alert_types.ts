@@ -14,12 +14,19 @@ import { trackLegacyRouteUsage } from '../../lib/track_legacy_route_usage';
 export const listAlertTypesRoute = (
   router: AlertingRouter,
   licenseState: ILicenseState,
-  usageCounter?: UsageCounter
+  usageCounter?: UsageCounter,
+  isServerless?: boolean
 ) => {
   router.get(
     {
       path: `${LEGACY_BASE_ALERT_API_PATH}/list_alert_types`,
       validate: {},
+      options: {
+        access: isServerless ? 'internal' : 'public',
+        summary: 'Get the alert types',
+        tags: ['oas-tag:alerting'],
+        deprecated: true,
+      },
     },
     router.handleLegacyErrors(async function (context, req, res) {
       verifyApiAccess(licenseState);
@@ -29,7 +36,7 @@ export const listAlertTypesRoute = (
       trackLegacyRouteUsage('listAlertTypes', usageCounter);
       const alertingContext = await context.alerting;
       return res.ok({
-        body: Array.from(await alertingContext.getRulesClient().listAlertTypes()),
+        body: Array.from(await alertingContext.getRulesClient().listRuleTypes()),
       });
     })
   );

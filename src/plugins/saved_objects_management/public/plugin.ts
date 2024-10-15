@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { i18n } from '@kbn/i18n';
@@ -16,37 +17,34 @@ import { HomePublicPluginSetup } from '@kbn/home-plugin/public';
 import { SavedObjectTaggingOssPluginStart } from '@kbn/saved-objects-tagging-oss-plugin/public';
 import {
   SavedObjectsManagementActionService,
-  SavedObjectsManagementActionServiceSetup,
   SavedObjectsManagementActionServiceStart,
   SavedObjectsManagementColumnService,
-  SavedObjectsManagementColumnServiceSetup,
   SavedObjectsManagementColumnServiceStart,
 } from './services';
 
-import { SavedObjectManagementTypeInfo, SavedObjectGetRelationshipsResponse } from './types';
+import type { v1 } from '../common';
+
+import { SavedObjectManagementTypeInfo } from './types';
 import {
   getAllowedTypes,
+  getDefaultTitle,
   getRelationships,
   getSavedObjectLabel,
-  getDefaultTitle,
-  parseQuery,
   getTagFindReferences,
+  parseQuery,
 } from './lib';
 
-export interface SavedObjectsManagementPluginSetup {
-  actions: SavedObjectsManagementActionServiceSetup;
-  columns: SavedObjectsManagementColumnServiceSetup;
-}
+// keeping the interface to reduce work if we want to add back APIs later
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface SavedObjectsManagementPluginSetup {}
 
 export interface SavedObjectsManagementPluginStart {
-  actions: SavedObjectsManagementActionServiceStart;
-  columns: SavedObjectsManagementColumnServiceStart;
   getAllowedTypes: () => Promise<SavedObjectManagementTypeInfo[]>;
   getRelationships: (
     type: string,
     id: string,
     savedObjectTypes: string[]
-  ) => Promise<SavedObjectGetRelationshipsResponse>;
+  ) => Promise<v1.RelationshipsResponseHTTP>;
   getSavedObjectLabel: typeof getSavedObjectLabel;
   getDefaultTitle: typeof getDefaultTitle;
   parseQuery: typeof parseQuery;
@@ -76,6 +74,9 @@ export class SavedObjectsManagementPlugin
 {
   private actionService = new SavedObjectsManagementActionService();
   private columnService = new SavedObjectsManagementColumnService();
+
+  private actionServiceStart?: SavedObjectsManagementActionServiceStart;
+  private columnServiceStart?: SavedObjectsManagementColumnServiceStart;
 
   public setup(
     core: CoreSetup<StartDependencies, SavedObjectsManagementPluginStart>,
@@ -112,6 +113,8 @@ export class SavedObjectsManagementPlugin
         return mountManagementSection({
           core,
           mountParams,
+          getColumnServiceStart: () => this.columnServiceStart!,
+          getActionServiceStart: () => this.actionServiceStart!,
         });
       },
     });
@@ -123,12 +126,10 @@ export class SavedObjectsManagementPlugin
   }
 
   public start(_core: CoreStart, { spaces: spacesApi }: StartDependencies) {
-    const actionStart = this.actionService.start(spacesApi);
-    const columnStart = this.columnService.start(spacesApi);
+    this.actionServiceStart = this.actionService.start(spacesApi);
+    this.columnServiceStart = this.columnService.start(spacesApi);
 
     return {
-      actions: actionStart,
-      columns: columnStart,
       getAllowedTypes: () => getAllowedTypes(_core.http),
       getRelationships: (type: string, id: string, savedObjectTypes: string[]) =>
         getRelationships(_core.http, type, id, savedObjectTypes),

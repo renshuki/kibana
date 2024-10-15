@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { type Subject, ReplaySubject } from 'rxjs';
+import { type Subject, ReplaySubject, of } from 'rxjs';
 import { loggerMock } from '@kbn/logging-mocks';
 import { RuleDataService } from './rule_data_plugin_service';
 import { elasticsearchServiceMock } from '@kbn/core/server/mocks';
@@ -14,16 +14,27 @@ import { Dataset } from './index_options';
 import { RuleDataClient } from '../rule_data_client/rule_data_client';
 import { createRuleDataClientMock as mockCreateRuleDataClient } from '../rule_data_client/rule_data_client.mock';
 
+import { createDataStreamAdapterMock } from '@kbn/alerting-plugin/server/mocks';
+import type { DataStreamAdapter } from '@kbn/alerting-plugin/server';
+
 jest.mock('../rule_data_client/rule_data_client', () => ({
   RuleDataClient: jest.fn().mockImplementation(() => mockCreateRuleDataClient()),
 }));
 
+const frameworkAlertsService = {
+  enabled: () => false,
+  getContextInitializationPromise: async () => ({ result: false }),
+};
+
 describe('ruleDataPluginService', () => {
   let pluginStop$: Subject<void>;
+  let dataStreamAdapter: DataStreamAdapter;
+  const elasticsearchAndSOAvailability$ = of(true);
 
   beforeEach(() => {
     jest.resetAllMocks();
     pluginStop$ = new ReplaySubject(1);
+    dataStreamAdapter = createDataStreamAdapterMock();
   });
 
   afterEach(() => {
@@ -43,7 +54,10 @@ describe('ruleDataPluginService', () => {
         isWriteEnabled: true,
         disabledRegistrationContexts: ['observability.logs'],
         isWriterCacheEnabled: true,
+        frameworkAlerts: frameworkAlertsService,
         pluginStop$,
+        dataStreamAdapter,
+        elasticsearchAndSOAvailability$,
       });
       expect(ruleDataService.isRegistrationContextDisabled('observability.logs')).toBe(true);
     });
@@ -59,7 +73,10 @@ describe('ruleDataPluginService', () => {
         isWriteEnabled: true,
         disabledRegistrationContexts: ['observability.logs'],
         isWriterCacheEnabled: true,
+        frameworkAlerts: frameworkAlertsService,
         pluginStop$,
+        dataStreamAdapter,
+        elasticsearchAndSOAvailability$,
       });
       expect(ruleDataService.isRegistrationContextDisabled('observability.apm')).toBe(false);
     });
@@ -77,7 +94,10 @@ describe('ruleDataPluginService', () => {
         isWriteEnabled: true,
         disabledRegistrationContexts: ['observability.logs'],
         isWriterCacheEnabled: true,
+        frameworkAlerts: frameworkAlertsService,
         pluginStop$,
+        dataStreamAdapter,
+        elasticsearchAndSOAvailability$,
       });
 
       expect(ruleDataService.isWriteEnabled('observability.logs')).toBe(false);
@@ -96,7 +116,10 @@ describe('ruleDataPluginService', () => {
         isWriteEnabled: true,
         disabledRegistrationContexts: ['observability.logs'],
         isWriterCacheEnabled: true,
+        frameworkAlerts: frameworkAlertsService,
         pluginStop$,
+        dataStreamAdapter,
+        elasticsearchAndSOAvailability$,
       });
       const indexOptions = {
         feature: AlertConsumers.LOGS,

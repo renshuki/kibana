@@ -20,8 +20,8 @@ import {
   shouldIgnoreAlertFilters,
   detectionAlertsTables,
 } from './helpers';
-import { SourcererScopeName } from '../../store/sourcerer/model';
-import { TableId } from '../../../../common/types';
+import { SourcererScopeName } from '../../../sourcerer/store/model';
+import { TableId } from '@kbn/securitysolution-data-table';
 
 /** the following scopes are NOT detection alert tables */
 const otherScopes = [

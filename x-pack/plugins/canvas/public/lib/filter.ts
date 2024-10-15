@@ -12,6 +12,7 @@ import {
   FilterField,
   FilterViewInstance,
   FlattenFilterViewInstance,
+  FormattedFilterViewInstance,
 } from '../../types/filters';
 
 const SELECT_FILTER = 'selectFilter';
@@ -27,17 +28,14 @@ export const defaultFormatter = (value: unknown) => (value || null ? `${value}` 
 export const formatFilterView =
   (filterValue: FilterType) => (filterView: FlattenFilterViewInstance) => {
     const filterViewKeys = Object.keys(filterView) as Array<keyof FilterViewInstance>;
-    return filterViewKeys.reduce(
-      (acc, key) => ({
-        ...acc,
-        [key]: {
-          label: filterView[key].label,
-          formattedValue: (filterView[key].formatter ?? defaultFormatter)(filterValue[key]),
-          component: filterView[key].component,
-        },
-      }),
-      {}
-    );
+    return filterViewKeys.reduce((acc, key) => {
+      acc[key] = {
+        label: filterView[key].label,
+        formattedValue: (filterView[key].formatter ?? defaultFormatter)(filterValue[key])!,
+        component: filterView[key].component,
+      };
+      return acc;
+    }, {} as FormattedFilterViewInstance);
   };
 
 export const flattenFilterView = (filterValue: FilterType) => (filterView: FilterViewInstance) => {
@@ -67,7 +65,7 @@ const excludeFiltersByGroups = (filters: Ast[], filterExprAst: AstFunction) => {
   const groupsToExclude = filterExprAst.arguments.group ?? [];
   const removeUngrouped = filterExprAst.arguments.ungrouped?.[0] ?? false;
   return filters.filter((filter) => {
-    const groups: string[] = get(filter, 'chain[0].arguments.filterGroup', []).filter(
+    const groups: string[] = (get(filter, 'chain[0].arguments.filterGroup', []) as string[]).filter(
       (group: string) => group !== ''
     );
     const noNeedToExcludeByGroup = !(
@@ -91,7 +89,7 @@ const includeFiltersByGroups = (
   const groupsToInclude = filterExprAst.arguments.group ?? [];
   const includeOnlyUngrouped = filterExprAst.arguments.ungrouped?.[0] ?? false;
   return filters.filter((filter) => {
-    const groups: string[] = get(filter, 'chain[0].arguments.filterGroup', []).filter(
+    const groups: string[] = (get(filter, 'chain[0].arguments.filterGroup', []) as string[]).filter(
       (group: string) => group !== ''
     );
     const needToIncludeByGroup =

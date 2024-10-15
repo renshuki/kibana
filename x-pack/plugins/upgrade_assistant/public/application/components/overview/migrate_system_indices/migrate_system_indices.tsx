@@ -138,11 +138,11 @@ const MigrateSystemIndicesStep: FunctionComponent<Props> = ({ setIsComplete }) =
       <EuiCallOut
         title={i18nTexts.loadingError}
         color="danger"
-        iconType="alert"
+        iconType="warning"
         data-test-subj="systemIndicesStatusErrorCallout"
       >
         <p>
-          {migrationStatus.error.statusCode} - {migrationStatus.error.message}
+          {migrationStatus.error.statusCode} - {migrationStatus.error.message as string}
         </p>
         <EuiButton
           color="danger"
@@ -181,7 +181,7 @@ const MigrateSystemIndicesStep: FunctionComponent<Props> = ({ setIsComplete }) =
           <EuiCallOut
             size="s"
             color="danger"
-            iconType="alert"
+            iconType="warning"
             title={`${startMigrationStatus.error!.statusCode} - ${
               startMigrationStatus.error!.message
             }`}
@@ -196,7 +196,7 @@ const MigrateSystemIndicesStep: FunctionComponent<Props> = ({ setIsComplete }) =
           <EuiCallOut
             size="s"
             color="danger"
-            iconType="alert"
+            iconType="warning"
             title={i18nTexts.migrationFailedTitle}
             data-test-subj="migrationFailedCallout"
           >

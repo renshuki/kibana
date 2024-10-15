@@ -18,16 +18,16 @@ import { callEnterpriseSearchConfigAPI } from './enterprise_search_config_api';
 interface CheckAccess {
   request: KibanaRequest;
   security: SecurityPluginSetup;
-  spaces: SpacesPluginStart;
+  spaces?: SpacesPluginStart;
   config: ConfigType;
   log: Logger;
 }
 
-const ALLOW_ALL_PLUGINS = {
+const ALLOW_ALL_PLUGINS: ProductAccess = {
   hasAppSearchAccess: true,
   hasWorkplaceSearchAccess: true,
 };
-const DENY_ALL_PLUGINS = {
+const DENY_ALL_PLUGINS: ProductAccess = {
   hasAppSearchAccess: false,
   hasWorkplaceSearchAccess: false,
 };
@@ -46,13 +46,13 @@ export const checkAccess = async ({
 }: CheckAccess): Promise<ProductAccess> => {
   const isRbacEnabled = security.authz.mode.useRbacForRequest(request);
 
-  // If security has been disabled, always hide the plugin
+  // If security has been disabled, always hide app search and workplace search
   if (!isRbacEnabled) {
     return DENY_ALL_PLUGINS;
   }
 
   // We can only retrieve the active space when security is enabled and the request has already been authenticated
-  const attemptSpaceRetrieval = request.auth.isAuthenticated;
+  const attemptSpaceRetrieval = request.auth.isAuthenticated && !!spaces;
   let allowedAtSpace = false;
 
   if (attemptSpaceRetrieval) {
@@ -79,7 +79,7 @@ export const checkAccess = async ({
       const { hasAllRequested } = await security.authz
         .checkPrivilegesWithRequest(request)
         .globally({ kibana: security.authz.actions.ui.get('enterpriseSearch', 'all') });
-      return hasAllRequested;
+      return hasAllRequested || false;
     } catch (err) {
       if (err.statusCode === 401 || err.statusCode === 403) {
         return false;

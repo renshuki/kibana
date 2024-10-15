@@ -5,12 +5,15 @@
  * 2.0.
  */
 
-import React, { memo, FC } from 'react';
+import type { FC, PropsWithChildren } from 'react';
+import React, { memo } from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
-import { EuiDescribedFormGroup, EuiFormRow } from '@elastic/eui';
+import { EuiDescribedFormGroup, EuiFormRow, EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
 
-export const AggDescription: FC = memo(({ children }) => {
+import { FunctionHelpPopover } from './function_help';
+
+export const AggDescription: FC<PropsWithChildren<unknown>> = memo(({ children }) => {
   const title = i18n.translate(
     'xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.aggSelect.title',
     {
@@ -19,22 +22,31 @@ export const AggDescription: FC = memo(({ children }) => {
   );
   return (
     <EuiDescribedFormGroup
-      title={<h3>{title}</h3>}
+      title={
+        <EuiFlexGroup gutterSize="none">
+          <EuiFlexItem grow={false}>
+            <h3>{title}</h3>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <FunctionHelpPopover />
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      }
       description={
         <FormattedMessage
           id="xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.aggSelect.description"
-          defaultMessage="Analysis functions to be performed e.g. sum, count."
+          defaultMessage="Analysis functions to be performed. For example, sum, count."
         />
       }
     >
-      <EuiFormRow label={title}>
+      <EuiFormRow>
         <>{children}</>
       </EuiFormRow>
     </EuiDescribedFormGroup>
   );
 });
 
-export const FieldDescription: FC = memo(({ children }) => {
+export const FieldDescription: FC<PropsWithChildren<unknown>> = memo(({ children }) => {
   const title = i18n.translate(
     'xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.fieldSelect.title',
     {
@@ -51,14 +63,14 @@ export const FieldDescription: FC = memo(({ children }) => {
         />
       }
     >
-      <EuiFormRow label={title}>
+      <EuiFormRow>
         <>{children}</>
       </EuiFormRow>
     </EuiDescribedFormGroup>
   );
 });
 
-export const ByFieldDescription: FC = memo(({ children }) => {
+export const ByFieldDescription: FC<PropsWithChildren<unknown>> = memo(({ children }) => {
   const title = i18n.translate(
     'xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.byFieldSelect.title',
     {
@@ -75,14 +87,14 @@ export const ByFieldDescription: FC = memo(({ children }) => {
         />
       }
     >
-      <EuiFormRow label={title}>
+      <EuiFormRow>
         <>{children}</>
       </EuiFormRow>
     </EuiDescribedFormGroup>
   );
 });
 
-export const OverFieldDescription: FC = memo(({ children }) => {
+export const OverFieldDescription: FC<PropsWithChildren<unknown>> = memo(({ children }) => {
   const title = i18n.translate(
     'xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.overFieldSelect.title',
     {
@@ -99,14 +111,14 @@ export const OverFieldDescription: FC = memo(({ children }) => {
         />
       }
     >
-      <EuiFormRow label={title}>
+      <EuiFormRow>
         <>{children}</>
       </EuiFormRow>
     </EuiDescribedFormGroup>
   );
 });
 
-export const PartitionFieldDescription: FC = memo(({ children }) => {
+export const PartitionFieldDescription: FC<PropsWithChildren<unknown>> = memo(({ children }) => {
   const title = i18n.translate(
     'xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.partitionFieldSelect.title',
     {
@@ -123,14 +135,14 @@ export const PartitionFieldDescription: FC = memo(({ children }) => {
         />
       }
     >
-      <EuiFormRow label={title}>
+      <EuiFormRow>
         <>{children}</>
       </EuiFormRow>
     </EuiDescribedFormGroup>
   );
 });
 
-export const ExcludeFrequentDescription: FC = memo(({ children }) => {
+export const ExcludeFrequentDescription: FC<PropsWithChildren<unknown>> = memo(({ children }) => {
   const title = i18n.translate(
     'xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.excludeFrequent.title',
     {
@@ -147,14 +159,14 @@ export const ExcludeFrequentDescription: FC = memo(({ children }) => {
         />
       }
     >
-      <EuiFormRow label={title}>
+      <EuiFormRow>
         <>{children}</>
       </EuiFormRow>
     </EuiDescribedFormGroup>
   );
 });
 
-export const DescriptionDescription: FC = memo(({ children }) => {
+export const DescriptionDescription: FC<PropsWithChildren<unknown>> = memo(({ children }) => {
   const title = i18n.translate(
     'xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.description.title',
     {
@@ -172,7 +184,7 @@ export const DescriptionDescription: FC = memo(({ children }) => {
         />
       }
     >
-      <EuiFormRow label={title} fullWidth={true}>
+      <EuiFormRow fullWidth={true}>
         <>{children}</>
       </EuiFormRow>
     </EuiDescribedFormGroup>

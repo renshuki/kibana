@@ -37,6 +37,7 @@ const domains: CrawlerDomain[] = [
     createdOn: '2020-01-01T00:00:00-12:00',
     deduplicationEnabled: false,
     deduplicationFields: ['title'],
+    extractionRules: [],
     availableDeduplicationFields: ['title', 'description'],
     auth: null,
   },
@@ -46,6 +47,7 @@ const domains: CrawlerDomain[] = [
     url: 'empty.site',
     crawlRules: [],
     entryPoints: [],
+    extractionRules: [],
     sitemaps: [],
     createdOn: '1970-01-01T00:00:00-12:00',
     deduplicationEnabled: false,
@@ -91,6 +93,10 @@ describe('DomainsTable', () => {
       .text();
   });
 
+  const getTableBody = () =>
+    // @ts-expect-error upgrade typescript v5.1.6
+    wrapper.find(EuiBasicTable).dive().find('RenderWithEuiTheme').renderProp('children')();
+
   it('renders', () => {
     expect(wrapper.find(EuiBasicTable)).toHaveLength(1);
 
@@ -111,8 +117,7 @@ describe('DomainsTable', () => {
     });
 
     it('renders a clickable domain url', () => {
-      const basicTable = wrapper.find(EuiBasicTable).dive();
-      const link = basicTable.find('[data-test-subj="CrawlerDomainURL"]').at(0);
+      const link = getTableBody().find('[data-test-subj="CrawlerDomainURL"]').at(0);
 
       expect(link.dive().text()).toContain('elastic.co');
       expect(link.props()).toEqual(
@@ -133,8 +138,9 @@ describe('DomainsTable', () => {
     });
 
     describe('actions column', () => {
-      const getTable = () => wrapper.find(EuiBasicTable).dive();
-      const getActions = () => getTable().find('ExpandedItemActions');
+      const simulatedClickEvent = { persist: () => {} }; // Required for EUI action clicks. Can be removed if switching away from Enzyme to RTL
+
+      const getActions = () => getTableBody().find('ExpandedItemActions');
       const getActionItems = () => getActions().first().dive().find('DefaultItemAction');
 
       describe('when the user can manage/delete engines', () => {
@@ -154,7 +160,7 @@ describe('DomainsTable', () => {
           it('sends the user to the engine overview on click', () => {
             const { navigateToUrl } = mockKibanaValues;
 
-            getManageAction().simulate('click');
+            getManageAction().simulate('click', simulatedClickEvent);
 
             expect(navigateToUrl).toHaveBeenCalledWith(
               '/search_indices/index-name/domain_management/1234'
@@ -164,7 +170,7 @@ describe('DomainsTable', () => {
 
         describe('delete action', () => {
           it('clicking the action and confirming deletes the domain', () => {
-            getDeleteAction().simulate('click');
+            getDeleteAction().simulate('click', simulatedClickEvent);
 
             expect(actions.showModal).toHaveBeenCalled();
           });

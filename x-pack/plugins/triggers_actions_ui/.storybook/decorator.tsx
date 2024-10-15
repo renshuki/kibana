@@ -5,24 +5,28 @@
  * 2.0.
  */
 
-import React from 'react';
+import React, { FC, PropsWithChildren } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { action } from '@storybook/addon-actions';
 import { DecoratorFn } from '@storybook/react';
 import { EMPTY, of } from 'rxjs';
 import { I18nProvider } from '@kbn/i18n-react';
-import { KibanaThemeProvider } from '@kbn/kibana-react-plugin/public';
+import { KibanaThemeProvider, KibanaServices } from '@kbn/kibana-react-plugin/public';
 import { EuiThemeProvider } from '@kbn/kibana-react-plugin/common';
 import type { NotificationsStart, ApplicationStart } from '@kbn/core/public';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { DARK_THEME, LIGHT_THEME } from '@elastic/charts';
 import { KibanaContextProvider } from '../public/common/lib/kibana';
 import { ExperimentalFeaturesService } from '../public/common/experimental_features_service';
 import { getHttp } from './context/http';
 import { getRuleTypeRegistry } from './context/rule_type_registry';
 import { getActionTypeRegistry } from './context/action_type_registry';
+import { getDefaultServicesApplication } from './context/application';
 
 interface StorybookContextDecoratorProps {
   context: Parameters<DecoratorFn>[1];
+  servicesApplicationOverride?: Partial<ApplicationStart>;
+  servicesOverride?: Partial<KibanaServices>;
 }
 
 const queryClient = new QueryClient();
@@ -43,43 +47,13 @@ const notifications: NotificationsStart = {
     remove: () => {},
     get$: () => of([]),
   },
+  showErrorDialog: () => {},
 };
 
-const applications = new Map();
-
-const application: ApplicationStart = {
-  currentAppId$: of('fleet'),
-  navigateToUrl: async (url: string) => {
-    action(`Navigate to: ${url}`);
-  },
-  navigateToApp: async (app: string) => {
-    action(`Navigate to: ${app}`);
-  },
-  getUrlForApp: (url: string) => url,
-  capabilities: {
-    actions: {
-      show: true,
-      save: true,
-      execute: true,
-      delete: true,
-    },
-    catalogue: {},
-    management: {},
-    navLinks: {},
-    fleet: {
-      read: true,
-      all: true,
-    },
-    fleetv2: {
-      read: true,
-      all: true,
-    },
-  },
-  applications$: of(applications),
-};
-
-export const StorybookContextDecorator: React.FC<StorybookContextDecoratorProps> = (props) => {
-  const { children, context } = props;
+export const StorybookContextDecorator: FC<PropsWithChildren<StorybookContextDecoratorProps>> = (
+  props
+) => {
+  const { children, context, servicesApplicationOverride, servicesOverride } = props;
   const { globals } = context;
   const { euiTheme } = globals;
 
@@ -87,11 +61,15 @@ export const StorybookContextDecorator: React.FC<StorybookContextDecoratorProps>
   ExperimentalFeaturesService.init({
     experimentalFeatures: {
       rulesListDatagrid: true,
-      internalAlertsTable: true,
       ruleTagFilter: true,
+      stackAlertsPage: true,
       ruleStatusFilter: true,
       rulesDetailLogs: true,
       ruleUseExecutionStatus: false,
+      ruleKqlBar: true,
+      isMustacheAutocompleteOn: false,
+      showMustacheAutocompleteSwitch: false,
+      isUsingRuleCreateFlyout: false,
     },
   });
   return (
@@ -113,10 +91,32 @@ export const StorybookContextDecorator: React.FC<StorybookContextDecoratorProps>
                   }
                 },
               },
-              application,
+              application: getDefaultServicesApplication(servicesApplicationOverride),
               http: getHttp(context),
               actionTypeRegistry: getActionTypeRegistry(),
               ruleTypeRegistry: getRuleTypeRegistry(),
+              charts: {
+                theme: {
+                  useChartsBaseTheme: () => (darkMode ? DARK_THEME : LIGHT_THEME),
+                  useSparklineOverrides: () => ({
+                    lineSeriesStyle: {
+                      point: {
+                        visible: false,
+                        strokeWidth: 1,
+                        radius: 1,
+                      },
+                    },
+                    areaSeriesStyle: {
+                      point: {
+                        visible: false,
+                        strokeWidth: 1,
+                        radius: 1,
+                      },
+                    },
+                  }),
+                },
+              },
+              ...servicesOverride,
             }}
           >
             <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

@@ -65,7 +65,8 @@ export class FleetAgentGenerator extends BaseDataGenerator<Agent> {
         // Casting here is needed because several of the attributes in `FleetServerAgent` are
         // defined as optional, but required in `Agent` type.
         ...(hit._source as Agent),
-        id: hit._id,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        id: hit._id!,
         policy_revision: hit._source?.policy_revision_idx,
         access_api_key: undefined,
         status: this.randomAgentStatus(),
@@ -84,11 +85,12 @@ export class FleetAgentGenerator extends BaseDataGenerator<Agent> {
     const hostname = this.randomHostname();
     const now = new Date().toISOString();
     const osFamily = this.randomOSFamily();
+    const version = overrides?._source?.agent?.version ?? this.randomVersion();
     const componentStatus = this.randomChoice<FleetServerAgentComponentStatus>(
       FleetServerAgentComponentStatuses
     );
     const componentInputPayload =
-      componentStatus === 'failed'
+      componentStatus === 'FAILED'
         ? {
             error: {
               code: ENDPOINT_ERROR_CODES.ES_CONNECTION_ERROR,
@@ -96,6 +98,7 @@ export class FleetAgentGenerator extends BaseDataGenerator<Agent> {
             },
           }
         : { extra: 'payload' };
+    const agentId = overrides?._source?.agent?.id ?? this.randomUUID();
 
     return merge<
       estypes.SearchHit<FleetServerAgent>,
@@ -111,20 +114,20 @@ export class FleetAgentGenerator extends BaseDataGenerator<Agent> {
           active: true,
           enrolled_at: now,
           agent: {
-            id: this.randomUUID(),
-            version: this.randomVersion(),
+            id: agentId,
+            version,
           },
           local_metadata: {
             elastic: {
               agent: {
-                'build.original': `8.0.0-SNAPSHOT (build: ${this.randomString(
+                'build.original': `${version} (build: ${this.randomString(
                   5
                 )} at 2021-05-07 18:42:49 +0000 UTC)`,
-                id: this.randomUUID(),
+                id: agentId,
                 log_level: 'info',
                 snapshot: true,
                 upgradeable: true,
-                version: '8.0.0',
+                version,
               },
             },
             host: {
@@ -245,5 +248,9 @@ export class FleetAgentGenerator extends BaseDataGenerator<Agent> {
 
   public randomAgentStatus() {
     return this.randomChoice(agentStatusList);
+  }
+
+  public randomString(length: number = 5) {
+    return super.randomString(length);
   }
 }

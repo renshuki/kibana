@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 /*
@@ -15,10 +16,12 @@ import type {
   SavedObjectSanitizedDoc,
   SavedObjectsRawDoc,
   SavedObjectUnsanitizedDoc,
+  ISavedObjectsSerializer,
 } from '@kbn/core-saved-objects-server';
-import { SavedObjectsSerializer } from '@kbn/core-saved-objects-base-server-internal';
-import { MigrateAndConvertFn } from './document_migrator';
+import type { IDocumentMigrator } from '@kbn/core-saved-objects-base-server-internal';
 import { TransformSavedObjectDocumentError } from '.';
+
+type MigrateAndConvertFn = IDocumentMigrator['migrateAndConvert'];
 
 export interface DocumentsTransformFailed {
   readonly type: string;
@@ -65,7 +68,7 @@ export class CorruptSavedObjectError extends Error {
  * @returns {SavedObjectsRawDoc[]}
  */
 export async function migrateRawDocs(
-  serializer: SavedObjectsSerializer,
+  serializer: ISavedObjectsSerializer,
   migrateDoc: MigrateAndConvertFn,
   rawDocs: SavedObjectsRawDoc[]
 ): Promise<SavedObjectsRawDoc[]> {
@@ -86,7 +89,7 @@ export async function migrateRawDocs(
 }
 
 interface MigrateRawDocsSafelyDeps {
-  serializer: SavedObjectsSerializer;
+  serializer: ISavedObjectsSerializer;
   migrateDoc: MigrateAndConvertFn;
   rawDocs: SavedObjectsRawDoc[];
 }
@@ -181,7 +184,7 @@ function transformNonBlocking(
 async function migrateMapToRawDoc(
   migrateMethod: MigrateFn,
   savedObject: SavedObjectSanitizedDoc<unknown>,
-  serializer: SavedObjectsSerializer
+  serializer: ISavedObjectsSerializer
 ): Promise<SavedObjectsRawDoc[]> {
   return [...(await migrateMethod(savedObject))].map((attrs) =>
     serializer.savedObjectToRaw({
@@ -201,9 +204,11 @@ async function migrateMapToRawDoc(
 function convertToRawAddMigrationVersion(
   rawDoc: SavedObjectsRawDoc,
   options: { namespaceTreatment: 'lax' },
-  serializer: SavedObjectsSerializer
+  serializer: ISavedObjectsSerializer
 ): SavedObjectSanitizedDoc<unknown> {
   const savedObject = serializer.rawToSavedObject(rawDoc, options);
-  savedObject.migrationVersion = savedObject.migrationVersion || {};
+  if (!savedObject.migrationVersion && !savedObject.typeMigrationVersion) {
+    savedObject.typeMigrationVersion = '';
+  }
   return savedObject;
 }

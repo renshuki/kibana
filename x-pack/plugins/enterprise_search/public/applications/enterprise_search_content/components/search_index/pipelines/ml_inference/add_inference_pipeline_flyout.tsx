@@ -23,6 +23,7 @@ import {
   EuiStepsHorizontalProps,
   EuiLoadingSpinner,
   EuiSpacer,
+  EuiStepStatus,
   EuiTitle,
 } from '@elastic/eui';
 
@@ -37,9 +38,9 @@ import {
 import { IndexNameLogic } from '../../index_name_logic';
 import { IndexViewLogic } from '../../index_view_logic';
 
+import { ConfigureFields } from './configure_fields';
 import { ConfigurePipeline } from './configure_pipeline';
 import { MLInferenceLogic } from './ml_inference_logic';
-import { NoModelsPanel } from './no_models';
 import { ReviewPipeline } from './review_pipeline';
 import { TestPipeline } from './test_pipeline';
 import { AddInferencePipelineSteps } from './types';
@@ -52,9 +53,15 @@ export interface AddInferencePipelineFlyoutProps {
 
 export const AddInferencePipelineFlyout = (props: AddInferencePipelineFlyoutProps) => {
   const { indexName } = useValues(IndexNameLogic);
-  const { setIndexName } = useActions(MLInferenceLogic);
+  const { setIndexName, makeMlInferencePipelinesRequest, startPollingModels, makeMappingRequest } =
+    useActions(MLInferenceLogic);
   useEffect(() => {
     setIndexName(indexName);
+
+    // Trigger fetching of initial data: existing ML pipelines, available models, index mapping
+    makeMlInferencePipelinesRequest(undefined);
+    startPollingModels();
+    makeMappingRequest({ indexName });
   }, [indexName]);
 
   return (
@@ -80,7 +87,6 @@ export const AddInferencePipelineContent = ({ onClose }: AddInferencePipelineFly
   const { ingestionMethod } = useValues(IndexViewLogic);
   const {
     createErrors,
-    supportedMLModels,
     isLoading,
     addInferencePipelineModal: { step },
   } = useValues(MLInferenceLogic);
@@ -89,10 +95,9 @@ export const AddInferencePipelineContent = ({ onClose }: AddInferencePipelineFly
   const createErrorsHookDep = createErrors.join('|');
   useEffect(() => {
     if (createErrors.length === 0) return;
-    // TODO - update for flyout
-    const modalOverflow = document.getElementsByClassName('euiModalBody__overflow');
-    if (modalOverflow.length === 0) return;
-    modalOverflow[0].scrollTop = 0;
+    const flyoutOverflow = document.getElementsByClassName('euiFlyoutBody__overflow');
+    if (flyoutOverflow.length === 0) return;
+    flyoutOverflow[0].scrollTop = 0;
   }, [createErrorsHookDep]);
 
   if (isLoading) {
@@ -101,9 +106,6 @@ export const AddInferencePipelineContent = ({ onClose }: AddInferencePipelineFly
         <EuiLoadingSpinner size="xl" />
       </EuiFlyoutBody>
     );
-  }
-  if (supportedMLModels.length === 0) {
-    return <NoModelsPanel />;
   }
 
   return (
@@ -117,7 +119,7 @@ export const AddInferencePipelineContent = ({ onClose }: AddInferencePipelineFly
                 { defaultMessage: 'Error creating pipeline' }
               )}
               color="danger"
-              iconType="alert"
+              iconType="error"
             >
               {createErrors.map((message, i) => (
                 <p key={`createError.${i}`}>{message}</p>
@@ -127,7 +129,9 @@ export const AddInferencePipelineContent = ({ onClose }: AddInferencePipelineFly
           </>
         )}
         <AddInferencePipelineHorizontalSteps />
+        <EuiSpacer size="m" />
         {step === AddInferencePipelineSteps.Configuration && <ConfigurePipeline />}
+        {step === AddInferencePipelineSteps.Fields && <ConfigureFields />}
         {step === AddInferencePipelineSteps.Test && <TestPipeline />}
         {step === AddInferencePipelineSteps.Review && <ReviewPipeline />}
       </EuiFlyoutBody>
@@ -141,13 +145,28 @@ export const AddInferencePipelineContent = ({ onClose }: AddInferencePipelineFly
 export const AddInferencePipelineHorizontalSteps: React.FC = () => {
   const {
     addInferencePipelineModal: { step },
+    isConfigureStepValid,
     isPipelineDataValid,
   } = useValues(MLInferenceLogic);
-  const { setAddInferencePipelineStep } = useActions(MLInferenceLogic);
+  const { onAddInferencePipelineStepChange } = useActions(MLInferenceLogic);
+
+  /**
+   * Convenience function for determining the status of a step in the horizontal nav.
+   * @param currentStep The current step in the pipeline.
+   * @param otherStep The step to compare against.
+   * @returns The status of the step.
+   */
+  const getStepStatus = (
+    currentStep: AddInferencePipelineSteps,
+    otherStep: AddInferencePipelineSteps
+  ): EuiStepStatus =>
+    currentStep > otherStep ? 'complete' : currentStep === otherStep ? 'current' : 'incomplete';
+
   const navSteps: EuiStepsHorizontalProps['steps'] = [
     {
-      onClick: () => setAddInferencePipelineStep(AddInferencePipelineSteps.Configuration),
-      status: isPipelineDataValid ? 'complete' : 'disabled',
+      // Configure
+      onClick: () => onAddInferencePipelineStepChange(AddInferencePipelineSteps.Configuration),
+      status: step > AddInferencePipelineSteps.Configuration ? 'complete' : 'current',
       title: i18n.translate(
         'xpack.enterpriseSearch.content.indices.transforms.addInferencePipelineModal.steps.configure.title',
         {
@@ -156,24 +175,46 @@ export const AddInferencePipelineHorizontalSteps: React.FC = () => {
       ),
     },
     {
+      // Fields
       onClick: () => {
-        if (!isPipelineDataValid) return;
-        setAddInferencePipelineStep(AddInferencePipelineSteps.Test);
+        if (!isConfigureStepValid) return;
+        onAddInferencePipelineStepChange(AddInferencePipelineSteps.Fields);
       },
-      status: isPipelineDataValid ? 'incomplete' : 'disabled',
+      status: isConfigureStepValid
+        ? getStepStatus(step, AddInferencePipelineSteps.Fields)
+        : 'disabled',
       title: i18n.translate(
-        'xpack.enterpriseSearch.content.indices.transforms.addInferencePipelineModal.steps.test.title',
+        'xpack.enterpriseSearch.content.indices.transforms.addInferencePipelineModal.steps.fields.title',
         {
-          defaultMessage: 'Test',
+          defaultMessage: 'Fields',
         }
       ),
     },
     {
+      // Test
       onClick: () => {
         if (!isPipelineDataValid) return;
-        setAddInferencePipelineStep(AddInferencePipelineSteps.Review);
+        onAddInferencePipelineStepChange(AddInferencePipelineSteps.Test);
       },
-      status: isPipelineDataValid ? 'incomplete' : 'disabled',
+      status: isPipelineDataValid
+        ? getStepStatus(step, AddInferencePipelineSteps.Test)
+        : 'disabled',
+      title: i18n.translate(
+        'xpack.enterpriseSearch.content.indices.transforms.addInferencePipelineModal.steps.test.title',
+        {
+          defaultMessage: 'Test (Optional)',
+        }
+      ),
+    },
+    {
+      // Review
+      onClick: () => {
+        if (!isPipelineDataValid) return;
+        onAddInferencePipelineStepChange(AddInferencePipelineSteps.Review);
+      },
+      status: isPipelineDataValid
+        ? getStepStatus(step, AddInferencePipelineSteps.Review)
+        : 'disabled',
       title: i18n.translate(
         'xpack.enterpriseSearch.content.indices.transforms.addInferencePipelineModal.steps.review.title',
         {
@@ -182,56 +223,47 @@ export const AddInferencePipelineHorizontalSteps: React.FC = () => {
       ),
     },
   ];
-  switch (step) {
-    case AddInferencePipelineSteps.Configuration:
-      navSteps[0].status = isPipelineDataValid ? 'complete' : 'current';
-      break;
-    case AddInferencePipelineSteps.Test:
-      navSteps[1].status = 'current';
-      break;
-    case AddInferencePipelineSteps.Review:
-      navSteps[2].status = 'current';
-      break;
-  }
+
   return <EuiStepsHorizontal steps={navSteps} />;
 };
 
 export const AddInferencePipelineFooter: React.FC<
   AddInferencePipelineFlyoutProps & { ingestionMethod: string }
 > = ({ ingestionMethod, onClose }) => {
-  const { addInferencePipelineModal: modal, isPipelineDataValid } = useValues(MLInferenceLogic);
-  const { attachPipeline, createPipeline, setAddInferencePipelineStep } =
+  const {
+    addInferencePipelineModal: modal,
+    isPipelineDataValid,
+    isConfigureStepValid,
+  } = useValues(MLInferenceLogic);
+  const { attachPipeline, createPipeline, onAddInferencePipelineStepChange } =
     useActions(MLInferenceLogic);
 
   const attachExistingPipeline = Boolean(modal.configuration.existingPipeline);
   let nextStep: AddInferencePipelineSteps | undefined;
   let previousStep: AddInferencePipelineSteps | undefined;
+  let isContinueButtonEnabled = false;
   switch (modal.step) {
+    case AddInferencePipelineSteps.Configuration:
+      nextStep = AddInferencePipelineSteps.Fields;
+      isContinueButtonEnabled = isConfigureStepValid;
+      break;
+    case AddInferencePipelineSteps.Fields:
+      nextStep = AddInferencePipelineSteps.Test;
+      previousStep = AddInferencePipelineSteps.Configuration;
+      isContinueButtonEnabled = isPipelineDataValid;
+      break;
     case AddInferencePipelineSteps.Test:
       nextStep = AddInferencePipelineSteps.Review;
-      previousStep = AddInferencePipelineSteps.Configuration;
+      previousStep = AddInferencePipelineSteps.Fields;
+      isContinueButtonEnabled = true;
       break;
     case AddInferencePipelineSteps.Review:
       previousStep = AddInferencePipelineSteps.Test;
-      break;
-    case AddInferencePipelineSteps.Configuration:
-      nextStep = AddInferencePipelineSteps.Test;
+      isContinueButtonEnabled = true;
       break;
   }
   return (
     <EuiFlexGroup>
-      <EuiFlexItem grow={false}>
-        {previousStep !== undefined ? (
-          <EuiButtonEmpty
-            flush="both"
-            iconType="arrowLeft"
-            onClick={() => setAddInferencePipelineStep(previousStep as AddInferencePipelineSteps)}
-          >
-            {BACK_BUTTON_LABEL}
-          </EuiButtonEmpty>
-        ) : null}
-      </EuiFlexItem>
-      <EuiFlexItem />
       <EuiFlexItem grow={false}>
         <EuiButtonEmpty
           data-telemetry-id={`entSearchContent-${ingestionMethod}-pipelines-addMlInference-cancel`}
@@ -240,14 +272,28 @@ export const AddInferencePipelineFooter: React.FC<
           {CANCEL_BUTTON_LABEL}
         </EuiButtonEmpty>
       </EuiFlexItem>
+      <EuiFlexItem />
+      <EuiFlexItem grow={false}>
+        {previousStep !== undefined ? (
+          <EuiButtonEmpty
+            flush="both"
+            iconType="arrowLeft"
+            onClick={() =>
+              onAddInferencePipelineStepChange(previousStep as AddInferencePipelineSteps)
+            }
+          >
+            {BACK_BUTTON_LABEL}
+          </EuiButtonEmpty>
+        ) : null}
+      </EuiFlexItem>
       <EuiFlexItem grow={false}>
         {nextStep !== undefined ? (
           <EuiButton
             data-telemetry-id={`entSearchContent-${ingestionMethod}-pipelines-addMlInference-continue`}
             iconType="arrowRight"
             iconSide="right"
-            onClick={() => setAddInferencePipelineStep(nextStep as AddInferencePipelineSteps)}
-            disabled={!isPipelineDataValid}
+            onClick={() => onAddInferencePipelineStepChange(nextStep as AddInferencePipelineSteps)}
+            disabled={!isContinueButtonEnabled}
             fill
           >
             {CONTINUE_BUTTON_LABEL}
@@ -256,7 +302,7 @@ export const AddInferencePipelineFooter: React.FC<
           <EuiButton
             color="primary"
             data-telemetry-id={`entSearchContent-${ingestionMethod}-pipelines-addMlInference-attach`}
-            disabled={!isPipelineDataValid}
+            disabled={!isContinueButtonEnabled}
             fill
             onClick={attachPipeline}
           >
@@ -271,14 +317,14 @@ export const AddInferencePipelineFooter: React.FC<
           <EuiButton
             color="success"
             data-telemetry-id={`entSearchContent-${ingestionMethod}-pipelines-addMlInference-create`}
-            disabled={!isPipelineDataValid}
+            disabled={!isContinueButtonEnabled}
             fill
             onClick={createPipeline}
           >
             {i18n.translate(
               'xpack.enterpriseSearch.content.indices.transforms.addInferencePipelineModal.footer.create',
               {
-                defaultMessage: 'Create',
+                defaultMessage: 'Create pipeline',
               }
             )}
           </EuiButton>

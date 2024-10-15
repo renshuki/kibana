@@ -5,17 +5,16 @@
  * 2.0.
  */
 
-import { PluginSetupContract, PluginStartContract } from './plugin';
+import { FeaturesPluginSetup, FeaturesPluginStart } from './plugin';
 import {
   featurePrivilegeIterator,
   subFeaturePrivilegeIterator,
 } from './feature_privilege_iterator';
 
-const createSetup = (): jest.Mocked<PluginSetupContract> => {
+const createSetup = (): jest.Mocked<FeaturesPluginSetup> => {
   return {
     getKibanaFeatures: jest.fn(),
     getElasticsearchFeatures: jest.fn(),
-    getFeaturesUICapabilities: jest.fn(),
     registerKibanaFeature: jest.fn(),
     registerElasticsearchFeature: jest.fn(),
     enableReportingUiCapabilities: jest.fn(),
@@ -24,7 +23,7 @@ const createSetup = (): jest.Mocked<PluginSetupContract> => {
   };
 };
 
-const createStart = (): jest.Mocked<PluginStartContract> => {
+const createStart = (): jest.Mocked<FeaturesPluginStart> => {
   return {
     getKibanaFeatures: jest.fn(),
     getElasticsearchFeatures: jest.fn(),

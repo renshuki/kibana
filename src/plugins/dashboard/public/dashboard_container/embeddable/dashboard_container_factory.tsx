@@ -1,36 +1,27 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { Observable } from 'rxjs';
 import { i18n } from '@kbn/i18n';
-
+import { EmbeddablePersistableStateService } from '@kbn/embeddable-plugin/common';
 import {
   Container,
-  ErrorEmbeddable,
   ContainerOutput,
   EmbeddableFactory,
   EmbeddableFactoryDefinition,
-  EmbeddablePackageState,
+  ErrorEmbeddable,
 } from '@kbn/embeddable-plugin/public';
-import { SearchSessionInfoProvider } from '@kbn/data-plugin/public';
-import { IKbnUrlStateStorage } from '@kbn/kibana-utils-plugin/public';
-import { EmbeddablePersistableStateService } from '@kbn/embeddable-plugin/common';
 
-import {
-  createInject,
-  createExtract,
-  DashboardContainerInput,
-  DashboardContainerByValueInput,
-} from '../../../common';
 import { DASHBOARD_CONTAINER_TYPE } from '..';
-import type { DashboardContainer } from './dashboard_container';
+import { createExtract, createInject, DashboardContainerInput } from '../../../common';
 import { DEFAULT_DASHBOARD_INPUT } from '../../dashboard_constants';
-import { LoadDashboardFromSavedObjectReturn } from '../../services/dashboard_saved_object/lib/load_dashboard_state_from_saved_object';
+import type { DashboardContainer } from './dashboard_container';
+import type { DashboardCreationOptions } from '../..';
 
 export type DashboardContainerFactory = EmbeddableFactory<
   DashboardContainerInput,
@@ -38,31 +29,16 @@ export type DashboardContainerFactory = EmbeddableFactory<
   DashboardContainer
 >;
 
-export interface DashboardCreationOptions {
-  initialInput?: Partial<DashboardContainerInput>;
-  overrideInput?: Partial<DashboardContainerByValueInput>;
+export const dashboardTypeDisplayName = i18n.translate('dashboard.factory.displayName', {
+  defaultMessage: 'Dashboard',
+});
 
-  incomingEmbeddable?: EmbeddablePackageState;
-
-  useSearchSessionsIntegration?: boolean;
-  searchSessionSettings?: {
-    sessionIdToRestore?: string;
-    sessionIdUrlChangeObservable?: Observable<string | undefined>;
-    getSearchSessionIdFromURL: () => string | undefined;
-    removeSessionIdFromUrl: () => void;
-    createSessionRestorationDataProvider: (
-      container: DashboardContainer
-    ) => SearchSessionInfoProvider;
-  };
-
-  useControlGroupIntegration?: boolean;
-  useSessionStorageIntegration?: boolean;
-
-  useUnifiedSearchIntegration?: boolean;
-  unifiedSearchSettings?: { kbnUrlStateStorage: IKbnUrlStateStorage };
-
-  validateLoadedSavedObject?: (result: LoadDashboardFromSavedObjectReturn) => boolean;
-}
+export const dashboardTypeDisplayLowercase = i18n.translate(
+  'dashboard.factory.displayNameLowercase',
+  {
+    defaultMessage: 'dashboard',
+  }
+);
 
 export class DashboardContainerFactoryDefinition
   implements
@@ -84,11 +60,7 @@ export class DashboardContainerFactoryDefinition
     return false;
   };
 
-  public readonly getDisplayName = () => {
-    return i18n.translate('dashboard.factory.displayName', {
-      defaultMessage: 'Dashboard',
-    });
-  };
+  public readonly getDisplayName = () => dashboardTypeDisplayName;
 
   public getDefaultInput(): Partial<DashboardContainerInput> {
     return DEFAULT_DASHBOARD_INPUT;
@@ -97,19 +69,20 @@ export class DashboardContainerFactoryDefinition
   public create = async (
     initialInput: DashboardContainerInput,
     parent?: Container,
-    creationOptions?: DashboardCreationOptions
-  ): Promise<DashboardContainer | ErrorEmbeddable> => {
+    creationOptions?: DashboardCreationOptions,
+    savedObjectId?: string
+  ): Promise<DashboardContainer | ErrorEmbeddable | undefined> => {
     const dashboardCreationStartTime = performance.now();
-    const { DashboardContainer: DashboardContainerEmbeddable } = await import(
-      './dashboard_container'
-    );
-    return Promise.resolve(
-      new DashboardContainerEmbeddable(
-        initialInput,
+    const { createDashboard } = await import('./create/create_dashboard');
+    try {
+      const dashboard = await createDashboard(
+        creationOptions,
         dashboardCreationStartTime,
-        parent,
-        creationOptions
-      )
-    );
+        savedObjectId
+      );
+      return dashboard;
+    } catch (e) {
+      return new ErrorEmbeddable(e, { id: e.id });
+    }
   };
 }

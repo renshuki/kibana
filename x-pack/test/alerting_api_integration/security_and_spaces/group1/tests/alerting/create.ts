@@ -6,14 +6,15 @@
  */
 
 import expect from '@kbn/expect';
-import { UserAtSpaceScenarios } from '../../../scenarios';
+import { RULE_SAVED_OBJECT_TYPE } from '@kbn/alerting-plugin/server';
+import { ES_TEST_INDEX_NAME } from '@kbn/alerting-api-integration-helpers';
+import { systemActionScenario, UserAtSpaceScenarios } from '../../../scenarios';
 import {
   checkAAD,
   getTestRuleData,
-  getConsumerUnauthorizedErrorMessage,
+  getUnauthorizedErrorMessage,
   getUrlPrefix,
   ObjectRemover,
-  getProducerUnauthorizedErrorMessage,
   TaskManagerDoc,
 } from '../../../../common/lib';
 import { FtrProviderContext } from '../../../../common/ftr_provider_context';
@@ -37,7 +38,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
       return scheduledTask._source!;
     }
 
-    for (const scenario of UserAtSpaceScenarios) {
+    for (const scenario of [...UserAtSpaceScenarios, systemActionScenario]) {
       const { user, space } = scenario;
       describe(scenario.id, () => {
         it('should handle create alert request appropriately', async () => {
@@ -65,6 +66,10 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
                     params: {},
                   },
                 ],
+                flapping: {
+                  look_back_window: 10,
+                  status_change_threshold: 10,
+                },
               })
             );
 
@@ -75,11 +80,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: getConsumerUnauthorizedErrorMessage(
-                  'create',
-                  'test.noop',
-                  'alertsFixture'
-                ),
+                message: getUnauthorizedErrorMessage('create', 'test.noop', 'alertsFixture'),
                 statusCode: 403,
               });
               break;
@@ -94,6 +95,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'superuser at space1':
             case 'space_1_all at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(200);
               objectRemover.add(space.id, response.body.id, 'rule', 'alerting');
               expect(response.body).to.eql({
@@ -106,6 +108,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
                     connector_type_id: createdAction.connector_type_id,
                     group: 'default',
                     params: {},
+                    uuid: response.body.actions[0].uuid,
                   },
                 ],
                 enabled: true,
@@ -122,9 +125,15 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
                 notify_when: 'onThrottleInterval',
                 updated_by: user.username,
                 api_key_owner: user.username,
+                api_key_created_by_user: false,
                 mute_all: false,
                 muted_alert_ids: [],
                 execution_status: response.body.execution_status,
+                revision: 0,
+                flapping: {
+                  look_back_window: 10,
+                  status_change_threshold: 10,
+                },
                 ...(response.body.next_run ? { next_run: response.body.next_run } : {}),
                 ...(response.body.last_run ? { last_run: response.body.last_run } : {}),
               });
@@ -148,7 +157,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               await checkAAD({
                 supertest,
                 spaceId: space.id,
-                type: 'alert',
+                type: RULE_SAVED_OBJECT_TYPE,
                 id: response.body.id,
               });
               break;
@@ -178,7 +187,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: getConsumerUnauthorizedErrorMessage(
+                message: getUnauthorizedErrorMessage(
                   'create',
                   'test.restricted-noop',
                   'alertsRestrictedFixture'
@@ -188,6 +197,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               break;
             case 'superuser at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(200);
               objectRemover.add(space.id, response.body.id, 'rule', 'alerting');
               break;
@@ -215,7 +225,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: getConsumerUnauthorizedErrorMessage(
+                message: getUnauthorizedErrorMessage(
                   'create',
                   'test.unrestricted-noop',
                   'alertsFixture'
@@ -225,19 +235,9 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               break;
             case 'space_1_all at space1':
             case 'space_1_all_alerts_none_actions at space1':
-              expect(response.statusCode).to.eql(403);
-              expect(response.body).to.eql({
-                error: 'Forbidden',
-                message: getProducerUnauthorizedErrorMessage(
-                  'create',
-                  'test.unrestricted-noop',
-                  'alertsRestrictedFixture'
-                ),
-                statusCode: 403,
-              });
-              break;
             case 'superuser at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(200);
               objectRemover.add(space.id, response.body.id, 'rule', 'alerting');
               break;
@@ -264,7 +264,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: getConsumerUnauthorizedErrorMessage('create', 'test.noop', 'alerts'),
+                message: getUnauthorizedErrorMessage('create', 'test.noop', 'alerts'),
                 statusCode: 403,
               });
               break;
@@ -272,11 +272,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: getProducerUnauthorizedErrorMessage(
-                  'create',
-                  'test.noop',
-                  'alertsFixture'
-                ),
+                message: getUnauthorizedErrorMessage('create', 'test.noop', 'alertsFixture'),
                 statusCode: 403,
               });
               break;
@@ -284,6 +280,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'space_1_all_alerts_none_actions at space1':
             case 'superuser at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(200);
               objectRemover.add(space.id, response.body.id, 'rule', 'alerting');
               break;
@@ -312,10 +309,11 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'space_1_all_alerts_none_actions at space1':
             case 'space_1_all_with_restricted_fixture at space1':
             case 'superuser at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: getConsumerUnauthorizedErrorMessage(
+                message: getUnauthorizedErrorMessage(
                   'create',
                   'test.noop',
                   'some consumer patrick invented'
@@ -342,11 +340,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: getConsumerUnauthorizedErrorMessage(
-                  'create',
-                  'test.noop',
-                  'alertsFixture'
-                ),
+                message: getUnauthorizedErrorMessage('create', 'test.noop', 'alertsFixture'),
                 statusCode: 403,
               });
               break;
@@ -354,6 +348,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'space_1_all at space1':
             case 'space_1_all_alerts_none_actions at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(200);
               objectRemover.add(space.id, response.body.id, 'rule', 'alerting');
               expect(response.body.scheduled_task_id).to.eql(undefined);
@@ -381,11 +376,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: getConsumerUnauthorizedErrorMessage(
-                  'create',
-                  'test.noop',
-                  'alertsFixture'
-                ),
+                message: getUnauthorizedErrorMessage('create', 'test.noop', 'alertsFixture'),
                 statusCode: 403,
               });
               break;
@@ -393,6 +384,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'space_1_all at space1':
             case 'space_1_all_alerts_none_actions at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(200);
               expect(response.body.name).to.eql(' leading and trailing whitespace ');
               objectRemover.add(space.id, response.body.id, 'rule', 'alerting');
@@ -421,6 +413,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'space_1_all_alerts_none_actions at space1':
             case 'space_1_all_with_restricted_fixture at space1':
             case 'superuser at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(400);
               expect(response.body).to.eql({
                 statusCode: 400,
@@ -448,6 +441,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'space_1_all at space1':
             case 'space_1_all_alerts_none_actions at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(400);
               expect(response.body).to.eql({
                 statusCode: 400,
@@ -478,11 +472,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: getConsumerUnauthorizedErrorMessage(
-                  'create',
-                  'test.validation',
-                  'alertsFixture'
-                ),
+                message: getUnauthorizedErrorMessage('create', 'test.validation', 'alertsFixture'),
                 statusCode: 403,
               });
               break;
@@ -490,6 +480,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'space_1_all at space1':
             case 'space_1_all_alerts_none_actions at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(400);
               expect(response.body).to.eql({
                 statusCode: 400,
@@ -518,6 +509,7 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'space_1_all at space1':
             case 'space_1_all_alerts_none_actions at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(400);
               expect(response.body).to.eql({
                 error: 'Bad Request',
@@ -545,12 +537,72 @@ export default function createAlertTests({ getService }: FtrProviderContext) {
             case 'space_1_all at space1':
             case 'space_1_all_alerts_none_actions at space1':
             case 'space_1_all_with_restricted_fixture at space1':
+            case 'system_actions at space1':
               expect(response.statusCode).to.eql(400);
               expect(response.body).to.eql({
                 error: 'Bad Request',
                 message: '[request body.schedule.interval]: string is not a valid duration: 0s',
                 statusCode: 400,
               });
+              break;
+            default:
+              throw new Error(`Scenario untested: ${JSON.stringify(scenario)}`);
+          }
+        });
+
+        it('should handle create alert request appropriately with system actions', async () => {
+          const connectorId = 'system-connector-test.system-action-kibana-privileges';
+          const reference = `actions-enqueue-${scenario.id}:${space.id}:${connectorId}`;
+
+          const systemActionWithKibanaPrivileges = {
+            id: connectorId,
+            group: 'default',
+            params: { index: ES_TEST_INDEX_NAME, reference },
+          };
+
+          const response = await supertestWithoutAuth
+            .post(`${getUrlPrefix(space.id)}/api/alerting/rule`)
+            .set('kbn-xsrf', 'foo')
+            .auth(user.username, user.password)
+            .send(
+              getTestRuleData({
+                actions: [systemActionWithKibanaPrivileges],
+              })
+            );
+
+          switch (scenario.id) {
+            case 'no_kibana_privileges at space1':
+            case 'global_read at space1':
+            case 'space_1_all at space2':
+              expect(response.statusCode).to.eql(403);
+              expect(response.body).to.eql({
+                error: 'Forbidden',
+                message: getUnauthorizedErrorMessage('create', 'test.noop', 'alertsFixture'),
+                statusCode: 403,
+              });
+              break;
+            case 'space_1_all at space1':
+            case 'space_1_all_with_restricted_fixture at space1':
+              expect(response.statusCode).to.eql(403);
+              expect(response.body).to.eql({
+                error: 'Forbidden',
+                message: 'Unauthorized to execute actions',
+                statusCode: 403,
+              });
+              break;
+            case 'space_1_all_alerts_none_actions at space1':
+              expect(response.statusCode).to.eql(403);
+              expect(response.body).to.eql({
+                error: 'Forbidden',
+                message: 'Unauthorized to get actions',
+                statusCode: 403,
+              });
+              break;
+
+            case 'superuser at space1':
+            case 'system_actions at space1':
+              expect(response.statusCode).to.eql(200);
+              objectRemover.add(space.id, response.body.id, 'rule', 'alerting');
               break;
             default:
               throw new Error(`Scenario untested: ${JSON.stringify(scenario)}`);

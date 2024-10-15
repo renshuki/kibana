@@ -6,16 +6,22 @@
  */
 
 import type { CollectorFetchContext } from '@kbn/usage-collection-plugin/server';
-import type { CollectorDependencies } from './types';
+
+import type { CollectorDependencies, DashboardMetrics } from './types';
 import { getDetectionsMetrics } from './detections/get_metrics';
 import { getInternalSavedObjectsClient } from './get_internal_saved_objects_client';
 import { getEndpointMetrics } from './endpoint/get_metrics';
+import { getDashboardMetrics } from './dashboards/get_dashboards_metrics';
+import { riskEngineMetricsSchema } from './risk_engine/schema';
+import { getRiskEngineMetrics } from './risk_engine/get_risk_engine_metrics';
 
 export type RegisterCollector = (deps: CollectorDependencies) => void;
 
 export interface UsageData {
   detectionMetrics: {};
   endpointMetrics: {};
+  dashboardMetrics: DashboardMetrics;
+  riskEngineMetrics: {};
 }
 
 export const registerCollector: RegisterCollector = ({
@@ -25,6 +31,7 @@ export const registerCollector: RegisterCollector = ({
   ml,
   usageCollection,
   logger,
+  riskEngineIndexPatterns,
 }) => {
   if (!usageCollection) {
     logger.debug('Usage collection is undefined, therefore returning early without registering it');
@@ -64,6 +71,75 @@ export const registerCollector: RegisterCollector = ({
                 type: 'long',
                 _meta: { description: 'Number of notifications enabled' },
               },
+              legacy_investigation_fields: {
+                type: 'long',
+                _meta: {
+                  description:
+                    'Number of rules using the legacy investigation fields type introduced only in 8.10 ESS',
+                },
+              },
+              alert_suppression: {
+                enabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of enabled query rules configured with suppression',
+                  },
+                },
+                disabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of disabled query rules configured with suppression',
+                  },
+                },
+                suppressed_fields_count: {
+                  one: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of query rules configured with one suppression field',
+                    },
+                  },
+                  two: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of query rules configured with two suppression field',
+                    },
+                  },
+                  three: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of query rules configured with three suppression field',
+                    },
+                  },
+                },
+                suppressed_per_time_period: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of query rules configured with suppression per time period',
+                  },
+                },
+                suppressed_per_rule_execution: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of query rules configured with suppression per rule execution',
+                  },
+                },
+                suppresses_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of query rules configured to suppress alerts with missing fields',
+                  },
+                },
+                does_not_suppress_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of query rules configured do not suppress alerts with missing fields',
+                  },
+                },
+              },
             },
             threshold: {
               enabled: {
@@ -100,6 +176,78 @@ export const registerCollector: RegisterCollector = ({
                 type: 'long',
                 _meta: { description: 'Number of notifications enabled' },
               },
+              legacy_investigation_fields: {
+                type: 'long',
+                _meta: {
+                  description:
+                    'Number of rules using the legacy investigation fields type introduced only in 8.10 ESS',
+                },
+              },
+              alert_suppression: {
+                enabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of enabled threshold rules configured with suppression',
+                  },
+                },
+                disabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of disabled threshold rules configured with suppression',
+                  },
+                },
+                suppressed_fields_count: {
+                  one: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of threshold rules configured with one suppression field',
+                    },
+                  },
+                  two: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of threshold rules configured with two suppression field',
+                    },
+                  },
+                  three: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of threshold rules configured with three suppression field',
+                    },
+                  },
+                },
+                suppressed_per_time_period: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of threshold rules configured with suppression per time period',
+                  },
+                },
+                suppressed_per_rule_execution: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of threshold rules configured with suppression per rule execution',
+                  },
+                },
+                suppresses_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of threshold rules configured to suppress alerts with missing fields',
+                  },
+                },
+                does_not_suppress_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of threshold rules configured do not suppress alerts with missing fields',
+                  },
+                },
+              },
             },
             eql: {
               enabled: { type: 'long', _meta: { description: 'Number of eql rules enabled' } },
@@ -127,6 +275,74 @@ export const registerCollector: RegisterCollector = ({
               notifications_disabled: {
                 type: 'long',
                 _meta: { description: 'Number of notifications enabled' },
+              },
+              legacy_investigation_fields: {
+                type: 'long',
+                _meta: {
+                  description:
+                    'Number of rules using the legacy investigation fields type introduced only in 8.10 ESS',
+                },
+              },
+              alert_suppression: {
+                enabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of enabled eql rules configured with suppression',
+                  },
+                },
+                disabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of disabled eql rules configured with suppression',
+                  },
+                },
+                suppressed_fields_count: {
+                  one: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of eql rules configured with one suppression field',
+                    },
+                  },
+                  two: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of eql rules configured with two suppression field',
+                    },
+                  },
+                  three: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of eql rules configured with three suppression field',
+                    },
+                  },
+                },
+                suppressed_per_time_period: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of eql rules configured with suppression per time period',
+                  },
+                },
+                suppressed_per_rule_execution: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of eql rules configured with suppression per rule execution',
+                  },
+                },
+                suppresses_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of eql rules configured to suppress alerts with missing fields',
+                  },
+                },
+                does_not_suppress_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of eql rules configured do not suppress alerts with missing fields',
+                  },
+                },
               },
             },
             machine_learning: {
@@ -164,6 +380,80 @@ export const registerCollector: RegisterCollector = ({
                 type: 'long',
                 _meta: { description: 'Number of notifications enabled' },
               },
+              legacy_investigation_fields: {
+                type: 'long',
+                _meta: {
+                  description:
+                    'Number of rules using the legacy investigation fields type introduced only in 8.10 ESS',
+                },
+              },
+              alert_suppression: {
+                enabled: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of enabled machine_learning rules configured with suppression',
+                  },
+                },
+                disabled: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of disabled machine_learning rules configured with suppression',
+                  },
+                },
+                suppressed_fields_count: {
+                  one: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of machine_learning rules configured with one suppression field',
+                    },
+                  },
+                  two: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of machine_learning rules configured with two suppression field',
+                    },
+                  },
+                  three: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of machine_learning rules configured with three suppression field',
+                    },
+                  },
+                },
+                suppressed_per_time_period: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of machine_learning rules configured with suppression per time period',
+                  },
+                },
+                suppressed_per_rule_execution: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of machine_learning rules configured with suppression per rule execution',
+                  },
+                },
+                suppresses_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of machine_learning rules configured to suppress alerts with missing fields',
+                  },
+                },
+                does_not_suppress_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of machine_learning rules configured do not suppress alerts with missing fields',
+                  },
+                },
+              },
             },
             threat_match: {
               enabled: {
@@ -199,6 +489,79 @@ export const registerCollector: RegisterCollector = ({
               notifications_disabled: {
                 type: 'long',
                 _meta: { description: 'Number of notifications enabled' },
+              },
+              legacy_investigation_fields: {
+                type: 'long',
+                _meta: {
+                  description:
+                    'Number of rules using the legacy investigation fields type introduced only in 8.10 ESS',
+                },
+              },
+              alert_suppression: {
+                enabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of enabled threat_match rules configured with suppression',
+                  },
+                },
+                disabled: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of disabled threat_match rules configured with suppression',
+                  },
+                },
+                suppressed_fields_count: {
+                  one: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of threat_match rules configured with one suppression field',
+                    },
+                  },
+                  two: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of threat_match rules configured with two suppression field',
+                    },
+                  },
+                  three: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of threat_match rules configured with three suppression field',
+                    },
+                  },
+                },
+                suppressed_per_time_period: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of threat_match rules configured with suppression per time period',
+                  },
+                },
+                suppressed_per_rule_execution: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of threat_match rules configured with suppression per rule execution',
+                  },
+                },
+                suppresses_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of threat_match rules configured to suppress alerts with missing fields',
+                  },
+                },
+                does_not_suppress_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of threat_match rules configured do not suppress alerts with missing fields',
+                  },
+                },
               },
             },
             new_terms: {
@@ -236,6 +599,182 @@ export const registerCollector: RegisterCollector = ({
                 type: 'long',
                 _meta: { description: 'Number of notifications enabled' },
               },
+              legacy_investigation_fields: {
+                type: 'long',
+                _meta: {
+                  description:
+                    'Number of rules using the legacy investigation fields type introduced only in 8.10 ESS',
+                },
+              },
+              alert_suppression: {
+                enabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of enabled new_terms rules configured with suppression',
+                  },
+                },
+                disabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of disabled new_terms rules configured with suppression',
+                  },
+                },
+                suppressed_fields_count: {
+                  one: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of new_terms rules configured with one suppression field',
+                    },
+                  },
+                  two: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of new_terms rules configured with two suppression field',
+                    },
+                  },
+                  three: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of new_terms rules configured with three suppression field',
+                    },
+                  },
+                },
+                suppressed_per_time_period: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of new_terms rules configured with suppression per time period',
+                  },
+                },
+                suppressed_per_rule_execution: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of new_terms rules configured with suppression per rule execution',
+                  },
+                },
+                suppresses_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of new_terms rules configured to suppress alerts with missing fields',
+                  },
+                },
+                does_not_suppress_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of new_terms rules configured do not suppress alerts with missing fields',
+                  },
+                },
+              },
+            },
+            esql: {
+              enabled: {
+                type: 'long',
+                _meta: { description: 'Number of esql rules enabled' },
+              },
+              disabled: {
+                type: 'long',
+                _meta: { description: 'Number of esql rules disabled' },
+              },
+              alerts: {
+                type: 'long',
+                _meta: { description: 'Number of alerts generated by esql rules' },
+              },
+              cases: {
+                type: 'long',
+                _meta: {
+                  description: 'Number of cases attached to esql detection rule alerts',
+                },
+              },
+              legacy_notifications_enabled: {
+                type: 'long',
+                _meta: { description: 'Number of legacy notifications enabled' },
+              },
+              legacy_notifications_disabled: {
+                type: 'long',
+                _meta: { description: 'Number of legacy notifications disabled' },
+              },
+              notifications_enabled: {
+                type: 'long',
+                _meta: { description: 'Number of notifications enabled' },
+              },
+              notifications_disabled: {
+                type: 'long',
+                _meta: { description: 'Number of notifications enabled' },
+              },
+              legacy_investigation_fields: {
+                type: 'long',
+                _meta: {
+                  description:
+                    'Number of rules using the legacy investigation fields type introduced only in 8.10 ESS',
+                },
+              },
+              alert_suppression: {
+                enabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of enabled esql rules configured with suppression',
+                  },
+                },
+                disabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of disabled esql rules configured with suppression',
+                  },
+                },
+                suppressed_fields_count: {
+                  one: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of esql rules configured with one suppression field',
+                    },
+                  },
+                  two: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of esql rules configured with two suppression field',
+                    },
+                  },
+                  three: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of esql rules configured with three suppression field',
+                    },
+                  },
+                },
+                suppressed_per_time_period: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of esql rules configured with suppression per time period',
+                  },
+                },
+                suppressed_per_rule_execution: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of esql rules configured with suppression per rule execution',
+                  },
+                },
+                suppresses_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of esql rules configured to suppress alerts with missing fields',
+                  },
+                },
+                does_not_suppress_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of esql rules configured do not suppress alerts with missing fields',
+                  },
+                },
+              },
             },
             elastic_total: {
               enabled: { type: 'long', _meta: { description: 'Number of elastic rules enabled' } },
@@ -267,6 +806,76 @@ export const registerCollector: RegisterCollector = ({
                 type: 'long',
                 _meta: { description: 'Number of notifications enabled' },
               },
+              legacy_investigation_fields: {
+                type: 'long',
+                _meta: {
+                  description:
+                    'Number of rules using the legacy investigation fields type introduced only in 8.10 ESS',
+                },
+              },
+              alert_suppression: {
+                enabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of enabled elastic rules configured with suppression',
+                  },
+                },
+                disabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of disabled elastic rules configured with suppression',
+                  },
+                },
+                suppressed_fields_count: {
+                  one: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of elastic rules configured with one suppression field',
+                    },
+                  },
+                  two: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of elastic rules configured with two suppression field',
+                    },
+                  },
+                  three: {
+                    type: 'long',
+                    _meta: {
+                      description:
+                        'Number of elastic rules configured with three suppression field',
+                    },
+                  },
+                },
+                suppressed_per_time_period: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of elastic rules configured with suppression per time period',
+                  },
+                },
+                suppressed_per_rule_execution: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of elastic rules configured with suppression per rule execution',
+                  },
+                },
+                suppresses_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of elastic rules configured to suppress alerts with missing fields',
+                  },
+                },
+                does_not_suppress_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of elastic rules configured do not suppress alerts with missing fields',
+                  },
+                },
+              },
             },
             custom_total: {
               enabled: { type: 'long', _meta: { description: 'Number of custom rules enabled' } },
@@ -294,6 +903,75 @@ export const registerCollector: RegisterCollector = ({
               notifications_disabled: {
                 type: 'long',
                 _meta: { description: 'Number of notifications enabled' },
+              },
+              legacy_investigation_fields: {
+                type: 'long',
+                _meta: {
+                  description:
+                    'Number of rules using the legacy investigation fields type introduced only in 8.10 ESS',
+                },
+              },
+              alert_suppression: {
+                enabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of enabled custom rules configured with suppression',
+                  },
+                },
+                disabled: {
+                  type: 'long',
+                  _meta: {
+                    description: 'Number of disabled custom rules configured with suppression',
+                  },
+                },
+                suppressed_fields_count: {
+                  one: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of custom rules configured with one suppression field',
+                    },
+                  },
+                  two: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of custom rules configured with two suppression field',
+                    },
+                  },
+                  three: {
+                    type: 'long',
+                    _meta: {
+                      description: 'Number of custom rules configured with three suppression field',
+                    },
+                  },
+                },
+                suppressed_per_time_period: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of custom rules configured with suppression per time period',
+                  },
+                },
+                suppressed_per_rule_execution: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of custom rules configured with suppression per rule execution',
+                  },
+                },
+                suppresses_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of custom rules configured to suppress alerts with missing fields',
+                  },
+                },
+                does_not_suppress_missing_fields: {
+                  type: 'long',
+                  _meta: {
+                    description:
+                      'Number of custom rules configured do not suppress alerts with missing fields',
+                  },
+                },
               },
             },
           },
@@ -2405,24 +3083,66 @@ export const registerCollector: RegisterCollector = ({
           _meta: { description: 'Number of active unique endpoints in last 24 hours' },
         },
       },
+      dashboardMetrics: {
+        dashboard_tag: {
+          created_at: {
+            type: 'keyword',
+            _meta: { description: 'The time the tab was created' },
+          },
+          linked_dashboards_count: {
+            type: 'long',
+            _meta: { description: 'Number of associated dashboards' },
+          },
+        },
+        dashboards: {
+          type: 'array',
+          items: {
+            created_at: {
+              type: 'keyword',
+              _meta: { description: 'The time the dashboard was created' },
+            },
+            dashboard_id: {
+              type: 'keyword',
+              _meta: { description: 'The dashboard saved object id' },
+            },
+            error_message: {
+              type: 'keyword',
+              _meta: { description: 'The relevant error message' },
+            },
+            error_status_code: {
+              type: 'long',
+              _meta: { description: 'The relevant error status code' },
+            },
+          },
+        },
+      },
+      riskEngineMetrics: riskEngineMetricsSchema,
     },
     isReady: () => true,
     fetch: async ({ esClient }: CollectorFetchContext): Promise<UsageData> => {
       const savedObjectsClient = await getInternalSavedObjectsClient(core);
-      const [detectionMetrics, endpointMetrics] = await Promise.allSettled([
-        getDetectionsMetrics({
-          eventLogIndex,
-          signalsIndex,
-          esClient,
-          savedObjectsClient,
-          logger,
-          mlClient: ml,
-        }),
-        getEndpointMetrics({ esClient, logger }),
-      ]);
+      const [detectionMetrics, endpointMetrics, dashboardMetrics, riskEngineMetrics] =
+        await Promise.allSettled([
+          getDetectionsMetrics({
+            eventLogIndex,
+            signalsIndex,
+            esClient,
+            savedObjectsClient,
+            logger,
+            mlClient: ml,
+          }),
+          getEndpointMetrics({ esClient, logger }),
+          getDashboardMetrics({
+            savedObjectsClient,
+            logger,
+          }),
+          getRiskEngineMetrics({ esClient, logger, riskEngineIndexPatterns }),
+        ]);
       return {
         detectionMetrics: detectionMetrics.status === 'fulfilled' ? detectionMetrics.value : {},
         endpointMetrics: endpointMetrics.status === 'fulfilled' ? endpointMetrics.value : {},
+        dashboardMetrics: dashboardMetrics.status === 'fulfilled' ? dashboardMetrics.value : {},
+        riskEngineMetrics: riskEngineMetrics.status === 'fulfilled' ? riskEngineMetrics.value : {},
       };
     },
   });

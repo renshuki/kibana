@@ -24,6 +24,11 @@ export function defineActionTypes(
     name: 'Test: Noop',
     minimumLicenseRequired: 'gold',
     supportedFeatureIds: ['alerting'],
+    validate: {
+      config: { schema: schema.object({}, { defaultValue: {} }) },
+      secrets: { schema: schema.object({}, { defaultValue: {} }) },
+      params: { schema: schema.object({}, { defaultValue: {} }) },
+    },
     async executor() {
       return { status: 'ok', actionId: '' };
     },
@@ -34,7 +39,14 @@ export function defineActionTypes(
     name: 'Test: Throw',
     minimumLicenseRequired: 'gold',
     supportedFeatureIds: ['alerting'],
+    validate: {
+      config: { schema: schema.object({}, { defaultValue: {} }) },
+      secrets: { schema: schema.object({}, { defaultValue: {} }) },
+      params: { schema: schema.object({}, { defaultValue: {} }) },
+    },
     async executor() {
+      // add a delay so the execution time is non-zero
+      await new Promise((r) => setTimeout(r, 1000));
       throw new Error('this action is intended to fail');
     },
   };
@@ -44,6 +56,11 @@ export function defineActionTypes(
     name: 'Test: Capped',
     minimumLicenseRequired: 'gold',
     supportedFeatureIds: ['alerting'],
+    validate: {
+      config: { schema: schema.object({}, { defaultValue: {} }) },
+      secrets: { schema: schema.object({}, { defaultValue: {} }) },
+      params: { schema: schema.object({}, { defaultValue: {} }) },
+    },
     async executor() {
       return { status: 'ok', actionId: '' };
     },
@@ -59,6 +76,14 @@ export function defineActionTypes(
   actions.registerType(getNoAttemptsRateLimitedActionType());
   actions.registerType(getAuthorizationActionType(core));
   actions.registerType(getExcludedActionType());
+  actions.registerType(getHookedActionType());
+
+  /**
+   * System actions
+   */
+  actions.registerType(getSystemActionType());
+  actions.registerType(getSystemActionTypeWithKibanaPrivileges());
+  actions.registerType(getSystemActionTypeWithConnectorAdapter());
 
   /** Sub action framework */
 
@@ -110,6 +135,96 @@ function getIndexRecordActionType() {
         },
       });
       return { status: 'ok', actionId };
+    },
+  };
+  return result;
+}
+
+function getHookedActionType() {
+  const paramsSchema = schema.object({});
+  type ParamsType = TypeOf<typeof paramsSchema>;
+  const configSchema = schema.object({
+    index: schema.string(),
+    source: schema.string(),
+  });
+  type ConfigType = TypeOf<typeof configSchema>;
+  const secretsSchema = schema.object({
+    encrypted: schema.string(),
+  });
+  type SecretsType = TypeOf<typeof secretsSchema>;
+  const result: ActionType<ConfigType, SecretsType, ParamsType> = {
+    id: 'test.connector-with-hooks',
+    name: 'Test: Connector with hooks',
+    minimumLicenseRequired: 'gold',
+    supportedFeatureIds: ['alerting'],
+    validate: {
+      params: { schema: paramsSchema },
+      config: { schema: configSchema },
+      secrets: { schema: secretsSchema },
+    },
+    async executor({ config, secrets, params, services, actionId }) {
+      return { status: 'ok', actionId };
+    },
+    async preSaveHook({ connectorId, config, secrets, services, isUpdate, logger }) {
+      const body = {
+        state: {
+          connectorId,
+          config,
+          secrets,
+          isUpdate,
+        },
+        reference: 'pre-save',
+        source: config.source,
+      };
+      logger.info(`running hook pre-save for ${JSON.stringify(body)}`);
+      await services.scopedClusterClient.asInternalUser.index({
+        index: config.index,
+        refresh: 'wait_for',
+        body,
+      });
+    },
+    async postSaveHook({
+      connectorId,
+      config,
+      secrets,
+      services,
+      logger,
+      isUpdate,
+      wasSuccessful,
+    }) {
+      const body = {
+        state: {
+          connectorId,
+          config,
+          secrets,
+          isUpdate,
+          wasSuccessful,
+        },
+        reference: 'post-save',
+        source: config.source,
+      };
+      logger.info(`running hook post-save for ${JSON.stringify(body)}`);
+      await services.scopedClusterClient.asInternalUser.index({
+        index: config.index,
+        refresh: 'wait_for',
+        body,
+      });
+    },
+    async postDeleteHook({ connectorId, config, services, logger }) {
+      const body = {
+        state: {
+          connectorId,
+          config,
+        },
+        reference: 'post-delete',
+        source: config.source,
+      };
+      logger.info(`running hook post-delete for ${JSON.stringify(body)}`);
+      await services.scopedClusterClient.asInternalUser.index({
+        index: config.index,
+        refresh: 'wait_for',
+        body,
+      });
     },
   };
   return result;
@@ -168,6 +283,8 @@ function getFailingActionType() {
     minimumLicenseRequired: 'gold',
     supportedFeatureIds: ['alerting'],
     validate: {
+      config: { schema: schema.object({}, { defaultValue: {} }) },
+      secrets: { schema: schema.object({}, { defaultValue: {} }) },
       params: {
         schema: paramsSchema,
       },
@@ -204,6 +321,8 @@ function getRateLimitedActionType() {
     supportedFeatureIds: ['alerting'],
     maxAttempts: 2,
     validate: {
+      config: { schema: schema.object({}, { defaultValue: {} }) },
+      secrets: { schema: schema.object({}, { defaultValue: {} }) },
       params: {
         schema: paramsSchema,
       },
@@ -243,6 +362,8 @@ function getNoAttemptsRateLimitedActionType() {
     supportedFeatureIds: ['alerting'],
     maxAttempts: 0,
     validate: {
+      config: { schema: schema.object({}, { defaultValue: {} }) },
+      secrets: { schema: schema.object({}, { defaultValue: {} }) },
       params: {
         schema: paramsSchema,
       },
@@ -284,6 +405,8 @@ function getAuthorizationActionType(core: CoreSetup<FixtureStartDeps>) {
     minimumLicenseRequired: 'gold',
     supportedFeatureIds: ['alerting'],
     validate: {
+      config: { schema: schema.object({}, { defaultValue: {} }) },
+      secrets: { schema: schema.object({}, { defaultValue: {} }) },
       params: {
         schema: paramsSchema,
       },
@@ -365,9 +488,163 @@ function getExcludedActionType() {
     name: 'Test: Excluded',
     minimumLicenseRequired: 'gold',
     supportedFeatureIds: ['alerting'],
+    validate: {
+      config: { schema: schema.object({}, { defaultValue: {} }) },
+      secrets: { schema: schema.object({}, { defaultValue: {} }) },
+      params: { schema: schema.object({}, { defaultValue: {} }) },
+    },
     async executor({ actionId }) {
       return { status: 'ok', actionId };
     },
   };
+  return result;
+}
+
+function getSystemActionType() {
+  const result: ActionType<{}, {}, {}> = {
+    id: 'test.system-action',
+    name: 'Test system action',
+    minimumLicenseRequired: 'platinum',
+    supportedFeatureIds: ['alerting'],
+    validate: {
+      params: {
+        schema: schema.any(),
+      },
+      config: {
+        schema: schema.any(),
+      },
+      secrets: {
+        schema: schema.any(),
+      },
+    },
+    isSystemActionType: true,
+    async executor({ config, secrets, params, services, actionId }) {
+      return { status: 'ok', actionId };
+    },
+  };
+
+  return result;
+}
+
+function getSystemActionTypeWithKibanaPrivileges() {
+  const result: ActionType<{}, {}, { index?: string; reference?: string }> = {
+    id: 'test.system-action-kibana-privileges',
+    name: 'Test system action with kibana privileges',
+    minimumLicenseRequired: 'platinum',
+    supportedFeatureIds: ['alerting'],
+    /**
+     * Requires all access to the case feature
+     * in Stack management
+     */
+    getKibanaPrivileges: () => ['cases:cases/createCase'],
+    validate: {
+      params: {
+        /**
+         * Adapter: x-pack/test/alerting_api_integration/common/plugins/alerts/server/connector_adapters.ts
+         */
+        schema: schema.object({
+          index: schema.maybe(schema.string()),
+          reference: schema.maybe(schema.string()),
+        }),
+      },
+      config: {
+        schema: schema.any(),
+      },
+      secrets: {
+        schema: schema.any(),
+      },
+    },
+    isSystemActionType: true,
+    /**
+     * The executor writes a doc to the
+     * testing index. The test uses the doc
+     * to verify that the action is executed
+     * correctly
+     */
+    async executor({ params, services, actionId }) {
+      const { index, reference } = params;
+
+      if (index == null || reference == null) {
+        return { status: 'ok', actionId };
+      }
+
+      await services.scopedClusterClient.index({
+        index,
+        refresh: 'wait_for',
+        body: {
+          params,
+          reference,
+          source: 'action:test.system-action-kibana-privileges',
+        },
+      });
+
+      return { status: 'ok', actionId };
+    },
+  };
+
+  return result;
+}
+
+function getSystemActionTypeWithConnectorAdapter() {
+  const result: ActionType<
+    {},
+    {},
+    { myParam: string; injected: string; index?: string; reference?: string }
+  > = {
+    id: 'test.system-action-connector-adapter',
+    name: 'Test system action with a connector adapter set',
+    minimumLicenseRequired: 'platinum',
+    supportedFeatureIds: ['alerting'],
+    validate: {
+      params: {
+        /**
+         * The injected params will be set by the
+         * connector adapter while executing the action.
+         *
+         * Adapter: x-pack/test/alerting_api_integration/common/plugins/alerts/server/connector_adapters.ts
+         */
+        schema: schema.object({
+          myParam: schema.string(),
+          injected: schema.string(),
+          index: schema.maybe(schema.string()),
+          reference: schema.maybe(schema.string()),
+        }),
+      },
+
+      config: {
+        schema: schema.any(),
+      },
+      secrets: {
+        schema: schema.any(),
+      },
+    },
+    isSystemActionType: true,
+    /**
+     * The executor writes a doc to the
+     * testing index. The test uses the doc
+     * to verify that the action is executed
+     * correctly
+     */
+    async executor({ params, services, actionId }) {
+      const { index, reference } = params;
+
+      if (index == null || reference == null) {
+        return { status: 'ok', actionId };
+      }
+
+      await services.scopedClusterClient.index({
+        index,
+        refresh: 'wait_for',
+        body: {
+          params,
+          reference,
+          source: 'action:test.system-action-connector-adapter',
+        },
+      });
+
+      return { status: 'ok', actionId };
+    },
+  };
+
   return result;
 }

@@ -7,7 +7,7 @@
 
 import { readFileSync as fsReadFileSync } from 'fs';
 import { resolve as pathResolve, join as pathJoin } from 'path';
-import { schema, ByteSizeValue } from '@kbn/config-schema';
+import { ByteSizeValue } from '@kbn/config-schema';
 import moment from 'moment';
 
 import { ActionsConfig } from '../config';
@@ -15,6 +15,11 @@ import { Logger } from '@kbn/core/server';
 import { loggingSystemMock } from '@kbn/core/server/mocks';
 
 import { resolveCustomHosts, getCanonicalCustomHostUrl } from './custom_host_settings';
+import {
+  DEFAULT_MICROSOFT_GRAPH_API_URL,
+  DEFAULT_MICROSOFT_GRAPH_API_SCOPE,
+  DEFAULT_MICROSOFT_EXCHANGE_URL,
+} from '../../common';
 
 const CA_DIR = '../../../../../../packages/kbn-dev-utils/certs';
 const CA_FILE1 = pathResolve(__filename, pathJoin(CA_DIR, 'ca.crt'));
@@ -73,12 +78,10 @@ describe('custom_host_settings', () => {
       rejectUnauthorized: true,
       maxResponseContentLength: new ByteSizeValue(1000000),
       responseTimeout: moment.duration(60000),
-      cleanupFailedExecutionsTask: {
-        enabled: true,
-        cleanupInterval: schema.duration().validate('5m'),
-        idleInterval: schema.duration().validate('1h'),
-        pageSize: 100,
-      },
+      enableFooterInEmail: true,
+      microsoftGraphApiUrl: DEFAULT_MICROSOFT_GRAPH_API_URL,
+      microsoftGraphApiScope: DEFAULT_MICROSOFT_GRAPH_API_SCOPE,
+      microsoftExchangeUrl: DEFAULT_MICROSOFT_EXCHANGE_URL,
     };
 
     test('ensure it copies over the config parts that it does not touch', () => {

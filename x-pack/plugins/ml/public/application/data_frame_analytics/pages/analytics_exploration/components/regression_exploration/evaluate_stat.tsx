@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
+import type { FC } from 'react';
+import React from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { EuiStat, EuiIconTip, EuiFlexGroup, EuiFlexItem, EuiLink } from '@elastic/eui';
@@ -70,7 +71,7 @@ const tooltipContent = {
     'xpack.ml.dataframe.analytics.regressionExploration.msleTooltipContent',
     {
       defaultMessage:
-        'Average squared difference between the logarithm of the predicted values and the logarithm of the actual (ground truth) value',
+        'Average squared difference between the logarithm of the predicted values and the logarithm of the actual (ground truth) value.',
     }
   ),
   [REGRESSION_STATS.R_SQUARED]: i18n.translate(

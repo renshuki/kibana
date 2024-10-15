@@ -15,7 +15,6 @@ import {
   EuiProgress,
   EuiSpacer,
   EuiDataGridSorting,
-  Pagination,
   EuiSuperDatePicker,
   OnTimeChangeProps,
   EuiSwitch,
@@ -29,7 +28,7 @@ import {
   CONNECTOR_LOCKED_COLUMNS,
 } from '../../../constants';
 import { CenterJustifiedSpinner } from '../../../components/center_justified_spinner';
-import { LoadGlobalConnectorExecutionLogAggregationsProps } from '../../../lib/action_connector_api';
+import { LoadGlobalConnectorExecutionLogAggregationsProps } from '../../../lib/action_connector_api/load_execution_log_aggregations';
 import {
   ComponentOpts as ConnectorApis,
   withActionOperations,
@@ -38,6 +37,7 @@ import { RefineSearchPrompt } from '../../common/components/refine_search_prompt
 import { ConnectorEventLogListKPIWithApi as ConnectorEventLogListKPI } from './actions_connectors_event_log_list_kpi';
 import {
   EventLogDataGrid,
+  type EventLogDataGrid as EventLogDataGridProps,
   EventLogListStatusFilter,
   getIsColumnSortable,
 } from '../../common/components/event_log';
@@ -136,7 +136,7 @@ export const ConnectorEventLogListTable = <T extends ConnectorEventLogListOption
   const [sortingColumns, setSortingColumns] = useState<EuiDataGridSorting['columns']>([]);
   const [filter, setFilter] = useState<string[]>([]);
   const [actualTotalItemCount, setActualTotalItemCount] = useState<number>(0);
-  const [pagination, setPagination] = useState<Pagination>({
+  const [pagination, setPagination] = useState<EventLogDataGridProps['pagination']>({
     pageIndex: 0,
     pageSize: initialPageSize,
     totalItemCount: 0,
@@ -262,7 +262,7 @@ export const ConnectorEventLogListTable = <T extends ConnectorEventLogListOption
   );
 
   const onSearchChange = useCallback(
-    (e) => {
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.value === '') {
         setSearchText('');
       }
@@ -272,7 +272,7 @@ export const ConnectorEventLogListTable = <T extends ConnectorEventLogListOption
   );
 
   const onKeyUp = useCallback(
-    (e) => {
+    (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
         setSearchText(search);
       }
@@ -377,6 +377,21 @@ export const ConnectorEventLogListTable = <T extends ConnectorEventLogListOption
             },
           ]
         : []),
+      {
+        id: 'source',
+        actions: {
+          showSortAsc: false,
+          showSortDesc: false,
+        },
+        displayAsText: i18n.translate(
+          'xpack.triggersActionsUI.sections.connectorEventLogList.eventLogColumn.source',
+          {
+            defaultMessage: 'Source',
+          }
+        ),
+        isSortable: getIsColumnSortable('source'),
+        cellActions: [],
+      },
       {
         id: 'message',
         actions: {
@@ -507,9 +522,9 @@ export const ConnectorEventLogListTable = <T extends ConnectorEventLogListOption
 
   return (
     <EuiFlexGroup gutterSize="none" direction="column">
-      <EuiFlexItem grow={false}>
-        <EuiFlexGroup alignItems="center">
-          <EuiFlexItem grow={false}>
+      <EuiFlexItem grow={true}>
+        <EuiFlexGroup gutterSize="m" alignItems="center">
+          <EuiFlexItem grow={true}>
             <EuiFieldSearch
               fullWidth
               isClearable

@@ -1,10 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import type { Logger } from '@kbn/logging';
 import type {
@@ -93,7 +95,12 @@ export class PointInTimeFinder<T = unknown, A = unknown>
         await this.close();
       }
 
-      yield results;
+      // do not yield first page if empty, unless there are aggregations
+      // (in which case we always want to return at least one page)
+      if (lastResultsCount > 0 || this.#findOptions.aggs) {
+        yield results;
+      }
+
       // We've reached the end when there are fewer hits than our perPage size,
       // or when `close()` has been called.
     } while (this.#open && lastResultsCount >= this.#findOptions.perPage!);
@@ -147,14 +154,14 @@ export class PointInTimeFinder<T = unknown, A = unknown>
     try {
       return await this.#client.find<T, A>(
         {
+          ...findOptions,
           // Sort fields are required to use searchAfter, so we set some defaults here
-          sortField: 'updated_at',
-          sortOrder: 'desc',
+          sortField: findOptions.sortField ?? 'updated_at',
+          sortOrder: findOptions.sortOrder ?? 'desc',
           // Bump keep_alive by 2m on every new request to allow for the ES client
           // to make multiple retries in the event of a network failure.
           pit: id ? { id, keepAlive: '2m' } : undefined,
           searchAfter,
-          ...findOptions,
         },
         this.#internalOptions
       );

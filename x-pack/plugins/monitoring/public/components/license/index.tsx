@@ -72,14 +72,14 @@ class LicenseStatus extends React.PureComponent<LicenseStatusProps> {
     let title;
     let message;
     if (isExpired) {
-      icon = <EuiIcon color="danger" type="alert" />;
+      icon = <EuiIcon color="danger" type="warning" />;
       message = (
         <Fragment>
           <FormattedMessage
             id="xpack.monitoring.expiredLicenseStatusDescription"
             defaultMessage="Your license expired on {expiryDate}"
             values={{
-              expiryDate: <strong>{expiryDate}</strong>,
+              expiryDate: <strong>{expiryDate as string}</strong>,
             }}
           />
         </Fragment>
@@ -101,7 +101,7 @@ class LicenseStatus extends React.PureComponent<LicenseStatusProps> {
             id="xpack.monitoring.activeLicenseStatusDescription"
             defaultMessage="Your license will expire on {expiryDate}"
             values={{
-              expiryDate: <strong>{expiryDate}</strong>,
+              expiryDate: <strong>{expiryDate as string}</strong>,
             }}
           />
         </Fragment>

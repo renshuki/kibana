@@ -10,7 +10,7 @@ import {
   INDEX_PATTERN_ELASTICSEARCH,
   INDEX_PATTERN_ELASTICSEARCH_ECS,
   INDEX_PATTERN_KIBANA,
-  INDEX_PATTERN_LOGSTASH,
+  INDEX_PATTERN_LOGSTASH_MONITORING,
   INDEX_PATTERN_BEATS,
   DS_INDEX_PATTERN_LOGS,
   DS_INDEX_PATTERN_METRICS,
@@ -63,13 +63,13 @@ export function getLegacyIndexPattern({
       indexPattern = INDEX_PATTERN_KIBANA;
       break;
     case 'logstash':
-      indexPattern = INDEX_PATTERN_LOGSTASH;
+      indexPattern = INDEX_PATTERN_LOGSTASH_MONITORING;
       break;
     case 'apm':
     case 'beats':
       indexPattern = INDEX_PATTERN_BEATS;
       break;
-    case 'enterprise_search':
+    case 'enterprisesearch':
       indexPattern = INDEX_PATTERN_ENTERPRISE_SEARCH;
       break;
     case 'filebeat':
@@ -127,6 +127,7 @@ export const getElasticsearchDataset = getDataset('elasticsearch');
 export const getKibanaDataset = getDataset('kibana');
 export const getLogstashDataset = getDataset('logstash');
 export const getBeatDataset = getDataset('beats');
+export const getEntsearchDataset = getDataset('enterprisesearch');
 
 function buildDatasetPattern(
   moduleType?: INDEX_PATTERN_TYPES,

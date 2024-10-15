@@ -5,9 +5,13 @@
  * 2.0.
  */
 
-import { schema } from '@kbn/config-schema';
 import { ByteSizeValue } from '@kbn/config-schema';
 import { ActionsConfig } from './config';
+import {
+  DEFAULT_MICROSOFT_EXCHANGE_URL,
+  DEFAULT_MICROSOFT_GRAPH_API_SCOPE,
+  DEFAULT_MICROSOFT_GRAPH_API_URL,
+} from '../common';
 import {
   getActionsConfigurationUtilities,
   AllowedHosts,
@@ -30,16 +34,14 @@ const defaultActionsConfig: ActionsConfig = {
   rejectUnauthorized: true, // legacy
   maxResponseContentLength: new ByteSizeValue(1000000),
   responseTimeout: moment.duration(60000),
-  cleanupFailedExecutionsTask: {
-    enabled: true,
-    cleanupInterval: schema.duration().validate('5m'),
-    idleInterval: schema.duration().validate('1h'),
-    pageSize: 100,
-  },
   ssl: {
     proxyVerificationMode: 'full',
     verificationMode: 'full',
   },
+  enableFooterInEmail: true,
+  microsoftGraphApiUrl: DEFAULT_MICROSOFT_GRAPH_API_URL,
+  microsoftGraphApiScope: DEFAULT_MICROSOFT_GRAPH_API_SCOPE,
+  microsoftExchangeUrl: DEFAULT_MICROSOFT_EXCHANGE_URL,
 };
 
 describe('ensureUriAllowed', () => {
@@ -567,5 +569,22 @@ describe('getMaxAttempts()', () => {
       actionTypeId: 'slack',
     });
     expect(maxAttempts).toEqual(3);
+  });
+});
+
+describe('getMaxQueued()', () => {
+  test('returns the queued actions max defined in config', () => {
+    const acu = getActionsConfigurationUtilities({
+      ...defaultActionsConfig,
+      queued: { max: 1 },
+    });
+    const max = acu.getMaxQueued();
+    expect(max).toEqual(1);
+  });
+
+  test('returns the default queued actions max', () => {
+    const acu = getActionsConfigurationUtilities(defaultActionsConfig);
+    const max = acu.getMaxQueued();
+    expect(max).toEqual(1000000);
   });
 });

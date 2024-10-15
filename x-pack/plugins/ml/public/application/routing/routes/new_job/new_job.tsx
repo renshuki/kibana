@@ -5,18 +5,21 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
+import type { FC } from 'react';
+import React from 'react';
 import { Redirect } from 'react-router-dom';
+import { ML_PAGES } from '../../../../locator';
 
-import { MlRoute } from '../../router';
+import type { MlRoute } from '../../router';
+import { createPath } from '../../router';
 
 export const newJobRouteFactory = (): MlRoute => ({
-  path: '/jobs/new_job',
+  path: createPath(ML_PAGES.ANOMALY_DETECTION_CREATE_JOB),
   render: () => <Page />,
   // no breadcrumbs since it's just a redirect
   breadcrumbs: [],
 });
 
 const Page: FC = () => {
-  return <Redirect to="/jobs/new_job/step/index_or_search" />;
+  return <Redirect to={createPath(ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_SELECT_INDEX)} />;
 };

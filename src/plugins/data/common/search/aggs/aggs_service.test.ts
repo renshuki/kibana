@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import {
@@ -57,6 +58,7 @@ describe('Aggs service', () => {
           "histogram",
           "range",
           "date_range",
+          "ip_prefix",
           "ip_range",
           "terms",
           "multi_terms",
@@ -65,7 +67,6 @@ describe('Aggs service', () => {
           "filters",
           "significant_terms",
           "significant_text",
-          "geohash_grid",
           "geotile_grid",
           "sampler",
           "diversified_sampler",
@@ -113,6 +114,7 @@ describe('Aggs service', () => {
           "histogram",
           "range",
           "date_range",
+          "ip_prefix",
           "ip_range",
           "terms",
           "multi_terms",
@@ -121,7 +123,6 @@ describe('Aggs service', () => {
           "filters",
           "significant_terms",
           "significant_text",
-          "geohash_grid",
           "geotile_grid",
           "sampler",
           "diversified_sampler",
@@ -210,7 +211,7 @@ describe('Aggs service', () => {
     test('types registry returns initialized type providers', () => {
       service.setup(setupDeps);
       const start = service.start(startDeps);
-      expect(start.types.get('terms').name).toBe('terms');
+      expect(start.types.get('terms')?.name).toBe('terms');
     });
   });
 });

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { createMockExecutionContext } from '@kbn/expressions-plugin/common/mocks';
@@ -16,6 +17,7 @@ describe('referenceLine', () => {
       value: 100,
       fill: 'above',
       position: 'bottom',
+      forAccessor: '',
     };
 
     const result = referenceLineFunction.fn(null, args, createMockExecutionContext());
@@ -47,6 +49,7 @@ describe('referenceLine', () => {
       color: '#fff',
       fill: 'below',
       textVisibility: true,
+      forAccessor: '',
     };
 
     const result = referenceLineFunction.fn(null, args, createMockExecutionContext());
@@ -71,6 +74,7 @@ describe('referenceLine', () => {
       value: 100,
       fill: 'none',
       position: 'bottom',
+      forAccessor: '',
     };
 
     const result = referenceLineFunction.fn(null, args, createMockExecutionContext());
@@ -96,6 +100,7 @@ describe('referenceLine', () => {
       textVisibility: true,
       fill: 'none',
       position: 'bottom',
+      forAccessor: '',
     };
 
     const result = referenceLineFunction.fn(null, args, createMockExecutionContext());
@@ -123,6 +128,7 @@ describe('referenceLine', () => {
         textVisibility,
         fill: 'none',
         position: 'bottom',
+        forAccessor: '',
       };
 
       const result = referenceLineFunction.fn(null, args, createMockExecutionContext());

@@ -150,7 +150,7 @@ export const DEPRECATED_TOOLTIP_CONTENT = i18n.translate(
 );
 
 export const CONFIGURE_CASES_PAGE_TITLE = i18n.translate('xpack.cases.configureCases.headerTitle', {
-  defaultMessage: 'Configure cases',
+  defaultMessage: 'Settings',
 });
 
 export const CASES_WEBHOOK_MAPPINGS = i18n.translate(
@@ -160,3 +160,25 @@ export const CASES_WEBHOOK_MAPPINGS = i18n.translate(
       'Webhook - Case Management field mappings are configured in the connector settings in the third-party REST API JSON.',
   }
 );
+
+export const ADD_CUSTOM_FIELD = i18n.translate(
+  'xpack.cases.configureCases.customFields.addCustomField',
+  {
+    defaultMessage: 'Add field',
+  }
+);
+
+export const EDIT_CUSTOM_FIELD = i18n.translate(
+  'xpack.cases.configureCases.customFields.editCustomField',
+  {
+    defaultMessage: 'Edit field',
+  }
+);
+
+export const CREATE_TEMPLATE = i18n.translate('xpack.cases.configureCases.templates.flyoutTitle', {
+  defaultMessage: 'Add template',
+});
+
+export const EDIT_TEMPLATE = i18n.translate('xpack.cases.configureCases.templates.editTemplate', {
+  defaultMessage: 'Edit template',
+});

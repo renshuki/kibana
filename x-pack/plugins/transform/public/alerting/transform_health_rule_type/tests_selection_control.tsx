@@ -5,11 +5,12 @@
  * 2.0.
  */
 
-import React, { FC, useCallback } from 'react';
+import type { FC } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { EuiDescribedFormGroup, EuiForm, EuiFormRow, EuiSpacer, EuiSwitch } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n-react';
 
-import {
+import type {
   TransformHealthRuleTestsConfig,
   TransformHealthTests,
 } from '../../../common/types/alerting';
@@ -22,9 +23,18 @@ interface TestsSelectionControlProps {
   errors?: string[];
 }
 
+const disabledChecks = new Set<keyof Exclude<TransformHealthRuleTestsConfig, null | undefined>>([
+  'errorMessages',
+]);
+
 export const TestsSelectionControl: FC<TestsSelectionControlProps> = React.memo(
   ({ config, onChange, errors }) => {
     const uiConfig = getResultTestConfig(config);
+
+    const initConfig = useMemo(() => {
+      return uiConfig;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const updateCallback = useCallback(
       (update: Partial<Exclude<TransformHealthRuleTestsConfig, undefined>>) => {
@@ -41,37 +51,39 @@ export const TestsSelectionControl: FC<TestsSelectionControlProps> = React.memo(
         <EuiForm component="div" isInvalid={!!errors?.length} error={errors}>
           {(
             Object.entries(uiConfig) as Array<
-              [TransformHealthTests, typeof uiConfig[TransformHealthTests]]
+              [TransformHealthTests, (typeof uiConfig)[TransformHealthTests]]
             >
-          ).map(([name, conf], i) => {
-            return (
-              <EuiDescribedFormGroup
-                key={name}
-                title={<h4>{TRANSFORM_HEALTH_CHECK_NAMES[name]?.name}</h4>}
-                description={TRANSFORM_HEALTH_CHECK_NAMES[name]?.description}
-                fullWidth
-                gutterSize={'s'}
-              >
-                <EuiFormRow>
-                  <EuiSwitch
-                    label={
-                      <FormattedMessage
-                        id="xpack.transform.alertTypes.transformHealth.testsSelection.enableTestLabel"
-                        defaultMessage="Enable"
-                      />
-                    }
-                    onChange={updateCallback.bind(null, {
-                      [name]: {
-                        ...uiConfig[name],
-                        enabled: !uiConfig[name].enabled,
-                      },
-                    })}
-                    checked={uiConfig[name].enabled}
-                  />
-                </EuiFormRow>
-              </EuiDescribedFormGroup>
-            );
-          })}
+          )
+            .filter(([name]) => !disabledChecks.has(name) || initConfig[name].enabled)
+            .map(([name, conf], i) => {
+              return (
+                <EuiDescribedFormGroup
+                  key={name}
+                  title={<h4>{TRANSFORM_HEALTH_CHECK_NAMES[name]?.name}</h4>}
+                  description={TRANSFORM_HEALTH_CHECK_NAMES[name]?.description}
+                  fullWidth
+                  gutterSize={'s'}
+                >
+                  <EuiFormRow>
+                    <EuiSwitch
+                      label={
+                        <FormattedMessage
+                          id="xpack.transform.alertTypes.transformHealth.testsSelection.enableTestLabel"
+                          defaultMessage="Enable"
+                        />
+                      }
+                      onChange={updateCallback.bind(null, {
+                        [name]: {
+                          ...uiConfig[name],
+                          enabled: !uiConfig[name].enabled,
+                        },
+                      })}
+                      checked={uiConfig[name].enabled}
+                    />
+                  </EuiFormRow>
+                </EuiDescribedFormGroup>
+              );
+            })}
         </EuiForm>
         <EuiSpacer size="l" />
       </>

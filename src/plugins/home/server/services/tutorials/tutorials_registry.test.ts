@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { MockedKeys } from '@kbn/utility-types-jest';
@@ -27,7 +28,7 @@ const INVALID_TUTORIAL: TutorialSchema = {
   name: '',
   isBeta: false,
   shortDescription: 'short description',
-  euiIconType: 'alert',
+  euiIconType: 'warning',
   longDescription: 'long description with lots of text',
   completionTimeMinutes: 10,
   previewImagePath: 'path',
@@ -49,7 +50,7 @@ const VALID_TUTORIAL: TutorialSchema = {
   moduleName: 'test',
   isBeta: false,
   shortDescription: 'short description',
-  euiIconType: 'alert',
+  euiIconType: 'warning',
   longDescription: 'long description with lots of text',
   completionTimeMinutes: 10,
   previewImagePath: 'path',
@@ -128,7 +129,7 @@ describe('TutorialsRegistry', () => {
             description: 'short description',
             icons: [
               {
-                src: 'alert',
+                src: 'warning',
                 type: 'eui',
               },
             ],
@@ -166,10 +167,9 @@ describe('TutorialsRegistry', () => {
 
   describe('start', () => {
     test('exposes proper contract', () => {
-      const start = new TutorialsRegistry(mockInitContext).start(
-        coreMock.createStart(),
-        mockCustomIntegrationsPluginSetup
-      );
+      const registry = new TutorialsRegistry(mockInitContext);
+      registry.setup(mockCoreSetup, mockCustomIntegrationsPluginSetup);
+      const start = registry.start(coreMock.createStart(), mockCustomIntegrationsPluginSetup);
       expect(start).toBeDefined();
     });
   });

@@ -5,16 +5,16 @@
  * 2.0.
  */
 
-import { Subject, Observable, Subscription } from 'rxjs';
+import { Subject, Observable } from 'rxjs';
 import { pipe } from 'fp-ts/lib/pipeable';
-import { Option, some, map as mapOptional } from 'fp-ts/lib/Option';
-import { tap } from 'rxjs/operators';
+import { map as mapOptional, none } from 'fp-ts/lib/Option';
+import { tap } from 'rxjs';
 import { UsageCounter } from '@kbn/usage-collection-plugin/server';
 import type { Logger, ExecutionContextStart } from '@kbn/core/server';
 
 import { Result, asErr, mapErr, asOk, map, mapOk } from './lib/result_type';
 import { ManagedConfiguration } from './lib/create_managed_configuration';
-import { TaskManagerConfig } from './config';
+import { TaskManagerConfig, CLAIM_STRATEGY_UPDATE_BY_QUERY } from './config';
 
 import {
   TaskMarkRunning,
@@ -27,17 +27,13 @@ import {
   TaskManagerStat,
   asTaskManagerStatEvent,
   EphemeralTaskRejectedDueToCapacity,
+  TaskManagerMetric,
 } from './task_events';
 import { fillPool, FillPoolResult, TimedFillPoolResult } from './lib/fill_pool';
 import { Middleware } from './lib/middleware';
 import { intervalFromNow } from './lib/intervals';
 import { ConcreteTaskInstance } from './task';
-import {
-  createTaskPoller,
-  PollingError,
-  PollingErrorType,
-  createObservableMonitor,
-} from './polling';
+import { createTaskPoller, PollingError, PollingErrorType } from './polling';
 import { TaskPool } from './task_pool';
 import { TaskManagerRunner, TaskRunner } from './task_running';
 import { TaskStore } from './task_store';
@@ -45,7 +41,16 @@ import { identifyEsError, isEsCannotExecuteScriptError } from './lib/identify_es
 import { BufferedTaskStore } from './buffered_task_store';
 import { TaskTypeDictionary } from './task_type_dictionary';
 import { delayOnClaimConflicts } from './polling';
-import { TaskClaiming, ClaimOwnershipResult } from './queries/task_claiming';
+import { TaskClaiming } from './queries/task_claiming';
+import { ClaimOwnershipResult } from './task_claimers';
+import { TaskPartitioner } from './lib/task_partitioner';
+import { TaskPoller } from './polling/task_poller';
+
+const MAX_BUFFER_OPERATIONS = 100;
+
+export interface ITaskEventEmitter<T> {
+  get events(): Observable<T>;
+}
 
 export type TaskPollingLifecycleOpts = {
   logger: Logger;
@@ -57,6 +62,7 @@ export type TaskPollingLifecycleOpts = {
   elasticsearchAndSOAvailability$: Observable<boolean>;
   executionContext: ExecutionContextStart;
   usageCounter?: UsageCounter;
+  taskPartitioner: TaskPartitioner;
 } & ManagedConfiguration;
 
 export type TaskLifecycleEvent =
@@ -66,12 +72,13 @@ export type TaskLifecycleEvent =
   | TaskRunRequest
   | TaskPollingCycle
   | TaskManagerStat
+  | TaskManagerMetric
   | EphemeralTaskRejectedDueToCapacity;
 
 /**
  * The public interface into the task manager system.
  */
-export class TaskPollingLifecycle {
+export class TaskPollingLifecycle implements ITaskEventEmitter<TaskLifecycleEvent> {
   private definitions: TaskTypeDictionary;
 
   private store: TaskStore;
@@ -80,18 +87,18 @@ export class TaskPollingLifecycle {
   private readonly executionContext: ExecutionContextStart;
 
   private logger: Logger;
+  private poller: TaskPoller<string, TimedFillPoolResult>;
+
   public pool: TaskPool;
+
   // all task related events (task claimed, task marked as running, etc.) are emitted through events$
   private events$ = new Subject<TaskLifecycleEvent>();
-  // all on-demand requests we wish to pipe into the poller
-  private claimRequests$ = new Subject<Option<string>>();
-  // our subscription to the poller
-  private pollingSubscription: Subscription = Subscription.EMPTY;
 
   private middleware: Middleware;
 
   private usageCounter?: UsageCounter;
   private config: TaskManagerConfig;
+  private currentPollInterval: number;
 
   /**
    * Initializes the task manager, preventing any further addition of middleware,
@@ -101,7 +108,7 @@ export class TaskPollingLifecycle {
   constructor({
     logger,
     middleware,
-    maxWorkersConfiguration$,
+    capacityConfiguration$,
     pollIntervalConfiguration$,
     // Elasticsearch and SavedObjects availability status
     elasticsearchAndSOAvailability$,
@@ -111,6 +118,7 @@ export class TaskPollingLifecycle {
     unusedTypes,
     executionContext,
     usageCounter,
+    taskPartitioner,
   }: TaskPollingLifecycleOpts) {
     this.logger = logger;
     this.middleware = middleware;
@@ -119,100 +127,86 @@ export class TaskPollingLifecycle {
     this.executionContext = executionContext;
     this.usageCounter = usageCounter;
     this.config = config;
+    this.currentPollInterval = config.poll_interval;
+    pollIntervalConfiguration$.subscribe((pollInterval) => {
+      this.currentPollInterval = pollInterval;
+    });
 
     const emitEvent = (event: TaskLifecycleEvent) => this.events$.next(event);
 
     this.bufferedStore = new BufferedTaskStore(this.store, {
-      bufferMaxOperations: config.max_workers,
+      bufferMaxOperations: MAX_BUFFER_OPERATIONS,
       logger,
     });
 
     this.pool = new TaskPool({
       logger,
-      maxWorkers$: maxWorkersConfiguration$,
+      strategy: config.claim_strategy,
+      capacity$: capacityConfiguration$,
+      definitions: this.definitions,
     });
     this.pool.load.subscribe(emitEvent);
 
     this.taskClaiming = new TaskClaiming({
       taskStore,
+      strategy: config.claim_strategy,
       maxAttempts: config.max_attempts,
       excludedTaskTypes: config.unsafe.exclude_task_types,
       definitions,
       unusedTypes,
       logger: this.logger,
-      getCapacity: (taskType?: string) =>
-        taskType && this.definitions.get(taskType)?.maxConcurrency
-          ? Math.max(
-              Math.min(
-                this.pool.availableWorkers,
-                this.definitions.get(taskType)!.maxConcurrency! -
-                  this.pool.getOccupiedWorkersByType(taskType)
-              ),
-              0
-            )
-          : this.pool.availableWorkers,
+      getAvailableCapacity: (taskType?: string) => this.pool.availableCapacity(taskType),
+      taskPartitioner,
     });
     // pipe taskClaiming events into the lifecycle event stream
     this.taskClaiming.events.subscribe(emitEvent);
 
-    const { max_poll_inactivity_cycles: maxPollInactivityCycles, poll_interval: pollInterval } =
-      config;
+    const { poll_interval: pollInterval, claim_strategy: claimStrategy } = config;
 
-    const pollIntervalDelay$ = delayOnClaimConflicts(
-      maxWorkersConfiguration$,
-      pollIntervalConfiguration$,
-      this.events$,
-      config.version_conflict_threshold,
-      config.monitored_stats_running_average_window
-    ).pipe(tap((delay) => emitEvent(asTaskManagerStatEvent('pollingDelay', asOk(delay)))));
+    let pollIntervalDelay$: Observable<number> | undefined;
+    if (claimStrategy === CLAIM_STRATEGY_UPDATE_BY_QUERY) {
+      pollIntervalDelay$ = delayOnClaimConflicts(
+        capacityConfiguration$,
+        pollIntervalConfiguration$,
+        this.events$,
+        config.version_conflict_threshold,
+        config.monitored_stats_running_average_window
+      ).pipe(tap((delay) => emitEvent(asTaskManagerStatEvent('pollingDelay', asOk(delay)))));
+    }
 
-    // the task poller that polls for work on fixed intervals and on demand
-    const poller$: Observable<Result<TimedFillPoolResult, PollingError<string>>> =
-      createObservableMonitor<Result<TimedFillPoolResult, PollingError<string>>, Error>(
-        () =>
-          createTaskPoller<string, TimedFillPoolResult>({
-            logger,
-            pollInterval$: pollIntervalConfiguration$,
-            pollIntervalDelay$,
-            bufferCapacity: config.request_capacity,
-            getCapacity: () => {
-              const capacity = this.pool.availableWorkers;
-              if (!capacity) {
-                // if there isn't capacity, emit a load event so that we can expose how often
-                // high load causes the poller to skip work (work isn'tcalled when there is no capacity)
-                this.emitEvent(asTaskManagerStatEvent('load', asOk(this.pool.workerLoad)));
-              }
-              return capacity;
-            },
-            pollRequests$: this.claimRequests$,
-            work: this.pollForWork,
-            // Time out the `work` phase if it takes longer than a certain number of polling cycles
-            // The `work` phase includes the prework needed *before* executing a task
-            // (such as polling for new work, marking tasks as running etc.) but does not
-            // include the time of actually running the task
-            workTimeout: pollInterval * maxPollInactivityCycles,
-          }),
-        {
-          heartbeatInterval: pollInterval,
-          // Time out the poller itself if it has failed to complete the entire stream for a certain amount of time.
-          // This is different that the `work` timeout above, as the poller could enter an invalid state where
-          // it fails to complete a cycle even thought `work` is completing quickly.
-          // We grant it a single cycle longer than the time alotted to `work` so that timing out the `work`
-          // doesn't get short circuited by the monitor reinstantiating the poller all together (a far more expensive
-          // operation than just timing out the `work` internally)
-          inactivityTimeout: pollInterval * (maxPollInactivityCycles + 1),
-          onError: (error) => {
-            logger.error(`[Task Poller Monitor]: ${error.message}`);
-          },
+    this.poller = createTaskPoller<string, TimedFillPoolResult>({
+      logger,
+      initialPollInterval: pollInterval,
+      pollInterval$: pollIntervalConfiguration$,
+      pollIntervalDelay$,
+      getCapacity: () => {
+        const capacity = this.pool.availableCapacity();
+        if (!capacity) {
+          const usedCapacityPercentage = this.pool.usedCapacityPercentage;
+
+          // if there isn't capacity, emit a load event so that we can expose how often
+          // high load causes the poller to skip work (work isn't called when there is no capacity)
+          this.emitEvent(asTaskManagerStatEvent('load', asOk(usedCapacityPercentage)));
+
+          // Emit event indicating task manager utilization
+          this.emitEvent(asTaskManagerStatEvent('workerUtilization', asOk(usedCapacityPercentage)));
         }
-      );
+        return capacity;
+      },
+      work: this.pollForWork,
+    });
+
+    this.subscribeToPoller(this.poller.events$);
 
     elasticsearchAndSOAvailability$.subscribe((areESAndSOAvailable) => {
-      if (areESAndSOAvailable && !this.isStarted) {
+      if (areESAndSOAvailable) {
         // start polling for work
-        this.pollingSubscription = this.subscribeToPoller(poller$);
-      } else if (!areESAndSOAvailable && this.isStarted) {
-        this.pollingSubscription.unsubscribe();
+        this.poller.start();
+      } else if (!areESAndSOAvailable) {
+        this.logger.info(
+          `Stopping the task poller because Elasticsearch and/or saved-objects service became unavailable`
+        );
+        this.poller.stop();
         this.pool.cancelRunningTasks();
       }
     });
@@ -222,13 +216,13 @@ export class TaskPollingLifecycle {
     return this.events$;
   }
 
+  public stop() {
+    this.poller.stop();
+  }
+
   private emitEvent = (event: TaskLifecycleEvent) => {
     this.events$.next(event);
   };
-
-  public attemptToRun(task: string) {
-    this.claimRequests$.next(some(task));
-  }
 
   private createTaskRunnerForTask = (instance: ConcreteTaskInstance) => {
     return new TaskManagerRunner({
@@ -242,15 +236,14 @@ export class TaskPollingLifecycle {
       defaultMaxAttempts: this.taskClaiming.maxAttempts,
       executionContext: this.executionContext,
       usageCounter: this.usageCounter,
-      eventLoopDelayConfig: { ...this.config.event_loop_delay },
+      config: this.config,
+      allowReadingInvalidState: this.config.allow_reading_invalid_state,
+      strategy: this.config.claim_strategy,
+      getPollInterval: () => this.currentPollInterval,
     });
   };
 
-  public get isStarted() {
-    return !this.pollingSubscription.closed;
-  }
-
-  private pollForWork = async (...tasksToClaim: string[]): Promise<TimedFillPoolResult> => {
+  private pollForWork = async (): Promise<TimedFillPoolResult> => {
     return fillPool(
       // claim available tasks
       () => {
@@ -270,10 +263,21 @@ export class TaskPollingLifecycle {
       this.createTaskRunnerForTask,
       // place tasks in the Task Pool
       async (tasks: TaskRunner[]) => {
-        const result = await this.pool.run(tasks);
+        const tasksToRun = [];
+        const removeTaskPromises = [];
+        for (const task of tasks) {
+          if (task.isAdHocTaskAndOutOfAttempts) {
+            this.logger.debug(`Removing ${task} because the max attempts have been reached.`);
+            removeTaskPromises.push(task.removeTask());
+          } else {
+            tasksToRun.push(task);
+          }
+        }
+        // Wait for all the promises at once to speed up the polling cycle
+        const [result] = await Promise.all([this.pool.run(tasksToRun), ...removeTaskPromises]);
         // Emit the load after fetching tasks, giving us a good metric for evaluating how
         // busy Task manager tends to be in this Kibana instance
-        this.emitEvent(asTaskManagerStatEvent('load', asOk(this.pool.workerLoad)));
+        this.emitEvent(asTaskManagerStatEvent('load', asOk(this.pool.usedCapacityPercentage)));
         return result;
       }
     );
@@ -292,7 +296,33 @@ export class TaskPollingLifecycle {
                 mapOptional((id) => this.emitEvent(asTaskRunRequestEvent(id, asErr(error))))
               );
             }
-            this.logger.error(error.message);
+            this.logger.error(error.message, { error: { stack_trace: error.stack } });
+
+            // Emit event indicating task manager utilization % at the end of a polling cycle
+            // Because there was a polling error, no tasks were claimed so this represents the number of workers busy
+            this.emitEvent(
+              asTaskManagerStatEvent('workerUtilization', asOk(this.pool.usedCapacityPercentage))
+            );
+          })
+        )
+      )
+      .pipe(
+        tap(
+          mapOk((results: TimedFillPoolResult) => {
+            // Emit event indicating task manager utilization % at the end of a polling cycle
+
+            // Get the actual utilization as a percentage
+            let tmUtilization = this.pool.usedCapacityPercentage;
+
+            // Check whether there are any tasks left unclaimed
+            // If we're not at capacity and there are unclaimed tasks, then
+            // there must be high cost tasks that need to be claimed
+            // Artificially inflate the utilization to represent the unclaimed load
+            if (tmUtilization < 100 && (results.stats?.tasksLeftUnclaimed ?? 0) > 0) {
+              tmUtilization = 100;
+            }
+
+            this.emitEvent(asTaskManagerStatEvent('workerUtilization', asOk(tmUtilization)));
           })
         )
       )
@@ -300,7 +330,21 @@ export class TaskPollingLifecycle {
         this.emitEvent(
           map(
             result,
-            ({ timing, ...event }) => asTaskPollingCycleEvent<string>(asOk(event), timing),
+            ({ timing, ...event }) => {
+              const anyTaskErrors = event.stats?.tasksErrors ?? 0;
+              if (anyTaskErrors > 0) {
+                return asTaskPollingCycleEvent<string>(
+                  asErr(
+                    new PollingError<string>(
+                      'Partially failed to poll for work: some tasks could not be claimed.',
+                      PollingErrorType.WorkError,
+                      none
+                    )
+                  )
+                );
+              }
+              return asTaskPollingCycleEvent<string>(asOk(event), timing);
+            },
             (event) => asTaskPollingCycleEvent<string>(asErr(event))
           )
         );

@@ -12,6 +12,7 @@ import { PLUGIN_ID, INTEGRATIONS_PLUGIN_ID, pagePathGetters } from '../../../../
 const EXCLUDED_PACKAGES = [
   'apm',
   'cloud_security_posture',
+  'cloud_defend',
   'dga',
   'fleet_server',
   'osquery_manager',
@@ -31,6 +32,11 @@ interface GetInstallPkgRouteOptionsParams {
   isGuidedOnboardingActive: boolean;
 }
 
+export type InstallPkgRouteOptions = [
+  string,
+  { path: string; state: CreatePackagePolicyRouteState }
+];
+
 const isPackageExemptFromStepsLayout = (pkgkey: string) =>
   EXCLUDED_PACKAGES.some((pkgname) => pkgkey.startsWith(pkgname));
 /*
@@ -46,7 +52,7 @@ export const getInstallPkgRouteOptions = ({
   isCloud,
   isExperimentalAddIntegrationPageEnabled,
   isGuidedOnboardingActive,
-}: GetInstallPkgRouteOptionsParams): [string, { path: string; state: unknown }] => {
+}: GetInstallPkgRouteOptionsParams): InstallPkgRouteOptions => {
   const integrationOpts: { integration?: string } = integration ? { integration } : {};
   const packageExemptFromStepsLayout = isPackageExemptFromStepsLayout(pkgkey);
   const useMultiPageLayout =

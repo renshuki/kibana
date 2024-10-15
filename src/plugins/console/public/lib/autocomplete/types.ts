@@ -1,18 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+import { MonacoEditorActionsProvider } from '../../application/containers/editor/monaco_editor_actions_provider';
 import { CoreEditor, Range, Token } from '../../types';
 
 export interface ResultTerm {
+  meta?: string;
   context?: AutoCompleteContext;
   insertValue?: string;
-  name?: string;
+  name?: string | boolean;
   value?: string;
+  score?: number;
+  template?: { __raw?: boolean; value?: string; [key: string]: unknown };
 }
 
 export interface DataAutoCompleteRulesOneOf {
@@ -25,6 +30,14 @@ export interface DataAutoCompleteRulesOneOf {
 
 export interface AutoCompleteContext {
   autoCompleteSet?: null | ResultTerm[];
+  /**
+   * Stores a state for async results, e.g. fields suggestions based on the mappings definition.
+   */
+  asyncResultsState?: {
+    isLoading: boolean;
+    lastFetched: number | null;
+    results: Promise<ResultTerm[]>;
+  };
   endpoint?: null | {
     paramsAutocomplete: {
       getTopLevelComponents: (method?: string | null) => unknown;
@@ -42,7 +55,7 @@ export interface AutoCompleteContext {
   replacingToken?: boolean;
   rangeToReplace?: Range;
   autoCompleteType?: null | string;
-  editor?: CoreEditor;
+  editor?: CoreEditor | MonacoEditorActionsProvider;
 
   /**
    * The tokenized user input that prompted the current autocomplete at the cursor. This can be out of sync with

@@ -37,7 +37,6 @@ export const getAnomaliesHostTableColumns = (
         idPrefix: `anomalies-host-table-hostName-${createCompoundAnomalyKey(
           anomaliesByHost.anomaly
         )}-hostName`,
-        fieldType: 'keyword',
         render: (item) => <HostDetailsLink hostName={item} />,
       }),
   },

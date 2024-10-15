@@ -6,8 +6,8 @@
  */
 
 import type { IconType } from '@elastic/eui';
-import { JOB_STATUSES } from '../../common/constants';
-import { Job } from '../lib/job';
+import { JOB_STATUS } from '@kbn/reporting-common';
+import { Job } from '@kbn/reporting-public';
 
 /**
  * This is not the most forward-compatible way of mapping to an {@link IconType} for an application.
@@ -25,6 +25,8 @@ export const guessAppIconTypeFromObjectType = (type: string): IconType => {
       return 'visualizeApp';
     case 'canvas workpad':
       return 'canvasApp';
+    case 'lens':
+      return 'lensApp';
     default:
       return 'apps';
   }
@@ -33,6 +35,6 @@ export const guessAppIconTypeFromObjectType = (type: string): IconType => {
 export const jobHasIssues = (job: Job): boolean => {
   return (
     Boolean(job.getWarnings()) ||
-    [JOB_STATUSES.WARNINGS, JOB_STATUSES.FAILED].some((status) => job.status === status)
+    [JOB_STATUS.WARNINGS, JOB_STATUS.FAILED].some((status) => job.status === status)
   );
 };

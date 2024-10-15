@@ -19,6 +19,16 @@ export const VALUE = i18n.translate('xpack.lists.exceptions.builder.valueLabel',
   defaultMessage: 'Value',
 });
 
+export const EXCEPTION_ITEM_ARIA_LABEL = (
+  name: string,
+  groupIndex: number,
+  positionIndex: number
+): string =>
+  i18n.translate('xpack.lists.exceptions.item.ariaLabel', {
+    defaultMessage: '"{name}" in group {group}, position {position} ',
+    values: { group: groupIndex + 1, name, position: positionIndex + 1 },
+  });
+
 export const EXCEPTION_FIELD_VALUE_PLACEHOLDER = i18n.translate(
   'xpack.lists.exceptions.builder.exceptionFieldValuePlaceholder',
   {
@@ -81,5 +91,27 @@ export const CUSTOM_COMBOBOX_OPTION_TEXT = i18n.translate(
   {
     defaultMessage:
       'Select a field from the list. If your field is not available, create a custom one.',
+  }
+);
+
+export const FIELD_CONFLICT_INDICES_WARNING_DESCRIPTION = i18n.translate(
+  'xpack.lists.exceptions.field.mappingConflict.description',
+  {
+    defaultMessage:
+      'This field is defined as different types across the following indices or is unmapped. This can cause unexpected query results.',
+  }
+);
+
+export const CONFLICT_MULTIPLE_INDEX_DESCRIPTION = (name: string, count: number): string =>
+  i18n.translate('xpack.lists.exceptions.field.index.description', {
+    defaultMessage: '{name} ({count} indices)',
+    values: { count, name },
+  });
+
+export const WILDCARD_WITH_IS_OPERATOR_TOOLTIP = i18n.translate(
+  'xpack.lists.exceptions.builder.exceptionIsOperator.warningmessage.tooltip',
+  {
+    defaultMessage:
+      'Using a wildcard with the "IS" operator can make an entry ineffective. Change the operator to "MATCHES" to ensure wildcards run properly.',
   }
 );

@@ -25,7 +25,16 @@ export const getLifecycleMethods = (getService: FtrProviderContext['getService']
   return {
     async setup(archives: string[] | string) {
       const archivesArray = Array.isArray(archives) ? archives : [archives];
-      await Promise.all(archivesArray.map((archive) => esArchiver.load(archive)));
+      await Promise.all(
+        archivesArray.map((archive) =>
+          esArchiver.load(archive, {
+            performance: {
+              batchSize: 300,
+              concurrency: 1,
+            },
+          })
+        )
+      );
     },
 
     async tearDown() {
@@ -33,7 +42,7 @@ export const getLifecycleMethods = (getService: FtrProviderContext['getService']
       // the tests suites. since the archiver doesn't have any reference to the
       // mappings it can't automatically delete it and we have to do the cleanup manually
       await deleteDataStream('.monitoring-*');
-      await deleteDataStream('metrics-beats.stack_monitoring.*');
+      await deleteDataStream('metrics-*.stack_monitoring.*');
     },
   };
 };

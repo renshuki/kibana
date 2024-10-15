@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { safeLoad } from 'js-yaml';
+import { load } from 'js-yaml';
 
 import { installationStatuses } from '../constants';
 import type { PackageInfo, NewPackagePolicy, RegistryPolicyTemplate } from '../types';
@@ -162,6 +162,7 @@ describe('Fleet - validatePackagePolicy()', () => {
       name: 'pkgPolicy1-1',
       namespace: 'default',
       policy_id: 'test-policy',
+      policy_ids: ['test-policy'],
       enabled: true,
       inputs: [
         {
@@ -379,13 +380,13 @@ describe('Fleet - validatePackagePolicy()', () => {
     };
 
     it('returns no errors for valid package policy', () => {
-      expect(validatePackagePolicy(validPackagePolicy, mockPackage, safeLoad)).toEqual(
+      expect(validatePackagePolicy(validPackagePolicy, mockPackage, load)).toEqual(
         noErrorsValidationResults
       );
     });
 
     it('returns errors for invalid package policy', () => {
-      expect(validatePackagePolicy(invalidPackagePolicy, mockPackage, safeLoad)).toEqual({
+      expect(validatePackagePolicy(invalidPackagePolicy, mockPackage, load)).toEqual({
         name: ['Name is required'],
         description: null,
         namespace: null,
@@ -400,7 +401,7 @@ describe('Fleet - validatePackagePolicy()', () => {
           },
           bar: {
             vars: {
-              'bar-input-var-name': ['Invalid format'],
+              'bar-input-var-name': ['Invalid format for bar-input-var-name: expected array'],
               'bar-input2-var-name': ['bar-input2-var-name is required'],
             },
             streams: {
@@ -432,11 +433,7 @@ describe('Fleet - validatePackagePolicy()', () => {
         enabled: false,
       }));
       expect(
-        validatePackagePolicy(
-          { ...validPackagePolicy, inputs: disabledInputs },
-          mockPackage,
-          safeLoad
-        )
+        validatePackagePolicy({ ...validPackagePolicy, inputs: disabledInputs }, mockPackage, load)
       ).toEqual(noErrorsValidationResults);
     });
 
@@ -453,7 +450,7 @@ describe('Fleet - validatePackagePolicy()', () => {
         validatePackagePolicy(
           { ...invalidPackagePolicy, inputs: inputsWithDisabledStreams },
           mockPackage,
-          safeLoad
+          load
         )
       ).toEqual({
         name: ['Name is required'],
@@ -470,7 +467,7 @@ describe('Fleet - validatePackagePolicy()', () => {
           },
           bar: {
             vars: {
-              'bar-input-var-name': ['Invalid format'],
+              'bar-input-var-name': ['Invalid format for bar-input-var-name: expected array'],
               'bar-input2-var-name': ['bar-input2-var-name is required'],
             },
             streams: {
@@ -506,13 +503,13 @@ describe('Fleet - validatePackagePolicy()', () => {
             ...mockPackage,
             policy_templates: undefined,
           },
-          safeLoad
+          load
         )
       ).toEqual({
         name: null,
         description: null,
         namespace: null,
-        inputs: null,
+        inputs: {},
         vars: {},
       });
       expect(
@@ -522,13 +519,13 @@ describe('Fleet - validatePackagePolicy()', () => {
             ...mockPackage,
             policy_templates: [],
           },
-          safeLoad
+          load
         )
       ).toEqual({
         name: null,
         description: null,
         namespace: null,
-        inputs: null,
+        inputs: {},
         vars: {},
       });
     });
@@ -541,13 +538,13 @@ describe('Fleet - validatePackagePolicy()', () => {
             ...mockPackage,
             policy_templates: [{} as RegistryPolicyTemplate],
           },
-          safeLoad
+          load
         )
       ).toEqual({
         name: null,
         description: null,
         namespace: null,
-        inputs: null,
+        inputs: {},
         vars: {},
       });
       expect(
@@ -557,13 +554,13 @@ describe('Fleet - validatePackagePolicy()', () => {
             ...mockPackage,
             policy_templates: [{ inputs: [] } as unknown as RegistryPolicyTemplate],
           },
-          safeLoad
+          load
         )
       ).toEqual({
         name: null,
         description: null,
         namespace: null,
-        inputs: null,
+        inputs: {},
         vars: {},
       });
     });
@@ -594,7 +591,7 @@ describe('Fleet - validatePackagePolicy()', () => {
             ],
           },
           mockPackage,
-          safeLoad
+          load
         )
       ).toEqual({
         name: null,
@@ -656,6 +653,7 @@ describe('Fleet - validatePackagePolicy()', () => {
               version: '0.6.2',
             },
             policy_id: 'b25cb6e0-8347-11ec-96f9-6590c25bacf9',
+            policy_ids: ['b25cb6e0-8347-11ec-96f9-6590c25bacf9'],
           },
           {
             ...mockPackage,
@@ -723,7 +721,7 @@ describe('Fleet - validatePackagePolicy()', () => {
               },
             ],
           },
-          safeLoad
+          load
         )
       ).toEqual({
         description: null,
@@ -754,7 +752,7 @@ describe('Fleet - validatePackagePolicy()', () => {
         validatePackagePolicy(
           INVALID_AWS_POLICY as NewPackagePolicy,
           AWS_PACKAGE as unknown as PackageInfo,
-          safeLoad
+          load
         )
       ).toMatchSnapshot();
     });
@@ -765,7 +763,7 @@ describe('Fleet - validatePackagePolicy()', () => {
           validatePackagePolicy(
             VALID_AWS_POLICY as NewPackagePolicy,
             AWS_PACKAGE as unknown as PackageInfo,
-            safeLoad
+            load
           )
         )
       ).toBe(false);
@@ -886,7 +884,7 @@ describe('Fleet - validatePackagePolicyConfig', () => {
           type: 'integer',
         },
         'myvariable',
-        safeLoad
+        load
       );
 
       expect(res).toEqual(['Invalid integer']);
@@ -903,7 +901,7 @@ describe('Fleet - validatePackagePolicyConfig', () => {
           type: 'integer',
         },
         'myvariable',
-        safeLoad
+        load
       );
 
       expect(res).toBeNull();
@@ -921,7 +919,7 @@ describe('Fleet - validatePackagePolicyConfig', () => {
           multi: true,
         },
         'myvariable',
-        safeLoad
+        load
       );
 
       expect(res).toEqual(['Invalid integer']);
@@ -939,10 +937,284 @@ describe('Fleet - validatePackagePolicyConfig', () => {
           multi: true,
         },
         'myvariable',
-        safeLoad
+        load
       );
 
       expect(res).toBeNull();
+    });
+  });
+
+  describe('Select', () => {
+    it('should return an error message if the value is not an option value', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          type: 'select',
+          value: 'c',
+        },
+        {
+          name: 'myvariable',
+          type: 'select',
+          options: [
+            { value: 'a', text: 'A' },
+            { value: 'b', text: 'B' },
+          ],
+        },
+        'myvariable',
+        load
+      );
+
+      expect(res).toEqual(['Invalid value for select type']);
+    });
+
+    it('should return an error message if the value is an empty string', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          type: 'select',
+          value: '',
+        },
+        {
+          name: 'myvariable',
+          type: 'select',
+          options: [
+            { value: 'a', text: 'A' },
+            { value: 'b', text: 'B' },
+          ],
+        },
+        'myvariable',
+        load
+      );
+
+      expect(res).toEqual(['Invalid value for select type']);
+    });
+
+    it('should accept a select with a valid value', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          type: 'select',
+          value: 'b',
+        },
+        {
+          name: 'myvariable',
+          type: 'select',
+          options: [
+            { value: 'a', text: 'A' },
+            { value: 'b', text: 'B' },
+          ],
+        },
+        'myvariable',
+        load
+      );
+
+      expect(res).toBeNull();
+    });
+
+    it('should accept a select with undefined value', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          type: 'select',
+          value: undefined,
+        },
+        {
+          name: 'myvariable',
+          type: 'select',
+          options: [
+            { value: 'a', text: 'A' },
+            { value: 'b', text: 'B' },
+          ],
+        },
+        'myvariable',
+        load
+      );
+
+      expect(res).toBeNull();
+    });
+    it('should accept a secret ref instead of a text value for a secret field', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          value: { isSecretRef: true, id: 'secret1' },
+        },
+        {
+          name: 'secret_variable',
+          type: 'text',
+          secret: true,
+        },
+        'secret_variable',
+        load
+      );
+
+      expect(res).toBeNull();
+    });
+    it('secret refs should always have an id', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          value: { isSecretRef: true },
+        },
+        {
+          name: 'secret_variable',
+          type: 'text',
+          secret: true,
+        },
+        'secret_variable',
+        load
+      );
+
+      expect(res).toEqual(['Secret reference is invalid, id must be a string']);
+    });
+    it('secret ref id should be a string', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          value: { isSecretRef: true, id: 123 },
+        },
+        {
+          name: 'secret_variable',
+          type: 'text',
+          secret: true,
+        },
+        'secret_variable',
+        load
+      );
+
+      expect(res).toEqual(['Secret reference is invalid, id must be a string']);
+    });
+  });
+
+  describe('Dataset', () => {
+    const datasetError = 'Dataset contains invalid characters';
+
+    const validateDataset = (dataset: string) => {
+      return validatePackagePolicyConfig(
+        {
+          type: 'text',
+          value: { dataset, package: 'log' },
+        },
+        {
+          name: 'data_stream.dataset',
+          type: 'text',
+        },
+        'data_stream.dataset',
+        load,
+        'input'
+      );
+    };
+
+    it('should return an error message if the value has *', () => {
+      const res = validateDataset('test*');
+
+      expect(res).toEqual([datasetError]);
+    });
+
+    it('should return an error message if the value has uppercase letter', () => {
+      const res = validateDataset('Test');
+
+      expect(res).toEqual(['Dataset must be lowercase']);
+    });
+
+    it('should return an error message if the value has _ in the beginning', () => {
+      const res = validateDataset('_test');
+
+      expect(res).toEqual(['Dataset cannot start with an underscore or dot']);
+    });
+
+    it('should return an error message if the value has . in the beginning', () => {
+      const res = validateDataset('.test');
+
+      expect(res).toEqual(['Dataset cannot start with an underscore or dot']);
+    });
+
+    it('should not return an error message if the value is valid', () => {
+      const res = validateDataset('fleet_server.test_dataset');
+
+      expect(res).toEqual(null);
+    });
+
+    it('should not return an error message if the value is undefined', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          type: 'text',
+          value: undefined,
+        },
+        {
+          name: 'data_stream.dataset',
+          type: 'text',
+        },
+        'data_stream.dataset',
+        load,
+        'input'
+      );
+
+      expect(res).toEqual(null);
+    });
+
+    it('should not return an error message if the package is not input type', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          type: 'text',
+          value: { dataset: 'Test', package: 'log' },
+        },
+        {
+          name: 'data_stream.dataset',
+          type: 'text',
+        },
+        'data_stream.dataset',
+        load,
+        'integration'
+      );
+
+      expect(res).toEqual(null);
+    });
+
+    it('should not return an error message if the var is not dataset', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          type: 'text',
+          value: { dataset: 'Test', package: 'log' },
+        },
+        {
+          name: 'test_field',
+          type: 'text',
+        },
+        'test_field',
+        load,
+        'input'
+      );
+
+      expect(res).toEqual(null);
+    });
+
+    it('should return an error message if the string dataset value has special characters', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          type: 'text',
+          value: 'test*',
+        },
+        {
+          name: 'data_stream.dataset',
+          type: 'text',
+        },
+        'data_stream.dataset',
+        load,
+        'input'
+      );
+
+      expect(res).toEqual(['Dataset contains invalid characters']);
+    });
+
+    it('should return an error message if the dataset value has special characters', () => {
+      const res = validatePackagePolicyConfig(
+        {
+          type: 'text',
+          value: { dataset: 'test*', package: 'log' },
+        },
+        {
+          name: 'data_stream.dataset',
+          type: 'text',
+        },
+        'data_stream.dataset',
+        load,
+        'input'
+      );
+
+      expect(res).toEqual(['Dataset contains invalid characters']);
     });
   });
 });

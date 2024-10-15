@@ -4,69 +4,226 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-import React, { useReducer } from 'react';
-
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import React, { useMemo, useReducer } from 'react';
+import { identity } from 'lodash';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { waitForEuiPopoverOpen } from '@elastic/eui/lib/test/rtl';
-import { EcsFieldsResponse } from '@kbn/rule-registry-plugin/common/search_strategy';
-
+import {
+  ALERT_RULE_NAME,
+  ALERT_REASON,
+  ALERT_FLAPPING,
+  ALERT_STATUS,
+  ALERT_CASE_IDS,
+} from '@kbn/rule-data-utils';
+import { FieldFormatsRegistry } from '@kbn/field-formats-plugin/common';
 import { AlertsTable } from './alerts_table';
-import { AlertsField, AlertsTableProps, BulkActionsState, RowSelectionState } from '../../../types';
-import { EuiButtonIcon, EuiFlexItem } from '@elastic/eui';
-import { __IntlProvider as IntlProvider } from '@kbn/i18n-react';
-import { BulkActionsContext } from './bulk_actions/context';
+import {
+  AlertsField,
+  AlertsTableConfigurationRegistry,
+  AlertsTableProps,
+  BulkActionsState,
+  FetchAlertData,
+  RowSelectionState,
+  UseCellActions,
+  Alerts,
+} from '../../../types';
+import { EuiButton, EuiButtonIcon, EuiDataGridColumnCellAction, EuiFlexItem } from '@elastic/eui';
 import { bulkActionsReducer } from './bulk_actions/reducer';
+import { BrowserFields } from '@kbn/alerting-types';
+import { getCasesMockMap } from './cases/index.mock';
+import { getMaintenanceWindowMockMap } from './maintenance_windows/index.mock';
+import { createAppMockRenderer, getJsDomPerformanceFix } from '../test_utils';
+import { createCasesServiceMock } from './index.mock';
+import { useCaseViewNavigation } from './cases/use_case_view_navigation';
+import { act } from 'react-dom/test-utils';
+import { AlertsTableContext } from './contexts/alerts_table_context';
+import { AlertsQueryContext } from '@kbn/alerts-ui-shared/src/common/contexts/alerts_query_context';
+
+const mockCaseService = createCasesServiceMock();
+
+const mockFieldFormatsRegistry = {
+  deserialize: jest.fn().mockImplementation(() => ({
+    id: 'string',
+    convert: jest.fn().mockImplementation(identity),
+  })),
+} as unknown as FieldFormatsRegistry;
 
 jest.mock('@kbn/data-plugin/public');
 jest.mock('@kbn/kibana-react-plugin/public/ui_settings/use_ui_setting', () => ({
   useUiSetting$: jest.fn((value: string) => ['0,0']),
 }));
 
+jest.mock('@kbn/kibana-react-plugin/public', () => {
+  const original = jest.requireActual('@kbn/kibana-react-plugin/public');
+
+  return {
+    ...original,
+    useKibana: () => ({
+      services: {
+        cases: mockCaseService,
+        notifications: {
+          toasts: {
+            addDanger: jest.fn(),
+            addSuccess: jest.fn(),
+          },
+        },
+      },
+    }),
+  };
+});
+
+jest.mock('./cases/use_case_view_navigation');
+
 const columns = [
   {
-    id: AlertsField.name,
+    id: ALERT_RULE_NAME,
     displayAsText: 'Name',
   },
   {
-    id: AlertsField.reason,
+    id: ALERT_REASON,
     displayAsText: 'Reason',
+  },
+  {
+    id: ALERT_STATUS,
+    displayAsText: 'Alert status',
+  },
+  {
+    id: ALERT_CASE_IDS,
+    displayAsText: 'Cases',
   },
 ];
 
+const alerts = [
+  {
+    [ALERT_RULE_NAME]: ['one'],
+    [ALERT_REASON]: ['two'],
+    [ALERT_STATUS]: ['active'],
+    [ALERT_FLAPPING]: [true],
+    [ALERT_CASE_IDS]: ['test-id'],
+  },
+  {
+    [ALERT_RULE_NAME]: ['three'],
+    [ALERT_REASON]: ['four'],
+    [ALERT_STATUS]: ['active'],
+    [ALERT_FLAPPING]: [false],
+    [ALERT_CASE_IDS]: ['test-id-2'],
+  },
+  {
+    [ALERT_RULE_NAME]: ['five'],
+    [ALERT_REASON]: ['six'],
+    [ALERT_STATUS]: ['recovered'],
+    [ALERT_FLAPPING]: [true],
+  },
+  {
+    [ALERT_RULE_NAME]: ['seven'],
+    [ALERT_REASON]: ['eight'],
+    [ALERT_STATUS]: ['recovered'],
+    [ALERT_FLAPPING]: [false],
+  },
+] as unknown as Alerts;
+
+const oldAlertsData = [
+  [
+    {
+      field: AlertsField.name,
+      value: ['one'],
+    },
+    {
+      field: AlertsField.reason,
+      value: ['two'],
+    },
+  ],
+  [
+    {
+      field: AlertsField.name,
+      value: ['three'],
+    },
+    {
+      field: AlertsField.reason,
+      value: ['four'],
+    },
+  ],
+] as FetchAlertData['oldAlertsData'];
+
+const ecsAlertsData = [
+  [
+    {
+      '@timestamp': ['2023-01-28T10:48:49.559Z'],
+      _id: 'SomeId',
+      _index: 'SomeIndex',
+      kibana: {
+        alert: {
+          rule: {
+            name: ['one'],
+          },
+          reason: ['two'],
+        },
+      },
+    },
+  ],
+  [
+    {
+      '@timestamp': ['2023-01-27T10:48:49.559Z'],
+      _id: 'SomeId2',
+      _index: 'SomeIndex',
+      kibana: {
+        alert: {
+          rule: {
+            name: ['three'],
+          },
+          reason: ['four'],
+        },
+      },
+    },
+  ],
+] as FetchAlertData['ecsAlertsData'];
+
+const cellActionOnClickMockedFn = jest.fn();
+
+const TEST_ID = {
+  CELL_ACTIONS_POPOVER: 'euiDataGridExpansionPopover',
+  CELL_ACTIONS_EXPAND: 'euiDataGridCellExpandButton',
+  FIELD_BROWSER: 'fields-browser-container',
+  FIELD_BROWSER_BTN: 'show-field-browser',
+  FIELD_BROWSER_CUSTOM_CREATE_BTN: 'field-browser-custom-create-btn',
+};
+
+const mockedUseCellActions: UseCellActions = () => {
+  const mockedGetCellActions = (columnId: string): EuiDataGridColumnCellAction[] => {
+    const fakeCellAction: EuiDataGridColumnCellAction = ({ rowIndex, Component }) => {
+      const label = 'Fake Cell First Action';
+      return (
+        <Component
+          onClick={() => cellActionOnClickMockedFn(columnId, rowIndex)}
+          data-test-subj={'fake-cell-first-action'}
+          iconType="refresh"
+          aria-label={label}
+        />
+      );
+    };
+    return [fakeCellAction];
+  };
+  return {
+    getCellActions: mockedGetCellActions,
+    visibleCellActions: 2,
+    disabledCellActions: [],
+  };
+};
+
+const { fix, cleanup } = getJsDomPerformanceFix();
+
+beforeAll(() => {
+  fix();
+});
+
+afterAll(() => {
+  cleanup();
+});
+
 describe('AlertsTable', () => {
-  const alerts = [
-    {
-      [AlertsField.name]: ['one'],
-      [AlertsField.reason]: ['two'],
-    },
-    {
-      [AlertsField.name]: ['three'],
-      [AlertsField.reason]: ['four'],
-    },
-  ] as unknown as EcsFieldsResponse[];
-
-  const fetchAlertsData = {
-    activePage: 0,
-    alerts,
-    alertsCount: alerts.length,
-    isInitializing: false,
-    isLoading: false,
-    getInspectQuery: jest.fn().mockImplementation(() => ({ request: {}, response: {} })),
-    onColumnsChange: jest.fn(),
-    onPageChange: jest.fn(),
-    onSortChange: jest.fn(),
-    refresh: jest.fn(),
-    sort: [],
-  };
-
-  const useFetchAlertsData = () => {
-    return fetchAlertsData;
-  };
-
-  const alertsTableConfiguration = {
+  const alertsTableConfiguration: AlertsTableConfigurationRegistry = {
     id: '',
-    casesFeatureId: '',
     columns,
     sort: [],
     useInternalFlyout: jest.fn().mockImplementation(() => ({
@@ -74,102 +231,205 @@ describe('AlertsTable', () => {
       body: jest.fn(),
       footer: jest.fn(),
     })),
-    getRenderCellValue: () =>
-      jest.fn().mockImplementation((props) => {
-        return `${props.colIndex}:${props.rowIndex}`;
-      }),
+    getRenderCellValue: jest.fn().mockImplementation((props) => {
+      return `${props.colIndex}:${props.rowIndex}`;
+    }),
     useBulkActions: () => [
       {
-        label: 'Fake Bulk Action',
-        key: 'fakeBulkAction',
-        'data-test-subj': 'fake-bulk-action',
-        disableOnQuery: false,
-        onClick: () => {},
+        id: 0,
+        items: [
+          {
+            label: 'Fake Bulk Action',
+            key: 'fakeBulkAction',
+            'data-test-subj': 'fake-bulk-action',
+            disableOnQuery: false,
+            onClick: () => {},
+          },
+        ],
       },
     ],
+    useFieldBrowserOptions: () => {
+      return {
+        createFieldButton: () => (
+          <EuiButton data-test-subj={TEST_ID.FIELD_BROWSER_CUSTOM_CREATE_BTN} />
+        ),
+      };
+    },
+    useActionsColumn: () => {
+      return {
+        renderCustomActionsRow: () => (
+          <EuiFlexItem grow={false}>
+            <EuiButtonIcon
+              iconType="analyzeEvent"
+              color="primary"
+              onClick={() => {}}
+              size="s"
+              data-test-subj="fake-action"
+              aria-label="fake-action"
+            />
+          </EuiFlexItem>
+        ),
+      };
+    },
   };
 
-  const tableProps = {
+  const browserFields: BrowserFields = {
+    kibana: {
+      fields: {
+        [AlertsField.uuid]: {
+          category: 'kibana',
+          name: AlertsField.uuid,
+        },
+        [AlertsField.name]: {
+          category: 'kibana',
+          name: AlertsField.name,
+        },
+        [AlertsField.reason]: {
+          category: 'kibana',
+          name: AlertsField.reason,
+        },
+      },
+    },
+  };
+
+  const casesMap = getCasesMockMap();
+  const maintenanceWindowsMap = getMaintenanceWindowMockMap();
+
+  const tableProps: AlertsTableProps = {
     alertsTableConfiguration,
+    cases: { data: casesMap, isLoading: false },
+    maintenanceWindows: { data: maintenanceWindowsMap, isLoading: false },
     columns,
-    bulkActions: [],
     deletedEventIds: [],
     disabledCellActions: [],
-    pageSize: 1,
     pageSizeOptions: [1, 10, 20, 50, 100],
     leadingControlColumns: [],
-    showExpandToDetails: true,
     trailingControlColumns: [],
-    alerts,
-    useFetchAlertsData,
     visibleColumns: columns.map((c) => c.id),
     'data-test-subj': 'testTable',
-    updatedAt: Date.now(),
     onToggleColumn: () => {},
     onResetColumns: () => {},
-    onColumnsChange: () => {},
     onChangeVisibleColumns: () => {},
-    browserFields: {},
+    browserFields,
+    query: {},
+    pageIndex: 0,
+    pageSize: 1,
+    sort: [],
+    isLoading: false,
+    alerts,
+    oldAlertsData,
+    ecsAlertsData,
+    querySnapshot: { request: [], response: [] },
+    refetchAlerts: () => {},
+    alertsCount: alerts.length,
+    onSortChange: jest.fn(),
+    onPageChange: jest.fn(),
+    fieldFormats: mockFieldFormatsRegistry,
   };
 
   const defaultBulkActionsState = {
     rowSelection: new Map<number, RowSelectionState>(),
     isAllSelected: false,
     areAllVisibleRowsSelected: false,
-    rowCount: 2,
+    rowCount: 4,
+    updatedAt: Date.now(),
   };
 
-  const AlertsTableWithLocale: React.FunctionComponent<
+  const useCaseViewNavigationMock = useCaseViewNavigation as jest.Mock;
+  useCaseViewNavigationMock.mockReturnValue({ navigateToCaseView: jest.fn() });
+
+  const AlertsTableWithProviders: React.FunctionComponent<
     AlertsTableProps & { initialBulkActionsState?: BulkActionsState }
   > = (props) => {
+    const renderer = useMemo(() => createAppMockRenderer(AlertsQueryContext), []);
+    const AppWrapper = renderer.AppWrapper;
+
     const initialBulkActionsState = useReducer(
       bulkActionsReducer,
       props.initialBulkActionsState || defaultBulkActionsState
     );
 
     return (
-      <IntlProvider locale="en">
-        <BulkActionsContext.Provider value={initialBulkActionsState}>
+      <AppWrapper>
+        <AlertsTableContext.Provider
+          value={{
+            mutedAlerts: {},
+            bulkActions: initialBulkActionsState,
+          }}
+        >
           <AlertsTable {...props} />
-        </BulkActionsContext.Provider>
-      </IntlProvider>
+        </AlertsTableContext.Provider>
+      </AppWrapper>
     );
   };
 
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe('Alerts table UI', () => {
     it('should support sorting', async () => {
-      const renderResult = render(<AlertsTableWithLocale {...tableProps} />);
-      userEvent.click(renderResult.container.querySelector('.euiDataGridHeaderCell__button')!);
+      const renderResult = render(<AlertsTableWithProviders {...tableProps} />);
+      await userEvent.click(
+        renderResult.container.querySelector('.euiDataGridHeaderCell__button')!,
+        { pointerEventsCheck: 0 }
+      );
+
       await waitForEuiPopoverOpen();
-      userEvent.click(renderResult.getByTestId(`dataGridHeaderCellActionGroup-${columns[0].id}`));
-      userEvent.click(renderResult.getByTitle('Sort A-Z'));
-      expect(fetchAlertsData.onSortChange).toHaveBeenCalledWith([
+
+      await userEvent.click(
+        renderResult.getByTestId(`dataGridHeaderCellActionGroup-${columns[0].id}`),
+        { pointerEventsCheck: 0 }
+      );
+
+      await userEvent.click(renderResult.getByTitle('Sort A-Z'), { pointerEventsCheck: 0 });
+
+      expect(tableProps.onSortChange).toHaveBeenCalledWith([
         { direction: 'asc', id: 'kibana.alert.rule.name' },
       ]);
     });
 
     it('should support pagination', async () => {
-      const renderResult = render(<AlertsTableWithLocale {...tableProps} />);
-      userEvent.click(renderResult.getByTestId('pagination-button-1'));
-      expect(fetchAlertsData.onPageChange).toHaveBeenCalledWith({ pageIndex: 1, pageSize: 1 });
+      const renderResult = render(
+        <AlertsTableWithProviders {...tableProps} pageIndex={0} pageSize={1} />
+      );
+      await userEvent.click(renderResult.getByTestId('pagination-button-1'), {
+        pointerEventsCheck: 0,
+      });
+
+      expect(tableProps.onPageChange).toHaveBeenCalledWith({ pageIndex: 1, pageSize: 1 });
     });
 
     it('should show when it was updated', () => {
-      const { getByTestId } = render(<AlertsTableWithLocale {...tableProps} />);
+      const { getByTestId } = render(<AlertsTableWithProviders {...tableProps} />);
       expect(getByTestId('toolbar-updated-at')).not.toBe(null);
     });
 
     it('should show alerts count', () => {
-      const { getByTestId } = render(<AlertsTableWithLocale {...tableProps} />);
+      const { getByTestId } = render(<AlertsTableWithProviders {...tableProps} />);
       expect(getByTestId('toolbar-alerts-count')).not.toBe(null);
     });
 
-    describe('leading control columns', () => {
-      it('should return at least the flyout action control', async () => {
-        const wrapper = render(<AlertsTableWithLocale {...tableProps} />);
-        expect(wrapper.getByTestId('expandColumnHeaderLabel').textContent).toBe('Actions');
-      });
+    it('should show alert status', () => {
+      const props = {
+        ...tableProps,
+        showAlertStatusWithFlapping: true,
+        pageIndex: 0,
+        pageSize: 10,
+        alertsTableConfiguration: {
+          ...alertsTableConfiguration,
+          getRenderCellValue: undefined,
+        },
+      };
 
+      const { queryAllByTestId } = render(<AlertsTableWithProviders {...props} />);
+      expect(queryAllByTestId('alertLifecycleStatusBadge')[0].textContent).toEqual('Flapping');
+      expect(queryAllByTestId('alertLifecycleStatusBadge')[1].textContent).toEqual('Active');
+      expect(queryAllByTestId('alertLifecycleStatusBadge')[2].textContent).toEqual('Recovered');
+      expect(queryAllByTestId('alertLifecycleStatusBadge')[3].textContent).toEqual('Recovered');
+    });
+
+    describe('leading control columns', () => {
       it('should render other leading controls', () => {
         const customTableProps = {
           ...tableProps,
@@ -181,8 +441,10 @@ describe('AlertsTable', () => {
               rowCellRender: () => <h2 data-test-subj="testCell">Test cell</h2>,
             },
           ],
+          pageIndex: 0,
+          pageSize: 1,
         };
-        const wrapper = render(<AlertsTableWithLocale {...customTableProps} />);
+        const wrapper = render(<AlertsTableWithProviders {...customTableProps} />);
         expect(wrapper.queryByTestId('testHeader')).not.toBe(null);
         expect(wrapper.queryByTestId('testCell')).not.toBe(null);
       });
@@ -206,6 +468,7 @@ describe('AlertsTable', () => {
                           onClick={() => {}}
                           size="s"
                           data-test-subj="testActionColumn"
+                          aria-label="testActionLabel"
                         />
                       </EuiFlexItem>
                       <EuiFlexItem grow={false}>
@@ -215,6 +478,7 @@ describe('AlertsTable', () => {
                           onClick={() => {}}
                           size="s"
                           data-test-subj="testActionColumn2"
+                          aria-label="testActionLabel2"
                         />
                       </EuiFlexItem>
                     </>
@@ -225,16 +489,14 @@ describe('AlertsTable', () => {
           },
         };
 
-        const { queryByTestId } = render(<AlertsTableWithLocale {...customTableProps} />);
+        const { queryByTestId } = render(<AlertsTableWithProviders {...customTableProps} />);
         expect(queryByTestId('testActionColumn')).not.toBe(null);
         expect(queryByTestId('testActionColumn2')).not.toBe(null);
-        expect(queryByTestId('expandColumnCellOpenFlyoutButton-0')).not.toBe(null);
       });
 
       it('should not add expansion action when not set', () => {
         const customTableProps = {
           ...tableProps,
-          showExpandToDetails: false,
           alertsTableConfiguration: {
             ...alertsTableConfiguration,
             useActionsColumn: () => {
@@ -249,6 +511,7 @@ describe('AlertsTable', () => {
                           onClick={() => {}}
                           size="s"
                           data-test-subj="testActionColumn"
+                          aria-label="testActionLabel"
                         />
                       </EuiFlexItem>
                       <EuiFlexItem grow={false}>
@@ -258,6 +521,7 @@ describe('AlertsTable', () => {
                           onClick={() => {}}
                           size="s"
                           data-test-subj="testActionColumn2"
+                          aria-label="testActionLabel2"
                         />
                       </EuiFlexItem>
                     </>
@@ -268,7 +532,7 @@ describe('AlertsTable', () => {
           },
         };
 
-        const { queryByTestId } = render(<AlertsTableWithLocale {...customTableProps} />);
+        const { queryByTestId } = render(<AlertsTableWithProviders {...customTableProps} />);
         expect(queryByTestId('testActionColumn')).not.toBe(null);
         expect(queryByTestId('testActionColumn2')).not.toBe(null);
         expect(queryByTestId('expandColumnCellOpenFlyoutButton-0')).toBe(null);
@@ -277,10 +541,13 @@ describe('AlertsTable', () => {
       it('should render no action column if there is neither the action nor the expand action config is set', () => {
         const customTableProps = {
           ...tableProps,
-          showExpandToDetails: false,
+          alertsTableConfiguration: {
+            ...alertsTableConfiguration,
+            useActionsColumn: undefined,
+          },
         };
 
-        const { queryByTestId } = render(<AlertsTableWithLocale {...customTableProps} />);
+        const { queryByTestId } = render(<AlertsTableWithProviders {...customTableProps} />);
         expect(queryByTestId('expandColumnHeaderLabel')).toBe(null);
         expect(queryByTestId('expandColumnCellOpenFlyoutButton')).toBe(null);
       });
@@ -293,7 +560,8 @@ describe('AlertsTable', () => {
           mockedFn = jest.fn();
           customTableProps = {
             ...tableProps,
-            pageSize: 2,
+            pageIndex: 0,
+            pageSize: 10,
             alertsTableConfiguration: {
               ...alertsTableConfiguration,
               useActionsColumn: () => {
@@ -307,10 +575,12 @@ describe('AlertsTable', () => {
                           onClick={() => {}}
                           size="s"
                           data-test-subj="testActionColumn"
+                          aria-label="testActionLabel"
                         />
                       </EuiFlexItem>
                     </>
                   ),
+                  width: 124,
                 };
               },
             },
@@ -318,22 +588,26 @@ describe('AlertsTable', () => {
         });
 
         it('should show the row loader when callback triggered', async () => {
-          render(<AlertsTableWithLocale {...customTableProps} />);
+          render(<AlertsTableWithProviders {...customTableProps} />);
           fireEvent.click((await screen.findAllByTestId('testActionColumn'))[0]);
 
           // the callback given to our clients to run when they want to update the loading state
-          mockedFn.mock.calls[0][0].setIsActionLoading(true);
+          act(() => {
+            mockedFn.mock.calls[0][0].setIsActionLoading(true);
+          });
 
           expect(await screen.findAllByTestId('row-loader')).toHaveLength(1);
           const selectedOptions = await screen.findAllByTestId('dataGridRowCell');
 
           // first row, first column
           expect(within(selectedOptions[0]).getByLabelText('Loading')).toBeDefined();
-          expect(within(selectedOptions[0]).queryByRole('checkbox')).not.toBeInTheDocument();
+          expect(
+            within(selectedOptions[0]).queryByTestId('bulk-actions-row-cell')
+          ).not.toBeInTheDocument();
 
           // second row, first column
-          expect(within(selectedOptions[4]).queryByLabelText('Loading')).not.toBeInTheDocument();
-          expect(within(selectedOptions[4]).getByRole('checkbox')).toBeDefined();
+          expect(within(selectedOptions[6]).queryByLabelText('Loading')).not.toBeInTheDocument();
+          expect(within(selectedOptions[6]).getByTestId('bulk-actions-row-cell')).toBeDefined();
         });
 
         it('should show the row loader when callback triggered with false', async () => {
@@ -343,7 +617,7 @@ describe('AlertsTable', () => {
           };
 
           render(
-            <AlertsTableWithLocale
+            <AlertsTableWithProviders
               {...customTableProps}
               initialBulkActionsState={initialBulkActionsState}
             />
@@ -351,10 +625,128 @@ describe('AlertsTable', () => {
           fireEvent.click((await screen.findAllByTestId('testActionColumn'))[0]);
 
           // the callback given to our clients to run when they want to update the loading state
-          mockedFn.mock.calls[0][0].setIsActionLoading(false);
+          act(() => {
+            mockedFn.mock.calls[0][0].setIsActionLoading(false);
+          });
 
           expect(screen.queryByTestId('row-loader')).not.toBeInTheDocument();
         });
+      });
+    });
+
+    describe('cell Actions', () => {
+      let customTableProps: AlertsTableProps;
+
+      beforeEach(() => {
+        customTableProps = {
+          ...tableProps,
+          alertsTableConfiguration: {
+            ...alertsTableConfiguration,
+            useCellActions: mockedUseCellActions,
+          },
+        };
+      });
+
+      it('Should render cell actions on hover', async () => {
+        render(<AlertsTableWithProviders {...customTableProps} />);
+
+        const reasonFirstRow = (await screen.findAllByTestId('dataGridRowCell'))[3];
+
+        fireEvent.mouseOver(reasonFirstRow);
+
+        await waitFor(() => {
+          expect(screen.getByTestId('fake-cell-first-action')).toBeInTheDocument();
+        });
+      });
+      it('cell Actions can be expanded', async () => {
+        render(<AlertsTableWithProviders {...customTableProps} />);
+        const reasonFirstRow = (await screen.findAllByTestId('dataGridRowCell'))[3];
+
+        fireEvent.mouseOver(reasonFirstRow);
+
+        expect(await screen.findByTestId(TEST_ID.CELL_ACTIONS_EXPAND)).toBeVisible();
+
+        fireEvent.click(await screen.findByTestId(TEST_ID.CELL_ACTIONS_EXPAND));
+
+        expect(await screen.findByTestId(TEST_ID.CELL_ACTIONS_POPOVER)).toBeVisible();
+        expect(await screen.findAllByLabelText(/fake cell first action/i)).toHaveLength(2);
+      });
+    });
+
+    describe('Alert Registry use field Browser Hook', () => {
+      it('field Browser Options hook is working correctly', async () => {
+        render(
+          <AlertsTableWithProviders
+            {...tableProps}
+            initialBulkActionsState={{
+              ...defaultBulkActionsState,
+              rowSelection: new Map(),
+            }}
+          />
+        );
+
+        const fieldBrowserBtn = screen.getByTestId(TEST_ID.FIELD_BROWSER_BTN);
+        expect(fieldBrowserBtn).toBeVisible();
+
+        fireEvent.click(fieldBrowserBtn);
+
+        expect(await screen.findByTestId(TEST_ID.FIELD_BROWSER)).toBeVisible();
+
+        expect(await screen.findByTestId(TEST_ID.FIELD_BROWSER_CUSTOM_CREATE_BTN)).toBeVisible();
+      });
+    });
+
+    describe('cases column', () => {
+      const props = {
+        ...tableProps,
+        pageSize: alerts.length,
+      };
+
+      it('should show the cases column', async () => {
+        render(<AlertsTableWithProviders {...props} />);
+        expect(await screen.findByText('Cases')).toBeInTheDocument();
+      });
+
+      it('should show the cases titles correctly', async () => {
+        render(<AlertsTableWithProviders {...props} pageIndex={0} pageSize={10} />);
+        expect(await screen.findByText('Test case')).toBeInTheDocument();
+        expect(await screen.findByText('Test case 2')).toBeInTheDocument();
+      });
+
+      it('show loading skeleton if it loads cases', async () => {
+        render(
+          <AlertsTableWithProviders
+            {...props}
+            pageIndex={0}
+            pageSize={10}
+            cases={{ ...props.cases, isLoading: true }}
+          />
+        );
+
+        expect((await screen.findAllByTestId('cases-cell-loading')).length).toBe(4);
+      });
+
+      it('shows the cases tooltip', async () => {
+        render(<AlertsTableWithProviders {...props} />);
+        expect(await screen.findByText('Test case')).toBeInTheDocument();
+
+        await userEvent.hover(screen.getByText('Test case'));
+
+        expect(await screen.findByTestId('cases-components-tooltip')).toBeInTheDocument();
+      });
+    });
+
+    describe('dynamic row height mode', () => {
+      it('should render a non-virtualized grid body when the dynamicRowHeight option is on', async () => {
+        const { container } = render(<AlertsTableWithProviders {...tableProps} dynamicRowHeight />);
+
+        expect(container.querySelector('.euiDataGrid__customRenderBody')).toBeTruthy();
+      });
+
+      it('should render a virtualized grid body when the dynamicRowHeight option is off', async () => {
+        const { container } = render(<AlertsTableWithProviders {...tableProps} />);
+
+        expect(container.querySelector('.euiDataGrid__virtualized')).toBeTruthy();
       });
     });
   });

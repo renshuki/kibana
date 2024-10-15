@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Position } from '@elastic/charts';
@@ -63,7 +64,7 @@ export class VisualizeChartPageObject extends FtrService {
     // check if enabled but not a line, area, histogram or pie chart
     if (await this.find.existsByCssSelector('.visLib__chart', 1)) {
       const chart = await this.find.byCssSelector('.visLib__chart');
-      const chartType = await chart.getAttribute('data-vislib-chart-type');
+      const chartType = (await chart.getAttribute('data-vislib-chart-type')) ?? '';
 
       if (!['line', 'area', 'histogram', 'pie'].includes(chartType)) {
         this.log.debug(`-- isNewLibraryChart = false`);
@@ -116,7 +117,9 @@ export class VisualizeChartPageObject extends FtrService {
   ) {
     const areas = (await this.getEsChartDebugState(selector))?.areas ?? [];
     const points = areas.find(({ name }) => name === dataLabel)?.lines.y1.points ?? [];
-    return shouldContainXAxisData ? points.map(({ x, y }) => [x, y]) : points.map(({ y }) => y);
+    return shouldContainXAxisData
+      ? points.sort((a, b) => a.x - b.x).map(({ x, y }) => [x, y])
+      : points.sort((a, b) => a.x - b.x).map(({ y }) => y);
   }
 
   /**
@@ -137,7 +140,7 @@ export class VisualizeChartPageObject extends FtrService {
   public async getLineChartData(selector: string, dataLabel = 'Count') {
     const lines = (await this.getEsChartDebugState(selector))?.lines ?? [];
     const points = lines.find(({ name }) => name === dataLabel)?.points ?? [];
-    return points.map(({ y }) => y);
+    return points.sort((a, b) => a.x - b.x).map(({ y }) => y);
   }
 
   /**
@@ -147,7 +150,7 @@ export class VisualizeChartPageObject extends FtrService {
   public async getBarChartData(selector: string, dataLabel = 'Count') {
     const bars = (await this.getEsChartDebugState(selector))?.bars ?? [];
     const values = bars.find(({ name }) => name === dataLabel)?.bars ?? [];
-    return values.map(({ y }) => y);
+    return values.sort((a, b) => a.x - b.x).map(({ y }) => y);
   }
 
   private async toggleLegend(force = false) {
@@ -248,6 +251,12 @@ export class VisualizeChartPageObject extends FtrService {
     return items.map(({ name }) => name);
   }
 
+  public async getReferenceLine(selector: string) {
+    const items = (await this.getEsChartDebugState(selector))?.annotations;
+    const referenceLine = items?.filter(({ type }) => type === 'line');
+    return referenceLine;
+  }
+
   public async getLegendEntries() {
     const isVisTypePieChart = await this.isNewLibraryChart(partitionVisChartSelector);
     const isVisTypeHeatmapChart = await this.isNewLibraryChart(heatmapChartSelector);
@@ -281,7 +290,7 @@ export class VisualizeChartPageObject extends FtrService {
       const legendItemColor = await chart.findByCssSelector(
         `[data-ech-series-name="${name}"] .echLegendItem__color`
       );
-      legendItemColor.click();
+      await legendItemColor.click();
 
       await this.waitForVisualizationRenderingStabilized();
       // arbitrary color chosen, any available would do
@@ -301,7 +310,7 @@ export class VisualizeChartPageObject extends FtrService {
         const legendItemColor = await chart.findByCssSelector(
           `[data-ech-series-name="${name}"] .echLegendItem__color`
         );
-        legendItemColor.click();
+        await legendItemColor.click();
       } else {
         // This click has been flaky in opening the legend, hence the this.retry.  See
         // https://github.com/elastic/kibana/issues/17468
@@ -327,7 +336,7 @@ export class VisualizeChartPageObject extends FtrService {
         cell
       );
       await this.common.sleep(2000);
-      filterBtn.click();
+      await filterBtn.click();
     });
   }
 
@@ -428,7 +437,7 @@ export class VisualizeChartPageObject extends FtrService {
   }
 
   public async getAxesCountByPosition(
-    axesPosition: typeof Position[keyof typeof Position],
+    axesPosition: (typeof Position)[keyof typeof Position],
     selector: string
   ) {
     const yAxes = (await this.getEsChartDebugState(selector))?.axes?.y ?? [];

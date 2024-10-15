@@ -6,6 +6,7 @@
  */
 import { keyBy, keys, merge } from 'lodash';
 import type { RequestHandler } from '@kbn/core/server';
+import pMap from 'p-map';
 
 import type { DataStream } from '../../types';
 import { KibanaSavedObjectType } from '../../../common/types';
@@ -15,6 +16,9 @@ import { defaultFleetErrorHandler } from '../../errors';
 import { dataStreamService } from '../../services/data_streams';
 
 import { getDataStreamsQueryMetadata } from './get_data_streams_query_metadata';
+
+const MANAGED_BY = 'fleet';
+const LEGACY_MANAGED_BY = 'ingest-manager';
 
 interface ESDataStreamInfo {
   name: string;
@@ -54,8 +58,11 @@ export const getListHandler: RequestHandler = async (context, request, response)
       getPackageSavedObjects(savedObjects.client),
     ]);
 
+    // managed_by property 'ingest-manager' added to allow for legacy data streams to be displayed
+    // See https://github.com/elastic/elastic-agent/issues/654
+
     const filteredDataStreamsInfo = dataStreamsInfo.filter(
-      (ds) => ds?._meta?.managed_by === 'fleet'
+      (ds) => ds?._meta?.managed_by === MANAGED_BY || ds?._meta?.managed_by === LEGACY_MANAGED_BY
     );
 
     const dataStreamsInfoByName = keyBy<ESDataStreamInfo>(filteredDataStreamsInfo, 'name');
@@ -114,8 +121,9 @@ export const getListHandler: RequestHandler = async (context, request, response)
     );
 
     // Query additional information for each data stream
-    const dataStreamPromises = dataStreamNames.map(async (dataStreamName) => {
+    const queryDataStreamInfo = async (dataStreamName: string) => {
       const dataStream = dataStreams[dataStreamName];
+
       const dataStreamResponse: DataStream = {
         index: dataStreamName,
         dataset: '',
@@ -190,13 +198,18 @@ export const getListHandler: RequestHandler = async (context, request, response)
       }
 
       return dataStreamResponse;
-    });
+    };
 
     // Return final data streams objects sorted by last activity, descending
     // After filtering out data streams that are missing dataset/namespace/type/package fields
-    body.data_streams = (await Promise.all(dataStreamPromises))
+    body.data_streams = (
+      await pMap(dataStreamNames, (dataStreamName) => queryDataStreamInfo(dataStreamName), {
+        concurrency: 50,
+      })
+    )
       .filter(({ dataset, namespace, type }) => dataset && namespace && type)
       .sort((a, b) => b.last_activity_ms - a.last_activity_ms);
+
     return response.ok({
       body,
     });

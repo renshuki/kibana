@@ -12,6 +12,7 @@ import type {
   ElasticsearchClient,
   SavedObjectsClientContract,
   IBasePath,
+  SecurityServiceStart,
 } from '@kbn/core/server';
 import type { ISavedObjectsSerializer } from '@kbn/core-saved-objects-server';
 import { SECURITY_EXTENSION_ID } from '@kbn/core-saved-objects-server';
@@ -20,13 +21,21 @@ import type {
   SecurityPluginSetup,
   SecurityPluginStart,
 } from '@kbn/security-plugin/server';
-import type { PluginStartContract as FeaturesPluginStart } from '@kbn/features-plugin/server';
+import type { FeaturesPluginStart } from '@kbn/features-plugin/server';
 import type { PluginStartContract as ActionsPluginStart } from '@kbn/actions-plugin/server';
 import type { LensServerPluginSetup } from '@kbn/lens-plugin/server';
 import type { SpacesPluginStart } from '@kbn/spaces-plugin/server';
 import type { LicensingPluginStart } from '@kbn/licensing-plugin/server';
 import type { NotificationsPluginStart } from '@kbn/notifications-plugin/server';
-import { SAVED_OBJECT_TYPES } from '../../common/constants';
+import type {
+  AlertsClient,
+  RuleRegistryPluginStartContract,
+} from '@kbn/rule-registry-plugin/server';
+
+import type { PublicMethodsOf } from '@kbn/utility-types';
+import { DEFAULT_SPACE_ID } from '@kbn/spaces-plugin/common';
+import type { FilesStart } from '@kbn/files-plugin/server';
+import { KIBANA_SYSTEM_USERNAME, SAVED_OBJECT_TYPES } from '../../common/constants';
 import { Authorization } from '../authorization/authorization';
 import {
   CaseConfigureService,
@@ -49,15 +58,18 @@ import { EmailNotificationService } from '../services/notifications/email_notifi
 interface CasesClientFactoryArgs {
   securityPluginSetup: SecurityPluginSetup;
   securityPluginStart: SecurityPluginStart;
-  spacesPluginStart: SpacesPluginStart;
+  securityServiceStart: SecurityServiceStart;
+  spacesPluginStart?: SpacesPluginStart;
   featuresPluginStart: FeaturesPluginStart;
   actionsPluginStart: ActionsPluginStart;
   licensingPluginStart: LicensingPluginStart;
   lensEmbeddableFactory: LensServerPluginSetup['lensEmbeddableFactory'];
+  notifications: NotificationsPluginStart;
+  ruleRegistry: RuleRegistryPluginStartContract;
   persistableStateAttachmentTypeRegistry: PersistableStateAttachmentTypeRegistry;
   externalReferenceAttachmentTypeRegistry: ExternalReferenceAttachmentTypeRegistry;
   publicBaseUrl?: IBasePath['publicBaseUrl'];
-  notifications: NotificationsPluginStart;
+  filesPluginStart: FilesStart;
 }
 
 /**
@@ -121,6 +133,7 @@ export class CasesClientFactory {
     });
 
     const savedObjectsSerializer = savedObjectsService.createSerializer();
+    const alertsClient = await this.options.ruleRegistry.getRacClientWithRequest(request);
 
     const services = this.createServices({
       unsecuredSavedObjectsClient,
@@ -128,9 +141,12 @@ export class CasesClientFactory {
       esClient: scopedClusterClient,
       request,
       auditLogger,
+      alertsClient,
     });
 
     const userInfo = await this.getUserInfo(request);
+
+    const fileService = this.options.filesPluginStart.fileServiceFactory.asScoped(request);
 
     return createCasesClient({
       services,
@@ -144,7 +160,10 @@ export class CasesClientFactory {
       externalReferenceAttachmentTypeRegistry: this.options.externalReferenceAttachmentTypeRegistry,
       securityStartPlugin: this.options.securityPluginStart,
       publicBaseUrl: this.options.publicBaseUrl,
-      spaceId: this.options.spacesPluginStart.spacesService.getSpaceId(request),
+      spaceId:
+        this.options.spacesPluginStart?.spacesService.getSpaceId(request) ?? DEFAULT_SPACE_ID,
+      savedObjectsSerializer,
+      fileService,
     });
   }
 
@@ -160,19 +179,22 @@ export class CasesClientFactory {
     esClient,
     request,
     auditLogger,
+    alertsClient,
   }: {
     unsecuredSavedObjectsClient: SavedObjectsClientContract;
     savedObjectsSerializer: ISavedObjectsSerializer;
     esClient: ElasticsearchClient;
     request: KibanaRequest;
     auditLogger: AuditLogger;
+    alertsClient: PublicMethodsOf<AlertsClient>;
   }): CasesServices {
     this.validateInitialization();
 
-    const attachmentService = new AttachmentService(
-      this.logger,
-      this.options.persistableStateAttachmentTypeRegistry
-    );
+    const attachmentService = new AttachmentService({
+      log: this.logger,
+      persistableStateAttachmentTypeRegistry: this.options.persistableStateAttachmentTypeRegistry,
+      unsecuredSavedObjectsClient,
+    });
 
     const caseService = new CasesService({
       log: this.logger,
@@ -195,11 +217,12 @@ export class CasesClientFactory {
       notifications: this.options.notifications,
       security: this.options.securityPluginStart,
       publicBaseUrl: this.options.publicBaseUrl,
-      spaceId: this.options.spacesPluginStart.spacesService.getSpaceId(request),
+      spaceId:
+        this.options.spacesPluginStart?.spacesService.getSpaceId(request) ?? DEFAULT_SPACE_ID,
     });
 
     return {
-      alertsService: new AlertService(esClient, this.logger),
+      alertsService: new AlertService(esClient, this.logger, alertsClient),
       caseService,
       caseConfigureService: new CaseConfigureService(this.logger),
       connectorMappingsService: new ConnectorMappingsService(this.logger),
@@ -236,6 +259,7 @@ export class CasesClientFactory {
 
     try {
       const userProfile = await this.options.securityPluginStart.userProfiles.getCurrent({
+        // todo: Access userProfiles from core's UserProfileService contract
         request,
       });
 
@@ -252,7 +276,7 @@ export class CasesClientFactory {
     }
 
     try {
-      const user = this.options.securityPluginStart.authc.getCurrentUser(request);
+      const user = this.options.securityServiceStart.authc.getCurrentUser(request);
 
       if (user != null) {
         return {
@@ -263,6 +287,14 @@ export class CasesClientFactory {
       }
     } catch (error) {
       this.logger.debug(`Failed to retrieve user info from authc: ${error}`);
+    }
+
+    if (request.isFakeRequest) {
+      return {
+        username: KIBANA_SYSTEM_USERNAME,
+        full_name: null,
+        email: null,
+      };
     }
 
     return {

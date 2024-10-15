@@ -24,20 +24,18 @@ describe('AddRoleTemplateButton', () => {
     expect(wrapper).toMatchInlineSnapshot(`
       <EuiCallOut
         color="danger"
-        iconType="alert"
+        iconType="warning"
         title={
-          <FormattedMessage
+          <Memo(MemoizedFormattedMessage)
             defaultMessage="Role templates unavailable"
             id="xpack.security.management.editRoleMapping.roleTemplatesUnavailableTitle"
-            values={Object {}}
           />
         }
       >
         <p>
-          <FormattedMessage
+          <MemoizedFormattedMessage
             defaultMessage="Role templates cannot be used when scripts are disabled in Elasticsearch."
             id="xpack.security.management.editRoleMapping.roleTemplatesUnavailable"
-            values={Object {}}
           />
         </p>
       </EuiCallOut>

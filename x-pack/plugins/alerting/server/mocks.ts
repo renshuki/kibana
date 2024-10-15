@@ -22,6 +22,7 @@ import {
   PublicRuleResultService,
   PublicRuleMonitoringService,
 } from './types';
+import { publicAlertsClientMock } from './alerts_client/alerts_client.mock';
 
 export { rulesClientMock };
 
@@ -30,6 +31,12 @@ const createSetupMock = () => {
     registerType: jest.fn(),
     getSecurityHealth: jest.fn(),
     getConfig: jest.fn(),
+    frameworkAlerts: {
+      enabled: jest.fn(),
+      getContextInitializationPromise: jest.fn(),
+    },
+    getDataStreamAdapter: jest.fn(),
+    registerConnectorAdapter: jest.fn(),
   };
   return mock;
 };
@@ -52,7 +59,9 @@ const createShareStartMock = () => {
 const createStartMock = () => {
   const mock: jest.Mocked<PluginStartContract> = {
     listTypes: jest.fn(),
+    getType: jest.fn(),
     getAllTypes: jest.fn(),
+    getAlertIndicesAlias: jest.fn(),
     getAlertingAuthorizationWithRequest: jest.fn(),
     getRulesClientWithRequest: jest.fn().mockResolvedValue(rulesClientMock.create()),
     getFrameworkHealth: jest.fn(),
@@ -76,6 +85,7 @@ export const createAlertFactoryMock = {
       getScheduledActionOptions: jest.fn(),
       unscheduleActions: jest.fn(),
       getState: jest.fn(),
+      getUuid: jest.fn(),
       scheduleActions: jest.fn(),
       replaceState: jest.fn(),
       updateLastScheduledActions: jest.fn(),
@@ -157,16 +167,18 @@ const createRuleExecutorServicesMock = <
       },
       done: jest.fn().mockReturnValue(alertFactoryMockDone),
     },
-    savedObjectsClient: savedObjectsClientMock.create(),
-    uiSettingsClient: uiSettingsServiceMock.createClient(),
-    scopedClusterClient: elasticsearchServiceMock.createScopedClusterClient(),
-    shouldWriteAlerts: () => true,
-    shouldStopExecution: () => true,
-    search: createAbortableSearchServiceMock(),
-    searchSourceClient: searchSourceCommonMock,
+    alertsClient: publicAlertsClientMock.create(),
+    getDataViews: jest.fn().mockResolvedValue(dataViewPluginMocks.createStartContract()),
+    getMaintenanceWindowIds: jest.fn().mockResolvedValue([]),
+    getSearchSourceClient: jest.fn().mockResolvedValue(searchSourceCommonMock),
     ruleMonitoringService: createRuleMonitoringServiceMock(),
+    savedObjectsClient: savedObjectsClientMock.create(),
+    scopedClusterClient: elasticsearchServiceMock.createScopedClusterClient(),
+    search: createAbortableSearchServiceMock(),
     share: createShareStartMock(),
-    dataViews: dataViewPluginMocks.createStartContract(),
+    shouldStopExecution: () => true,
+    shouldWriteAlerts: () => true,
+    uiSettingsClient: uiSettingsServiceMock.createClient(),
   };
 };
 export type RuleExecutorServicesMock = ReturnType<typeof createRuleExecutorServicesMock>;
@@ -181,3 +193,5 @@ export const alertsMock = {
 export const ruleMonitoringServiceMock = { create: createRuleMonitoringServiceMock };
 
 export const ruleLastRunServiceMock = { create: createRuleLastRunServiceMock };
+
+export { createDataStreamAdapterMock } from './alerts_service/lib/data_stream_adapter.mock';

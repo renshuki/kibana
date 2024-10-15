@@ -5,11 +5,7 @@
  * 2.0.
  */
 
-import type { RuleAction } from '@kbn/alerting-plugin/common';
-
-export type RuleAlertAction = Omit<RuleAction, 'actionTypeId'> & {
-  action_type_id: string;
-};
+import type { EqlHitsSequence } from '@elastic/elasticsearch/lib/api/types';
 
 /**
  * Defines the search types you can have from Elasticsearch within a
@@ -38,10 +34,7 @@ export interface BaseHit<T> {
   fields?: Record<string, SearchTypes[]>;
 }
 
-export interface EqlSequence<T> {
-  join_keys: SearchTypes[];
-  events: Array<BaseHit<T>>;
-}
+export type EqlSequence<T> = EqlHitsSequence<T>;
 
 export interface EqlSearchResponse<T> {
   is_partial: boolean;

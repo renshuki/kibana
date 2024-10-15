@@ -15,7 +15,7 @@ import {
   EuiLink,
   EuiPage,
   EuiPageBody,
-  EuiPageContent_Deprecated as EuiPageContent,
+  EuiPanel,
   EuiCallOut,
   EuiSpacer,
   EuiIcon,
@@ -28,7 +28,8 @@ import { AlertsStatus } from '../../../alerts/status';
 import { STANDALONE_CLUSTER_CLUSTER_UUID } from '../../../../common/constants';
 import { getSafeForExternalLink } from '../../../lib/get_safe_for_external_link';
 import './listing.scss';
-import { toMountPoint, useKibana } from '@kbn/kibana-react-plugin/public';
+import { useKibana } from '@kbn/kibana-react-plugin/public';
+import { toMountPoint } from '@kbn/react-kibana-mount';
 
 const IsClusterSupported = ({ isSupported, children }) => {
   return isSupported ? children : '-';
@@ -230,6 +231,14 @@ const getColumns = (
         );
       },
     },
+    {
+      name: i18n.translate('xpack.monitoring.cluster.listing.versionColumnTitle', {
+        defaultMessage: 'Version',
+      }),
+      field: 'version',
+      'data-test-subj': 'clusterVersion',
+      sortable: true,
+    },
   ];
 };
 
@@ -252,7 +261,7 @@ const licenseWarning = (scope, { title, text }) => {
   });
 };
 
-const handleClickIncompatibleLicense = (scope, theme$, clusterName) => {
+const handleClickIncompatibleLicense = (scope, services, clusterName) => {
   licenseWarning(scope, {
     title: i18n.translate(
       'xpack.monitoring.cluster.listing.incompatibleLicense.warningMessageTitle',
@@ -286,12 +295,12 @@ const handleClickIncompatibleLicense = (scope, theme$, clusterName) => {
           />
         </p>
       </Fragment>,
-      { theme$ }
+      services
     ),
   });
 };
 
-const handleClickInvalidLicense = (scope, theme$, clusterName) => {
+const handleClickInvalidLicense = (scope, services, clusterName) => {
   const licensingPath = `${Legacy.shims.getBasePath()}/app/management/stack/license_management/home`;
 
   licenseWarning(scope, {
@@ -332,7 +341,7 @@ const handleClickInvalidLicense = (scope, theme$, clusterName) => {
           />
         </p>
       </Fragment>,
-      { theme$ }
+      services
     ),
   });
 };
@@ -389,19 +398,15 @@ const StandaloneClusterCallout = ({ changeCluster, storage }) => {
 };
 
 export const Listing = ({ angular, clusters, sorting, pagination, onTableChange }) => {
+  const { scope, globalState, storage, showLicenseExpiration } = angular;
+  const {
+    sort: { direction, field },
+  } = sorting;
   const { services } = useKibana();
 
-  const _changeCluster = partial(changeCluster, angular.scope, angular.globalState);
-  const _handleClickIncompatibleLicense = partial(
-    handleClickIncompatibleLicense,
-    angular.scope,
-    services.theme.theme$
-  );
-  const _handleClickInvalidLicense = partial(
-    handleClickInvalidLicense,
-    angular.scope,
-    services.theme.theme$
-  );
+  const _changeCluster = partial(changeCluster, scope, globalState);
+  const _handleClickIncompatibleLicense = partial(handleClickIncompatibleLicense, scope, services);
+  const _handleClickInvalidLicense = partial(handleClickInvalidLicense, scope, services);
   const hasStandaloneCluster = !!clusters.find(
     (cluster) => cluster.cluster_uuid === STANDALONE_CLUSTER_CLUSTER_UUID
   );
@@ -409,15 +414,15 @@ export const Listing = ({ angular, clusters, sorting, pagination, onTableChange 
   return (
     <EuiPage>
       <EuiPageBody>
-        <EuiPageContent>
+        <EuiPanel>
           {hasStandaloneCluster ? (
-            <StandaloneClusterCallout changeCluster={_changeCluster} storage={angular.storage} />
+            <StandaloneClusterCallout changeCluster={_changeCluster} storage={storage} />
           ) : null}
           <EuiMonitoringTable
             className="clusterTable"
             rows={clusters}
             columns={getColumns(
-              angular.showLicenseExpiration,
+              showLicenseExpiration,
               _changeCluster,
               _handleClickIncompatibleLicense,
               _handleClickInvalidLicense
@@ -428,17 +433,16 @@ export const Listing = ({ angular, clusters, sorting, pagination, onTableChange 
               };
             }}
             sorting={{
-              ...sorting,
               sort: {
-                ...sorting.sort,
-                field: 'cluster_name',
+                direction,
+                field: field || 'cluster_name',
               },
             }}
             pagination={pagination}
             search={{
               box: {
                 incremental: true,
-                placeholder: angular.scope.filterText,
+                placeholder: scope.filterText,
               },
             }}
             onTableChange={onTableChange}
@@ -446,7 +450,7 @@ export const Listing = ({ angular, clusters, sorting, pagination, onTableChange 
               defaultFields: ['cluster_name'],
             }}
           />
-        </EuiPageContent>
+        </EuiPanel>
       </EuiPageBody>
     </EuiPage>
   );

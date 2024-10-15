@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 // Inspired in a discussion found at https://github.com/facebook/jest/issues/5356 as Jest currently doesn't
@@ -43,6 +44,13 @@ module.exports = (request, options) => {
     return module.exports(request.replace('@elastic/eui/lib/', '@elastic/eui/test-env/'), options);
   }
 
+  if (request === 'axios') {
+    return resolve.sync('axios/dist/node/axios.cjs', {
+      basedir: options.basedir,
+      extensions: options.extensions,
+    });
+  }
+
   if (request === `elastic-apm-node`) {
     return APM_AGENT_MOCK;
   }
@@ -62,7 +70,7 @@ module.exports = (request, options) => {
       return FILE_MOCK;
     }
 
-    if (reqExt === '.worker' && (reqBasename.endsWith('.ace') || reqBasename.endsWith('.editor'))) {
+    if (reqExt === '.worker' && reqBasename.endsWith('.editor')) {
       return WORKER_MOCK;
     }
   }

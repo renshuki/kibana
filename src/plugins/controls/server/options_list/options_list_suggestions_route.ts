@@ -1,25 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Observable } from 'rxjs';
-import { get } from 'lodash';
 
-import { PluginSetup as UnifiedSearchPluginSetup } from '@kbn/unified-search-plugin/server';
-import { getKbnServerError, reportServerError } from '@kbn/kibana-utils-plugin/server';
-import { CoreSetup, ElasticsearchClient } from '@kbn/core/server';
-import { SearchRequest } from '@kbn/data-plugin/common';
 import { schema } from '@kbn/config-schema';
+import { CoreSetup, ElasticsearchClient } from '@kbn/core/server';
+import { getKbnServerError, reportServerError } from '@kbn/kibana-utils-plugin/server';
+import { PluginSetup as UnifiedSearchPluginSetup } from '@kbn/unified-search-plugin/server';
 
+import type { SearchRequest } from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { OptionsListRequestBody, OptionsListResponse } from '../../common/options_list/types';
-import {
-  getSuggestionAggregationBuilder,
-  getValidationAggregationBuilder,
-} from './options_list_queries';
+import { getValidationAggregationBuilder } from './options_list_validation_queries';
+import { getSuggestionAggregationBuilder } from './suggestion_queries';
 
 export const setupOptionsListSuggestionsRoute = (
   { http }: CoreSetup,
@@ -27,47 +25,67 @@ export const setupOptionsListSuggestionsRoute = (
 ) => {
   const router = http.createRouter();
 
-  router.post(
-    {
-      path: '/api/kibana/controls/optionsList/{index}',
-      validate: {
-        params: schema.object(
-          {
-            index: schema.string(),
+  router.versioned
+    .post({
+      access: 'internal',
+      path: '/internal/controls/optionsList/{index}',
+    })
+    .addVersion(
+      {
+        version: '1',
+        validate: {
+          request: {
+            params: schema.object(
+              {
+                index: schema.string(),
+              },
+              { unknowns: 'allow' }
+            ),
+            body: schema.object(
+              {
+                size: schema.number(),
+                fieldName: schema.string(),
+                sort: schema.maybe(schema.any()),
+                filters: schema.maybe(schema.any()),
+                fieldSpec: schema.maybe(schema.any()),
+                allowExpensiveQueries: schema.boolean(),
+                ignoreValidations: schema.maybe(schema.boolean()),
+                searchString: schema.maybe(schema.string()),
+                searchTechnique: schema.maybe(
+                  schema.oneOf([
+                    schema.literal('exact'),
+                    schema.literal('prefix'),
+                    schema.literal('wildcard'),
+                  ])
+                ),
+                selectedOptions: schema.maybe(
+                  schema.oneOf([schema.arrayOf(schema.string()), schema.arrayOf(schema.number())])
+                ),
+              },
+              { unknowns: 'allow' }
+            ),
           },
-          { unknowns: 'allow' }
-        ),
-        body: schema.object(
-          {
-            fieldName: schema.string(),
-            sort: schema.maybe(schema.any()),
-            filters: schema.maybe(schema.any()),
-            fieldSpec: schema.maybe(schema.any()),
-            searchString: schema.maybe(schema.string()),
-            selectedOptions: schema.maybe(schema.arrayOf(schema.string())),
-          },
-          { unknowns: 'allow' }
-        ),
+        },
       },
-    },
-    async (context, request, response) => {
-      try {
-        const suggestionRequest: OptionsListRequestBody = request.body;
-        const { index } = request.params;
-        const esClient = (await context.core).elasticsearch.client.asCurrentUser;
-        const suggestionsResponse = await getOptionsListSuggestions({
-          abortedEvent$: request.events.aborted$,
-          request: suggestionRequest,
-          esClient,
-          index,
-        });
-        return response.ok({ body: suggestionsResponse });
-      } catch (e) {
-        const kbnErr = getKbnServerError(e);
-        return reportServerError(response, kbnErr);
+      async (context, request, response) => {
+        try {
+          const suggestionRequest: OptionsListRequestBody = request.body;
+          const { index } = request.params;
+          const esClient = (await context.core).elasticsearch.client.asCurrentUser;
+
+          const suggestionsResponse = await getOptionsListSuggestions({
+            abortedEvent$: request.events.aborted$,
+            request: suggestionRequest,
+            esClient,
+            index,
+          });
+          return response.ok({ body: suggestionsResponse });
+        } catch (e) {
+          const kbnErr = getKbnServerError(e);
+          return reportServerError(response, kbnErr);
+        }
       }
-    }
-  );
+    );
 
   const getOptionsListSuggestions = async ({
     abortedEvent$,
@@ -86,7 +104,7 @@ export const setupOptionsListSuggestionsRoute = (
     /**
      * Build ES Query
      */
-    const { runPastTimeout, filters, fieldName, runtimeFieldMap } = request;
+    const { runPastTimeout, filters, runtimeFieldMap, ignoreValidations } = request;
     const { terminateAfter, timeout } = getAutocompleteSettings();
     const timeoutSettings = runPastTimeout
       ? {}
@@ -95,18 +113,11 @@ export const setupOptionsListSuggestionsRoute = (
     const suggestionBuilder = getSuggestionAggregationBuilder(request);
     const validationBuilder = getValidationAggregationBuilder();
 
-    const builtSuggestionAggregation = suggestionBuilder.buildAggregation(request);
-    const suggestionAggregation = builtSuggestionAggregation
-      ? {
-          suggestions: builtSuggestionAggregation,
-        }
-      : {};
-    const builtValidationAggregation = validationBuilder.buildAggregation(request);
-    const validationAggregations = builtValidationAggregation
-      ? {
-          validation: builtValidationAggregation,
-        }
-      : {};
+    const suggestionAggregation: any = suggestionBuilder.buildAggregation(request) ?? {};
+    const validationAggregation: any = ignoreValidations
+      ? {}
+      : validationBuilder.buildAggregation(request);
+
     const body: SearchRequest['body'] = {
       size: 0,
       ...timeoutSettings,
@@ -117,12 +128,7 @@ export const setupOptionsListSuggestionsRoute = (
       },
       aggs: {
         ...suggestionAggregation,
-        ...validationAggregations,
-        unique_terms: {
-          cardinality: {
-            field: fieldName,
-          },
-        },
+        ...validationAggregation,
       },
       runtime_mappings: {
         ...runtimeFieldMap,
@@ -137,14 +143,16 @@ export const setupOptionsListSuggestionsRoute = (
     /**
      * Parse ES response into Options List Response
      */
-    const totalCardinality = get(rawEsResult, 'aggregations.unique_terms.value');
-    const suggestions = suggestionBuilder.parse(rawEsResult);
-    const invalidSelections = validationBuilder.parse(rawEsResult);
+    const results = suggestionBuilder.parse(rawEsResult, request);
+    const totalCardinality = results.totalCardinality;
+    const invalidSelections = ignoreValidations
+      ? []
+      : validationBuilder.parse(rawEsResult, request);
+
     return {
-      suggestions,
+      suggestions: results.suggestions,
       totalCardinality,
       invalidSelections,
-      rejected: false,
     };
   };
 };

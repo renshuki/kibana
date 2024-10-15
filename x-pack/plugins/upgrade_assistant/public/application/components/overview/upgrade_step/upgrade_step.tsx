@@ -68,11 +68,11 @@ const UpgradeStep = () => {
             defaultMessage: 'An error occurred while retrieving the upgrade status',
           })}
           color="danger"
-          iconType="alert"
+          iconType="warning"
           data-test-subj="upgradeStatusErrorCallout"
         >
           <p>
-            {error.statusCode} - {error.message}
+            {error.statusCode} - {error.message as string}
           </p>
           <EuiButton
             color="danger"

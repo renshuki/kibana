@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import Path from 'path';
@@ -12,12 +13,16 @@ import { run } from '@kbn/dev-cli-runner';
 import { createFailError } from '@kbn/dev-cli-errors';
 import { getRepoFiles } from '@kbn/get-repo-files';
 import { PackageFileMap } from '@kbn/repo-file-maps';
-import { getPackages } from '@kbn/repo-packages';
+import { updatePackageMap, getPackages } from '@kbn/repo-packages';
 import { REPO_ROOT } from '@kbn/repo-info';
 import { TS_PROJECTS } from '@kbn/ts-projects';
+import { makeMatcher } from '@kbn/picomatcher';
 import { runLintRules, PackageLintTarget } from '@kbn/repo-linter';
 
 import { RULES } from './rules';
+import { migratePluginsToPackages } from './migrate_plugins_to_package';
+
+const legacyManifestMatcher = makeMatcher(['**/kibana.json', '!**/{__fixtures__,fixtures}/**']);
 
 const kebabCase = (input: string) =>
   input
@@ -40,7 +45,26 @@ function getFilter(input: string) {
 run(
   async ({ log, flagsReader }) => {
     const filter = flagsReader.getPositionals();
+    let allRepoFiles = await getRepoFiles();
+
+    const legacyPackageManifests = Array.from(allRepoFiles).filter((f) =>
+      legacyManifestMatcher(f.repoRel)
+    );
+
+    if (legacyPackageManifests.length) {
+      await migratePluginsToPackages(legacyPackageManifests);
+      log.warning('Migrated legacy plugins to packages');
+      allRepoFiles = await getRepoFiles();
+    }
+
+    const pkgManifestPaths = Array.from(allRepoFiles)
+      .filter((f) => f.basename === 'kibana.jsonc')
+      .map((f) => f.abs);
+    if (await updatePackageMap(REPO_ROOT, pkgManifestPaths)) {
+      log.warning('updated package map');
+    }
     const packages = getPackages(REPO_ROOT);
+
     const allTargets = packages
       .map(
         (p) =>
@@ -69,7 +93,7 @@ run(
       )
     ).sort((a, b) => a.repoRel.localeCompare(b.repoRel));
 
-    const fileMap = new PackageFileMap(packages, await getRepoFiles());
+    const fileMap = new PackageFileMap(packages, allRepoFiles);
     const { lintingErrorCount } = await runLintRules(log, toLint, RULES, {
       fix: flagsReader.boolean('fix'),
       getFiles: (target) => fileMap.getFiles(target.pkg),

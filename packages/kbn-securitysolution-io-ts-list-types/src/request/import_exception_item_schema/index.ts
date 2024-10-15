@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import * as t from 'io-ts';
@@ -30,7 +31,7 @@ import { exceptionListItemType } from '../../common/exception_list_item_type';
 import { ItemId } from '../../common/item_id';
 import { EntriesArray } from '../../common/entries';
 import { DefaultImportCommentsArray } from '../../common/default_import_comments_array';
-import { ImportCommentsArray } from '../../common';
+import { ExpireTimeOrUndefined, expireTimeOrUndefined, ImportCommentsArray } from '../../common';
 
 /**
  * Differences from this and the createExceptionsListItemSchema are
@@ -67,6 +68,7 @@ export const importExceptionListItemSchema = t.intersection([
       namespace_type, // defaults to 'single' if not set during decode
       os_types: osTypeArrayOrUndefined, // defaults to empty array if not set during decode
       tags, // defaults to empty array if not set during decode
+      expire_time: expireTimeOrUndefined,
     })
   ),
 ]);
@@ -76,7 +78,7 @@ export type ImportExceptionListItemSchema = t.OutputOf<typeof importExceptionLis
 // This type is used after a decode since some things are defaults after a decode.
 export type ImportExceptionListItemSchemaDecoded = Omit<
   ImportExceptionListItemSchema,
-  'tags' | 'item_id' | 'entries' | 'namespace_type' | 'comments'
+  'tags' | 'item_id' | 'entries' | 'namespace_type' | 'comments' | 'expire_time'
 > & {
   comments: ImportCommentsArray;
   tags: Tags;
@@ -84,4 +86,5 @@ export type ImportExceptionListItemSchemaDecoded = Omit<
   entries: EntriesArray;
   namespace_type: NamespaceType;
   os_types: OsTypeArray;
+  expire_time: ExpireTimeOrUndefined;
 };

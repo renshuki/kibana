@@ -6,50 +6,72 @@
  */
 
 import React, { useEffect } from 'react';
-import { Redirect, Route, Switch, useParams } from 'react-router-dom';
+import { Redirect, useParams } from 'react-router-dom';
 
-import { useActions } from 'kea';
+import { useActions, useValues } from 'kea';
+
+import { Routes, Route } from '@kbn/shared-ux-router';
 
 import {
   OLD_SEARCH_INDEX_CRAWLER_DOMAIN_DETAIL_PATH,
   SEARCH_INDEX_PATH,
-  SEARCH_INDEX_SELECT_CONNECTOR_PATH,
   SEARCH_INDEX_TAB_DETAIL_PATH,
   SEARCH_INDEX_TAB_PATH,
 } from '../../routes';
 
-import { SelectConnector } from './connector/select_connector/select_connector';
+import { ConnectorViewLogic } from '../connector_detail/connector_view_logic';
+
 import { IndexNameLogic } from './index_name_logic';
 import { IndexViewLogic } from './index_view_logic';
 import { SearchIndex } from './search_index';
 
 export const SearchIndexRouter: React.FC = () => {
   const indexName = decodeURIComponent(useParams<{ indexName: string }>().indexName);
+  const { setIndexName } = useActions(IndexNameLogic);
+  const { startFetchIndexPoll, stopFetchIndexPoll, resetFetchIndexApi } =
+    useActions(IndexViewLogic);
+  const { connector } = useValues(IndexViewLogic);
+  const { startConnectorPoll, stopConnectorPoll, fetchConnectorApiReset } =
+    useActions(ConnectorViewLogic);
 
-  const indexNameLogic = IndexNameLogic({ indexName });
-  const { setIndexName } = useActions(indexNameLogic);
-  const { stopFetchIndexPoll } = useActions(IndexViewLogic);
   useEffect(() => {
-    const unmountName = indexNameLogic.mount();
+    const unmountName = IndexNameLogic.mount();
     const unmountView = IndexViewLogic.mount();
+    const unmountConnectorView = ConnectorViewLogic.mount();
     return () => {
       stopFetchIndexPoll();
+      stopConnectorPoll();
+      resetFetchIndexApi();
+      fetchConnectorApiReset();
       unmountName();
       unmountView();
+      unmountConnectorView();
     };
   }, []);
 
   useEffect(() => {
+    stopConnectorPoll();
+    fetchConnectorApiReset();
+    if (connector?.id) {
+      startConnectorPoll(connector.id);
+    }
+  }, [connector?.id]);
+
+  useEffect(() => {
+    stopFetchIndexPoll();
+    resetFetchIndexApi();
     setIndexName(indexName);
+    if (indexName) {
+      startFetchIndexPoll(indexName);
+    } else {
+      stopFetchIndexPoll();
+    }
   }, [indexName]);
 
   return (
-    <Switch>
+    <Routes>
       <Route path={SEARCH_INDEX_PATH} exact>
         <SearchIndex />
-      </Route>
-      <Route path={SEARCH_INDEX_SELECT_CONNECTOR_PATH} exact>
-        <SelectConnector />
       </Route>
       <Route path={SEARCH_INDEX_TAB_DETAIL_PATH}>
         <SearchIndex />
@@ -61,6 +83,6 @@ export const SearchIndexRouter: React.FC = () => {
         from={OLD_SEARCH_INDEX_CRAWLER_DOMAIN_DETAIL_PATH}
         to={`${SEARCH_INDEX_PATH}/domain_management/:domainId}`}
       />
-    </Switch>
+    </Routes>
   );
 };

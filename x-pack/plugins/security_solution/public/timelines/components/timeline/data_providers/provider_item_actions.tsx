@@ -7,16 +7,22 @@
 
 import type { EuiContextMenuPanelDescriptor, EuiPopoverProps } from '@elastic/eui';
 import { EuiContextMenu, EuiPopover } from '@elastic/eui';
-import type { FunctionComponent } from 'react';
+import type { FC, PropsWithChildren } from 'react';
 import React from 'react';
 import styled from 'styled-components';
 
-import { TimelineType } from '../../../../../common/types/timeline';
+import {
+  type DataProviderType,
+  DataProviderTypeEnum,
+  type TimelineType,
+  TimelineTypeEnum,
+} from '../../../../../common/api/timeline';
+import type { PrimitiveOrArrayOfPrimitives } from '../../../../common/lib/kuery';
 import type { BrowserFields } from '../../../../common/containers/source';
 
 import type { OnDataProviderEdited } from '../events';
 import type { QueryOperator } from './data_provider';
-import { DataProviderType, EXISTS_OPERATOR, IS_ONE_OF_OPERATOR } from './data_provider';
+import { EXISTS_OPERATOR, IS_ONE_OF_OPERATOR } from './data_provider';
 import { StatefulEditDataProvider } from '../../edit_data_provider';
 
 import * as i18n from './translations';
@@ -35,7 +41,7 @@ interface OwnProps {
   closePopover: () => void;
   deleteProvider: () => void;
   field: string;
-  kqlQuery: string;
+  kqlQuery: string; // eslint-disable-line react/no-unused-prop-types
   isEnabled: boolean;
   isExcluded: boolean;
   isLoading: boolean;
@@ -48,14 +54,15 @@ interface OwnProps {
   toggleEnabledProvider: () => void;
   toggleExcludedProvider: () => void;
   toggleTypeProvider: () => void;
-  value: string | number | Array<string | number>;
+  value: PrimitiveOrArrayOfPrimitives;
   type: DataProviderType;
 }
 
-const MyEuiPopover = styled(EuiPopover as unknown as FunctionComponent)<
-  EuiPopoverProps & {
-    id?: string;
-  }
+const MyEuiPopover = styled(EuiPopover as unknown as FC)<
+  EuiPopoverProps &
+    PropsWithChildren<{
+      id?: string;
+    }>
 >`
   height: 100%;
   user-select: none;
@@ -80,7 +87,7 @@ interface GetProviderActionsProps {
   toggleEnabled: () => void;
   toggleExcluded: () => void;
   toggleType: () => void;
-  value: string | number | Array<string | number>;
+  value: PrimitiveOrArrayOfPrimitives;
   type: DataProviderType;
 }
 
@@ -135,13 +142,13 @@ export const getProviderActions = ({
         name: i18n.FILTER_FOR_FIELD_PRESENT,
         onClick: onFilterForFieldPresent,
       },
-      timelineType === TimelineType.template
+      timelineType === TimelineTypeEnum.template
         ? {
             className: CONVERT_TO_FIELD_CLASS_NAME,
             disabled: isLoading || operator === IS_ONE_OF_OPERATOR,
             icon: 'visText',
             name:
-              type === DataProviderType.template
+              type === DataProviderTypeEnum.template
                 ? i18n.CONVERT_TO_FIELD
                 : i18n.CONVERT_TO_TEMPLATE_FIELD,
             onClick: toggleType,

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -75,12 +76,23 @@ export const GuideButton = ({
     </EuiButton>
   );
   // if there is no active guide
-  if (!pluginState || !pluginState.activeGuide || !pluginState.activeGuide.isActive) {
+  if (
+    !pluginState ||
+    !pluginState.activeGuide ||
+    !pluginState.activeGuide.isActive ||
+    // the guide has not started yet when the user just looks at the guide
+    // see https://github.com/elastic/kibana/issues/148912 for more context
+    pluginState.activeGuide.status === 'not_started'
+  ) {
     // if still active period and the user has not started a guide or skipped the guide,
     // display the button that redirects to the landing page
     if (
       pluginState?.isActivePeriod &&
-      (pluginState?.status === 'not_started' || pluginState?.status === 'skipped')
+      (pluginState?.status === 'not_started' ||
+        pluginState?.status === 'skipped' ||
+        // plugin state 'in_progress' without an active guide is when the guide has not started yet
+        // see https://github.com/elastic/kibana/issues/148912 for context
+        pluginState.status === 'in_progress')
     ) {
       return (
         <EuiButton

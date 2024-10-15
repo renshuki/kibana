@@ -16,6 +16,11 @@ export const ErrorStrings = {
           index,
         },
       }),
+    getConvertToLensUnsupportedSavedVisualization: () =>
+      i18n.translate('xpack.canvas.error.actionsElements.convertToLensUnsupportedErrrorMessage', {
+        defaultMessage:
+          "The legacy 'savedVisualization' Canvas function does not support Lens visualizations. Try replacing this element with an 'embeddable' Canvas function.",
+      }),
   },
   esPersist: {
     getSaveFailureTitle: () =>
@@ -39,7 +44,7 @@ export const ErrorStrings = {
       }),
     getFieldsFetchErrorMessage: (index: string) =>
       i18n.translate('xpack.canvas.error.esService.fieldsFetchErrorMessage', {
-        defaultMessage: "Couldn't fetch Elasticsearch fields for '{index}'",
+        defaultMessage: "Couldn't fetch Elasticsearch fields for ''{index}''",
         values: {
           index,
         },
@@ -52,7 +57,7 @@ export const ErrorStrings = {
   RenderWithFn: {
     getRenderErrorMessage: (functionName: string) =>
       i18n.translate('xpack.canvas.error.RenderWithFn.renderErrorMessage', {
-        defaultMessage: "Rendering '{functionName}' failed",
+        defaultMessage: "Rendering ''{functionName}'' failed",
         values: {
           functionName: functionName || 'function',
         },

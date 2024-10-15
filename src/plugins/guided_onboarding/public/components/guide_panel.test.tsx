@@ -1,13 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { act } from 'react-dom/test-utils';
 import React from 'react';
+import { BehaviorSubject } from 'rxjs';
+import { CoreTheme } from '@kbn/core/public';
 
 import { applicationServiceMock } from '@kbn/core-application-browser-mocks';
 import { notificationServiceMock } from '@kbn/core-notifications-browser-mocks';
@@ -18,7 +21,7 @@ import { testGuideConfig, testGuideId } from '@kbn/guided-onboarding';
 
 import type { PluginState } from '../../common';
 import { API_BASE_PATH } from '../../common';
-import { apiService } from '../services/api';
+import { apiService } from '../services/api.service';
 import type { GuidedOnboardingApi } from '../types';
 import {
   testGuideStep1ActiveState,
@@ -55,9 +58,15 @@ const setupComponentWithPluginStateMock = async (
 };
 
 const setupGuidePanelComponent = async (api: GuidedOnboardingApi) => {
+  const coreTheme$ = new BehaviorSubject<CoreTheme>({ darkMode: true });
   let testBed: TestBed;
   const GuidePanelComponent = () => (
-    <GuidePanel application={applicationMock} api={api} notifications={notificationsMock} />
+    <GuidePanel
+      application={applicationMock}
+      api={api}
+      notifications={notificationsMock}
+      theme$={coreTheme$}
+    />
   );
   await act(async () => {
     testBed = registerTestBed(GuidePanelComponent)();
@@ -154,6 +163,16 @@ describe('Guided setup', () => {
         // mock state is by default { status: 'not_started', isActivePeriod: true }
         test('shows redirect button when no guide has been started yet', () => {
           const { exists } = testBed;
+          expect(exists('guideButtonRedirect')).toBe(true);
+          expect(exists('guideButton')).toBe(false);
+        });
+
+        test('shows redirect button when a guide has been viewed but not started', async () => {
+          const { exists } = await setupComponentWithPluginStateMock(httpClient, {
+            status: 'in_progress',
+            isActivePeriod: true,
+            activeGuide: { ...testGuideStep1InProgressState, status: 'not_started' },
+          });
           expect(exists('guideButtonRedirect')).toBe(true);
           expect(exists('guideButton')).toBe(false);
         });
@@ -437,8 +456,8 @@ describe('Guided setup', () => {
 
         expect(
           find('guidePanelStepDescription')
-            .last()
-            .containsMatchingElement(<p>{testGuideConfig.steps[2].description}</p>)
+            .first()
+            .containsMatchingElement(<p>{testGuideConfig.steps[2].description as string}</p>)
         ).toBe(true);
       });
 
@@ -456,7 +475,7 @@ describe('Guided setup', () => {
             .containsMatchingElement(
               <ul>
                 {testGuideConfig.steps[0].descriptionList?.map((description, i) => (
-                  <li key={i}>{description}</li>
+                  <li key={i}>{description as string}</li>
                 ))}
               </ul>
             )

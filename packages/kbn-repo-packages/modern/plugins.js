@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 const Path = require('path');
@@ -13,23 +14,23 @@ const Path = require('path');
  * @returns {string[]}
  */
 function getPluginSearchPaths({ rootDir }) {
-  return [Path.resolve(rootDir, '../kibana-extra')];
+  return [Path.resolve(rootDir, '../kibana-extra'), Path.resolve(rootDir, 'plugins')];
 }
 
 /**
  * @param {import('./types').PluginSelector} selector
- * @param {import('./types').PluginTypeInfo} type
+ * @param {import('./types').PluginCategoryInfo} category
  */
-function matchType(selector, type) {
-  if (!type.oss && selector.oss) {
+function matchCategory(selector, category) {
+  if (!category.oss && selector.oss) {
     return false;
   }
 
-  if (type.example && !selector.examples) {
+  if (category.example && !selector.examples) {
     return false;
   }
 
-  if (type.testPlugin && !selector.testPlugins) {
+  if (category.testPlugin && !selector.testPlugins) {
     return false;
   }
 
@@ -72,6 +73,21 @@ function matchParentDirsLimit(selector, pkgDir) {
 
 /**
  * @param {import('./types').PluginSelector} selector
+ * @param {import('./types').PluginPackage} pkg
+ */
+function matchBrowserServer(selector, pkg) {
+  if (selector.browser && !pkg.manifest.plugin.browser) {
+    return false;
+  }
+  if (selector.server && !pkg.manifest.plugin.server) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * @param {import('./types').PluginSelector} selector
  */
 function getPluginPackagesFilter(selector = {}) {
   /**
@@ -79,9 +95,10 @@ function getPluginPackagesFilter(selector = {}) {
    * @returns {pkg is import('./types').PluginPackage}
    */
   return (pkg) =>
-    pkg.isPlugin &&
+    pkg.isPlugin() &&
+    matchBrowserServer(selector, pkg) &&
     matchParentDirsLimit(selector, pkg.directory) &&
-    (matchType(selector, pkg.getPlguinType()) ||
+    (matchCategory(selector, pkg.getPluginCategories()) ||
       matchPluginPaths(selector, pkg.directory) ||
       matchPluginParentDirs(selector, pkg.directory));
 }
@@ -91,19 +108,15 @@ function getPluginPackagesFilter(selector = {}) {
  */
 function getDistributablePacakgesFilter() {
   return (pkg) => {
-    if (
-      pkg.isDevOnly ||
-      pkg.manifest.type === 'functional-tests' ||
-      pkg.manifest.type === 'test-helper'
-    ) {
+    if (pkg.isDevOnly()) {
       return false;
     }
 
-    if (!pkg.isPlugin) {
+    if (!pkg.isPlugin()) {
       return true;
     }
 
-    const type = pkg.getPlguinType();
+    const type = pkg.getPluginCategories();
     return !(type.example || type.testPlugin);
   };
 }

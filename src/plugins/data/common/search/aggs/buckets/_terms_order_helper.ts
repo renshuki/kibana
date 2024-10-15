@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import moment from 'moment-timezone';
@@ -67,6 +68,9 @@ export const termsOrderAggParamDefinition: Partial<BucketAggParam<IBucketAggConf
 
     if (aggs?.hasTimeShifts() && Object.keys(aggs?.getTimeShifts()).length > 1 && aggs.timeRange) {
       const shift = orderAgg.getTimeShift();
+      // The timeRange can be either absolute or relative
+      // We need the absolute/resolved one for moment, so use the helper method
+      const timeRange = aggs.getResolvedTimeRange();
       orderAgg = aggs.createAggConfig(
         {
           type: 'filtered_metric',
@@ -84,11 +88,11 @@ export const termsOrderAggParamDefinition: Partial<BucketAggParam<IBucketAggConf
                         range: {
                           [aggs.timeFields![0]]: {
                             gte: moment
-                              .tz(aggs.timeRange.from, aggs.timeZone)
+                              .tz(timeRange?.min, aggs.timeZone)
                               .subtract(shift || 0)
                               .toISOString(),
                             lte: moment
-                              .tz(aggs.timeRange.to, aggs.timeZone)
+                              .tz(timeRange?.max, aggs.timeZone)
                               .subtract(shift || 0)
                               .toISOString(),
                           },

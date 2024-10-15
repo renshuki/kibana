@@ -22,6 +22,7 @@ const mockRuleType = (id: string): RuleType => ({
     params: [],
   },
   defaultActionGroupId: 'default',
+  category: 'test',
   producer: 'alerts',
   minimumLicenseRequired: 'basic',
   isExportable: true,
@@ -31,7 +32,7 @@ const mockRuleType = (id: string): RuleType => ({
 
 describe('AlertNavigationRegistry', () => {
   function handler(rule: SanitizedRule) {
-    return {};
+    return '';
   }
 
   describe('has()', () => {
@@ -151,7 +152,7 @@ describe('AlertNavigationRegistry', () => {
       const registry = new AlertNavigationRegistry();
 
       function indexThresholdHandler(rule: SanitizedRule) {
-        return {};
+        return '';
       }
 
       const indexThresholdRuleType = mockRuleType('indexThreshold');
@@ -163,7 +164,7 @@ describe('AlertNavigationRegistry', () => {
       const registry = new AlertNavigationRegistry();
 
       function defaultHandler(rule: SanitizedRule) {
-        return {};
+        return '';
       }
 
       registry.registerDefault('siem', defaultHandler);
@@ -173,10 +174,10 @@ describe('AlertNavigationRegistry', () => {
     test('returns default handlers by consumer when there are other rule type handler', () => {
       const registry = new AlertNavigationRegistry();
 
-      registry.register('siem', mockRuleType('indexThreshold').id, () => ({}));
+      registry.register('siem', mockRuleType('indexThreshold').id, () => '');
 
       function defaultHandler(rule: SanitizedRule) {
-        return {};
+        return '';
       }
 
       registry.registerDefault('siem', defaultHandler);

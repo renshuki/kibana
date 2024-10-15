@@ -8,7 +8,7 @@
 import moment from 'moment';
 import type { TimefilterContract } from '@kbn/data-plugin/public';
 import dateMath from '@kbn/datemath';
-import { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types';
+import type { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types';
 import { i18n } from '@kbn/i18n';
 import type { ToastsStart, HttpStart } from '@kbn/core/public';
 import type { DataView } from '@kbn/data-views-plugin/public';
@@ -16,6 +16,13 @@ import { isPopulatedObject } from '@kbn/ml-is-populated-object';
 import { addExcludeFrozenToQuery } from '@kbn/ml-query-utils';
 import { getTimeFieldRange } from './time_field_range';
 import type { GetTimeFieldRangeResponse } from './types';
+
+/**
+ * Allowed API paths to be passed to `setFullTimeRange`.
+ */
+export type SetFullTimeRangeApiPath =
+  | '/internal/file_upload/time_field_range'
+  | '/internal/ml/fields_service/time_field_range';
 
 /**
  * Determines the full available time range of the given Data View and updates
@@ -27,6 +34,7 @@ import type { GetTimeFieldRangeResponse } from './types';
  * @param http - HttpStart
  * @param query - optional query
  * @param excludeFrozenData - optional boolean flag
+ * @param path - optional SetFullTimeRangeApiPath
  * @returns {GetTimeFieldRangeResponse}
  */
 export async function setFullTimeRange(
@@ -35,8 +43,9 @@ export async function setFullTimeRange(
   toasts: ToastsStart,
   http: HttpStart,
   query?: QueryDslQueryContainer,
-  excludeFrozenData?: boolean
-): Promise<GetTimeFieldRangeResponse> {
+  excludeFrozenData?: boolean,
+  path: SetFullTimeRangeApiPath = '/internal/file_upload/time_field_range'
+): Promise<GetTimeFieldRangeResponse | undefined> {
   try {
     const runtimeMappings = dataView.getRuntimeMappings();
     const resp = await getTimeFieldRange({
@@ -45,6 +54,7 @@ export async function setFullTimeRange(
       query: excludeFrozenData ? addExcludeFrozenToQuery(query) : query,
       ...(isPopulatedObject(runtimeMappings) ? { runtimeMappings } : {}),
       http,
+      path,
     });
 
     if (resp.start.epoch && resp.end.epoch) {
@@ -52,6 +62,17 @@ export async function setFullTimeRange(
         from: moment(resp.start.epoch).toISOString(),
         to: moment(resp.end.epoch).toISOString(),
       });
+      return resp;
+    } else if (typeof resp.start === 'number' && typeof resp.end === 'number') {
+      timefilter.setTime({
+        from: moment(resp.start).toISOString(),
+        to: moment(resp.end).toISOString(),
+      });
+      return {
+        success: true,
+        start: { epoch: resp.start, string: moment(resp.start).toISOString() },
+        end: { epoch: resp.end, string: moment(resp.end).toISOString() },
+      };
     } else {
       toasts.addWarning({
         title: i18n.translate('xpack.ml.datePicker.fullTimeRangeSelector.noResults', {
@@ -59,18 +80,16 @@ export async function setFullTimeRange(
         }),
       });
     }
-
-    return resp;
-  } catch (resp) {
-    toasts.addDanger(
-      i18n.translate(
+  } catch (error) {
+    toasts.addError(error, {
+      title: i18n.translate(
         'xpack.ml.datePicker.fullTimeRangeSelector.errorSettingTimeRangeNotification',
         {
-          defaultMessage: 'An error occurred setting the time range.',
+          defaultMessage:
+            'An error occurred setting the time range. Please set the desired start and end times.',
         }
-      )
-    );
-    return resp;
+      ),
+    });
   }
 }
 

@@ -6,7 +6,6 @@
  */
 
 import React, { memo, useMemo, useState } from 'react';
-import { useHistory } from 'react-router-dom';
 import styled from 'styled-components';
 import { pick } from 'lodash';
 import {
@@ -20,9 +19,10 @@ import {
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 
+import { useSpaceSettingsContext } from '../../../../../../../hooks/use_space_settings_context';
+
 import type { AgentPolicy } from '../../../../../types';
 import {
-  useLink,
   useStartServices,
   useAuthz,
   sendUpdateAgentPolicy,
@@ -40,8 +40,30 @@ import { DevtoolsRequestFlyoutButton } from '../../../../../components';
 import { ExperimentalFeaturesService } from '../../../../../services';
 import { generateUpdateAgentPolicyDevToolsRequest } from '../../../services';
 
+const pickAgentPolicyKeysToSend = (agentPolicy: AgentPolicy) =>
+  pick(agentPolicy, [
+    'name',
+    'description',
+    'namespace',
+    'space_ids',
+    'monitoring_enabled',
+    'unenroll_timeout',
+    'inactivity_timeout',
+    'data_output_id',
+    'monitoring_output_id',
+    'download_source_id',
+    'fleet_server_host_id',
+    'agent_features',
+    'is_protected',
+    'advanced_settings',
+    'global_data_tags',
+    'monitoring_pprof_enabled',
+    'monitoring_http',
+    'monitoring_diagnostics',
+  ]);
+
 const FormWrapper = styled.div`
-  max-width: 800px;
+  max-width: 1200px;
   margin-right: auto;
   margin-left: auto;
 `;
@@ -53,18 +75,21 @@ export const SettingsView = memo<{ agentPolicy: AgentPolicy }>(
     const {
       agents: { enabled: isFleetEnabled },
     } = useConfig();
-    const history = useHistory();
-    const { getPath } = useLink();
-    const hasFleetAllPrivileges = useAuthz().fleet.all;
+    const hasAllAgentPoliciesPrivileges = useAuthz().fleet.allAgentPolicies;
     const refreshAgentPolicy = useAgentPolicyRefresh();
     const [agentPolicy, setAgentPolicy] = useState<AgentPolicy>({
       ...originalAgentPolicy,
     });
+    const spaceSettings = useSpaceSettingsContext();
+
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [hasChanges, setHasChanges] = useState<boolean>(false);
     const [agentCount, setAgentCount] = useState<number>(0);
     const [withSysMonitoring, setWithSysMonitoring] = useState<boolean>(true);
-    const validation = agentPolicyFormValidation(agentPolicy);
+    const validation = agentPolicyFormValidation(agentPolicy, {
+      allowedNamespacePrefixes: spaceSettings?.allowedNamespacePrefixes,
+    });
+    const [hasAdvancedSettingsErrors, setHasAdvancedSettingsErrors] = useState<boolean>(false);
 
     const updateAgentPolicy = (updatedFields: Partial<AgentPolicy>) => {
       setAgentPolicy({
@@ -77,41 +102,14 @@ export const SettingsView = memo<{ agentPolicy: AgentPolicy }>(
     const submitUpdateAgentPolicy = async () => {
       setIsLoading(true);
       try {
-        const {
-          name,
-          description,
-          namespace,
-          // eslint-disable-next-line @typescript-eslint/naming-convention
-          monitoring_enabled,
-          // eslint-disable-next-line @typescript-eslint/naming-convention
-          unenroll_timeout,
-          // eslint-disable-next-line @typescript-eslint/naming-convention
-          inactivity_timeout,
-          // eslint-disable-next-line @typescript-eslint/naming-convention
-          data_output_id,
-          // eslint-disable-next-line @typescript-eslint/naming-convention
-          monitoring_output_id,
-          // eslint-disable-next-line @typescript-eslint/naming-convention
-          download_source_id,
-          // eslint-disable-next-line @typescript-eslint/naming-convention
-          fleet_server_host_id,
-        } = agentPolicy;
-        const { data, error } = await sendUpdateAgentPolicy(agentPolicy.id, {
-          name,
-          description,
-          namespace,
-          monitoring_enabled,
-          unenroll_timeout,
-          inactivity_timeout,
-          data_output_id,
-          monitoring_output_id,
-          download_source_id,
-          fleet_server_host_id,
-        });
+        const { data, error } = await sendUpdateAgentPolicy(
+          agentPolicy.id,
+          pickAgentPolicyKeysToSend(agentPolicy)
+        );
         if (data) {
           notifications.toasts.addSuccess(
             i18n.translate('xpack.fleet.editAgentPolicy.successNotificationTitle', {
-              defaultMessage: "Successfully updated '{name}' settings",
+              defaultMessage: "Successfully updated ''{name}'' settings",
               values: { name: agentPolicy.name },
             })
           );
@@ -141,19 +139,7 @@ export const SettingsView = memo<{ agentPolicy: AgentPolicy }>(
       () =>
         generateUpdateAgentPolicyDevToolsRequest(
           agentPolicy.id,
-          pick(
-            agentPolicy,
-            'name',
-            'description',
-            'namespace',
-            'monitoring_enabled',
-            'unenroll_timeout',
-            'inactivity_timeout',
-            'data_output_id',
-            'monitoring_output_id',
-            'download_source_id',
-            'fleet_server_host_id'
-          )
+          pickAgentPolicyKeysToSend(agentPolicy)
         ),
       [agentPolicy]
     );
@@ -178,7 +164,7 @@ export const SettingsView = memo<{ agentPolicy: AgentPolicy }>(
         {agentCount ? (
           <ConfirmDeployAgentPolicyModal
             agentCount={agentCount}
-            agentPolicy={agentPolicy}
+            agentPolicies={[agentPolicy]}
             onConfirm={() => {
               setAgentCount(0);
               submitUpdateAgentPolicy();
@@ -196,9 +182,7 @@ export const SettingsView = memo<{ agentPolicy: AgentPolicy }>(
           updateSysMonitoring={(newValue) => setWithSysMonitoring(newValue)}
           validation={validation}
           isEditing={true}
-          onDelete={() => {
-            history.push(getPath('policies_list'));
-          }}
+          updateAdvancedSettingsHasErrors={setHasAdvancedSettingsErrors}
         />
 
         {hasChanges ? (
@@ -217,7 +201,7 @@ export const SettingsView = memo<{ agentPolicy: AgentPolicy }>(
                   <EuiFlexGroup gutterSize="s" justifyContent="flexEnd">
                     <EuiFlexItem grow={false}>
                       <EuiButtonEmpty
-                        color="ghost"
+                        color="text"
                         onClick={() => {
                           setAgentPolicy({ ...originalAgentPolicy });
                           setHasChanges(false);
@@ -232,9 +216,13 @@ export const SettingsView = memo<{ agentPolicy: AgentPolicy }>(
                     {showDevtoolsRequest ? (
                       <EuiFlexItem grow={false}>
                         <DevtoolsRequestFlyoutButton
-                          isDisabled={isLoading || Object.keys(validation).length > 0}
+                          isDisabled={
+                            isLoading ||
+                            Object.keys(validation).length > 0 ||
+                            hasAdvancedSettingsErrors
+                          }
                           btnProps={{
-                            color: 'ghost',
+                            color: 'text',
                           }}
                           description={i18n.translate(
                             'xpack.fleet.editAgentPolicy.devtoolsRequestDescription',
@@ -251,8 +239,12 @@ export const SettingsView = memo<{ agentPolicy: AgentPolicy }>(
                         onClick={onSubmit}
                         isLoading={isLoading}
                         isDisabled={
-                          !hasFleetAllPrivileges || isLoading || Object.keys(validation).length > 0
+                          !hasAllAgentPoliciesPrivileges ||
+                          isLoading ||
+                          Object.keys(validation).length > 0 ||
+                          hasAdvancedSettingsErrors
                         }
+                        data-test-subj="agentPolicyDetailsSaveButton"
                         iconType="save"
                         color="primary"
                         fill

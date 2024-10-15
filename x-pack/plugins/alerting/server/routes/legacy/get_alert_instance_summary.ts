@@ -30,7 +30,8 @@ const rewriteBodyRes = ({ ruleTypeId, alerts, ...rest }: AlertSummary) => ({
 export const getAlertInstanceSummaryRoute = (
   router: AlertingRouter,
   licenseState: ILicenseState,
-  usageCounter?: UsageCounter
+  usageCounter?: UsageCounter,
+  isServerless?: boolean
 ) => {
   router.get(
     {
@@ -38,6 +39,12 @@ export const getAlertInstanceSummaryRoute = (
       validate: {
         params: paramSchema,
         query: querySchema,
+      },
+      options: {
+        access: isServerless ? 'internal' : 'public',
+        summary: 'Get an alert summary',
+        tags: ['oas-tag:alerting'],
+        deprecated: true,
       },
     },
     router.handleLegacyErrors(async function (context, req, res) {

@@ -1,5 +1,5 @@
 {
-  "type": "shared-common",
+  "type": "shared-server",
   "id": "@kbn/core-ui-settings-server",
-  "owner": "@elastic/kibana-core"
+  "owner": "@elastic/appex-sharedux"
 }

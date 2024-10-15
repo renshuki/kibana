@@ -14,7 +14,7 @@ import { DEFAULT_RULE_NOTIFICATION_QUERY_SIZE } from '../../../../../../common/c
 import { getSignals } from './get_signals';
 import type { NotificationRuleTypeParams } from './schedule_notification_actions';
 import { scheduleNotificationActions } from './schedule_notification_actions';
-import type { AlertAttributes } from '../../../signals/types';
+import type { AlertAttributes } from '../../../rule_types/types';
 
 interface ScheduleThrottledNotificationActionsOptions {
   id: SavedObject['id'];
@@ -69,7 +69,7 @@ export const scheduleThrottledNotificationActions = async ({
       kibanaSiemAppUrl,
     });
 
-    logger.debug(
+    logger.debug(() =>
       [
         `The notification throttle resultsLink created is: ${resultsLink}.`,
         ' Notification throttle is querying the results using',
@@ -117,7 +117,7 @@ export const scheduleThrottledNotificationActions = async ({
 
     // Subtract any deconflicted differences from the total count.
     const signalsCount = signalsCountFromResults + signals.length - deconflictedDiff;
-    logger.debug(
+    logger.debug(() =>
       [
         `The notification throttle query result size before deconflicting duplicates is: ${resultsFlattened.length}.`,
         ` The notification throttle passed in signals size before deconflicting duplicates is: ${signals.length}.`,

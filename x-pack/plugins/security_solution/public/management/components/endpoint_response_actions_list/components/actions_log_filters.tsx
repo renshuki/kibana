@@ -5,15 +5,16 @@
  * 2.0.
  */
 import React, { memo, useCallback, useMemo } from 'react';
-import { EuiFlexGroup, EuiFlexItem, EuiFilterGroup, EuiSuperUpdateButton } from '@elastic/eui';
+import { EuiFilterGroup, EuiFlexGroup, EuiFlexItem, EuiSuperUpdateButton } from '@elastic/eui';
 import type {
   DurationRange,
   OnRefreshChangeProps,
 } from '@elastic/eui/src/components/date_picker/types';
+import { useIsExperimentalFeatureEnabled } from '../../../../common/hooks/use_experimental_features';
 import type { useGetEndpointActionList } from '../../../hooks';
 import {
-  type DateRangePickerValues,
   ActionLogDateRangePicker,
+  type DateRangePickerValues,
 } from './actions_log_date_range_picker';
 import { ActionsLogFilter } from './actions_log_filter';
 import { ActionsLogUsersFilter } from './actions_log_users_filter';
@@ -25,29 +26,40 @@ export const ActionsLogFilters = memo(
     isDataLoading,
     isFlyout,
     onClick,
+    onChangeAgentTypesFilter,
     onChangeHostsFilter,
     onChangeCommandsFilter,
     onChangeStatusesFilter,
     onChangeUsersFilter,
+    onChangeTypeFilter,
     onRefresh,
     onRefreshChange,
     onTimeChange,
     showHostsFilter,
+    'data-test-subj': dataTestSubj,
   }: {
     dateRangePickerState: DateRangePickerValues;
     isDataLoading: boolean;
     isFlyout: boolean;
+    onChangeAgentTypesFilter: (selectedAgentTypes: string[]) => void;
     onChangeHostsFilter: (selectedCommands: string[]) => void;
     onChangeCommandsFilter: (selectedCommands: string[]) => void;
     onChangeStatusesFilter: (selectedStatuses: string[]) => void;
     onChangeUsersFilter: (selectedUsers: string[]) => void;
+    onChangeTypeFilter: (selectedTypes: string[]) => void;
     onRefresh: () => void;
     onRefreshChange: (evt: OnRefreshChangeProps) => void;
     onTimeChange: ({ start, end }: DurationRange) => void;
     onClick: ReturnType<typeof useGetEndpointActionList>['refetch'];
     showHostsFilter: boolean;
+    'data-test-subj'?: string;
   }) => {
-    const getTestId = useTestIdGenerator('response-actions-list');
+    const getTestId = useTestIdGenerator(dataTestSubj);
+
+    const isSentinelOneV1Enabled = useIsExperimentalFeatureEnabled(
+      'responseActionsSentinelOneV1Enabled'
+    );
+
     const filters = useMemo(() => {
       return (
         <>
@@ -56,26 +68,51 @@ export const ActionsLogFilters = memo(
               filterName={'hosts'}
               isFlyout={isFlyout}
               onChangeFilterOptions={onChangeHostsFilter}
+              data-test-subj={dataTestSubj}
             />
           )}
           <ActionsLogFilter
             filterName={'actions'}
             isFlyout={isFlyout}
             onChangeFilterOptions={onChangeCommandsFilter}
+            data-test-subj={dataTestSubj}
           />
           <ActionsLogFilter
             filterName={'statuses'}
             isFlyout={isFlyout}
             onChangeFilterOptions={onChangeStatusesFilter}
+            data-test-subj={dataTestSubj}
           />
+          {isSentinelOneV1Enabled ? (
+            <ActionsLogFilter
+              filterName={'types'}
+              typesFilters={{
+                agentTypes: { onChangeFilterOptions: onChangeAgentTypesFilter },
+                actionTypes: { onChangeFilterOptions: onChangeTypeFilter },
+              }}
+              isFlyout={isFlyout}
+              data-test-subj={dataTestSubj}
+            />
+          ) : (
+            <ActionsLogFilter
+              filterName={'types'}
+              onChangeFilterOptions={onChangeTypeFilter}
+              isFlyout={isFlyout}
+              data-test-subj={dataTestSubj}
+            />
+          )}
         </>
       );
     }, [
-      isFlyout,
-      onChangeCommandsFilter,
-      onChangeHostsFilter,
-      onChangeStatusesFilter,
       showHostsFilter,
+      isFlyout,
+      isSentinelOneV1Enabled,
+      onChangeHostsFilter,
+      dataTestSubj,
+      onChangeCommandsFilter,
+      onChangeStatusesFilter,
+      onChangeAgentTypesFilter,
+      onChangeTypeFilter,
     ]);
 
     const onClickRefreshButton = useCallback(() => onClick(), [onClick]);
@@ -83,7 +120,11 @@ export const ActionsLogFilters = memo(
     return (
       <EuiFlexGroup responsive gutterSize="s">
         <EuiFlexItem grow={isFlyout ? 1 : 2}>
-          <ActionsLogUsersFilter isFlyout={isFlyout} onChangeUsersFilter={onChangeUsersFilter} />
+          <ActionsLogUsersFilter
+            isFlyout={isFlyout}
+            onChangeUsersFilter={onChangeUsersFilter}
+            data-test-subj={dataTestSubj}
+          />
         </EuiFlexItem>
         <EuiFlexItem grow={isFlyout ? 1 : 1}>
           <EuiFilterGroup>{filters}</EuiFilterGroup>
@@ -92,10 +133,10 @@ export const ActionsLogFilters = memo(
           <ActionLogDateRangePicker
             dateRangePickerState={dateRangePickerState}
             isDataLoading={isDataLoading}
-            isFlyout={isFlyout}
             onRefresh={onRefresh}
             onRefreshChange={onRefreshChange}
             onTimeChange={onTimeChange}
+            data-test-subj={dataTestSubj}
           />
         </EuiFlexItem>
         <EuiFlexItem grow={false}>

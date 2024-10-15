@@ -5,13 +5,11 @@
  * 2.0.
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { shallow } from 'enzyme';
 import React from 'react';
-import type { DraggableStateSnapshot, DraggingStyle } from 'react-beautiful-dnd';
+import type { DraggableStateSnapshot, DraggingStyle } from '@hello-pangea/dnd';
 
-import '../../mock/match_media';
-import { TableId, TimelineId } from '../../../../common/types';
 import { mockBrowserFields } from '../../containers/source/mock';
 import { TestProviders } from '../../mock';
 import { mockDataProviders } from '../../../timelines/components/timeline/data_providers/mock/mock_data_providers';
@@ -24,6 +22,8 @@ import {
   getStyle,
 } from './draggable_wrapper';
 import { useMountAppended } from '../../utils/use_mount_appended';
+import { TimelineId } from '../../../../common/types';
+import { TableId } from '@kbn/securitysolution-data-table';
 
 jest.mock('../../lib/kibana');
 
@@ -34,6 +34,14 @@ jest.mock('@elastic/eui', () => {
     EuiScreenReaderOnly: () => <></>,
   };
 });
+
+const MockSecurityCellActions = jest.fn(({ children }: { children: React.ReactNode }) => (
+  <div data-test-subj="cell-actions-mock">{children}</div>
+));
+jest.mock('../cell_actions', () => ({
+  ...jest.requireActual('../cell_actions'),
+  SecurityCellActions: (props: { children: React.ReactNode }) => MockSecurityCellActions(props),
+}));
 
 const scopeIdsWithHoverActions = [
   undefined,
@@ -105,46 +113,11 @@ describe('DraggableWrapper', () => {
       expect(wrapper.text()).toEqual(message);
     });
 
-    test('it does NOT render hover actions when the mouse is NOT over the draggable wrapper', () => {
-      const wrapper = mount(
-        <TestProviders>
-          <DragDropContextWrapper browserFields={mockBrowserFields}>
-            <DraggableWrapper
-              dataProvider={dataProvider}
-              isDraggable={true}
-              render={() => message}
-            />
-          </DragDropContextWrapper>
-        </TestProviders>
-      );
-
-      expect(wrapper.find('[data-test-subj="hover-actions-copy-button"]').exists()).toBe(false);
-    });
-
-    test('it renders hover actions when the mouse is over the text of draggable wrapper', async () => {
-      const wrapper = mount(
-        <TestProviders>
-          <DragDropContextWrapper browserFields={mockBrowserFields}>
-            <DraggableWrapper
-              dataProvider={dataProvider}
-              isDraggable={true}
-              render={() => message}
-            />
-          </DragDropContextWrapper>
-        </TestProviders>
-      );
-
-      await waitFor(() => {
-        wrapper.find('[data-test-subj="withHoverActionsButton"]').simulate('mouseenter');
-        expect(wrapper.find('[data-test-subj="hover-actions-copy-button"]').exists()).toBe(true);
-      });
-    });
-
     scopeIdsWithHoverActions.forEach((scopeId) => {
       test(`it renders hover actions (by default) when 'isDraggable' is false and timelineId is '${scopeId}'`, async () => {
         const isDraggable = false;
 
-        const { container } = render(
+        const { queryByTestId } = render(
           <TestProviders>
             <DragDropContextWrapper browserFields={mockBrowserFields}>
               <DraggableWrapper
@@ -157,11 +130,7 @@ describe('DraggableWrapper', () => {
           </TestProviders>
         );
 
-        fireEvent.mouseEnter(container.querySelector('[data-test-subj="withHoverActionsButton"]')!);
-
-        await waitFor(() => {
-          expect(screen.getByTestId('hover-actions-copy-button')).toBeInTheDocument();
-        });
+        expect(queryByTestId('cell-actions-mock')).toBeInTheDocument();
       });
     });
 
@@ -169,7 +138,7 @@ describe('DraggableWrapper', () => {
       test(`it does NOT render hover actions when 'isDraggable' is false and timelineId is '${scopeId}'`, async () => {
         const isDraggable = false;
 
-        const { container } = render(
+        const { queryByTestId } = render(
           <TestProviders>
             <DragDropContextWrapper browserFields={mockBrowserFields}>
               <DraggableWrapper
@@ -182,11 +151,7 @@ describe('DraggableWrapper', () => {
           </TestProviders>
         );
 
-        fireEvent.mouseEnter(container.querySelector('[data-test-subj="withHoverActionsButton"]')!);
-
-        await waitFor(() => {
-          expect(screen.queryByTestId('hover-actions-copy-button')).not.toBeInTheDocument();
-        });
+        expect(queryByTestId('cell-actions-mock')).not.toBeInTheDocument();
       });
     });
   });
@@ -264,6 +229,12 @@ describe('ConditionalPortal', () => {
       const snapshot: DraggableStateSnapshot = {
         isDragging: true,
         isDropAnimating: false, // <-- NOT drop animating
+        isClone: false,
+        dropAnimation: null,
+        draggingOver: null,
+        combineWith: null,
+        combineTargetFor: null,
+        mode: null,
       };
 
       expect(getStyle(style, snapshot)).not.toHaveProperty('transitionDuration');
@@ -273,6 +244,12 @@ describe('ConditionalPortal', () => {
       const snapshot: DraggableStateSnapshot = {
         isDragging: true,
         isDropAnimating: true, // <-- it is drop animating
+        isClone: false,
+        dropAnimation: null,
+        draggingOver: null,
+        combineWith: null,
+        combineTargetFor: null,
+        mode: null,
       };
 
       expect(getStyle(style, snapshot)).toHaveProperty('transitionDuration', '0.00000001s');

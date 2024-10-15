@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Agent, IncomingMessage } from 'http';
@@ -167,6 +168,10 @@ export const createHandler =
           return response.customError({
             statusCode: 502,
             body: e,
+            headers: {
+              'x-console-proxy-status-code': '502',
+              'x-console-proxy-status-text': 'Bad Gateway',
+            },
           });
         }
         // Otherwise, try the next host...
@@ -179,22 +184,18 @@ export const createHandler =
       headers: { warning },
     } = esIncomingMessage!;
 
-    if (method.toUpperCase() !== 'HEAD') {
-      return response.custom({
-        statusCode: statusCode!,
-        body: esIncomingMessage!,
-        headers: {
-          warning: warning || '',
-        },
-      });
-    }
-
-    return response.custom({
-      statusCode: statusCode!,
-      body: `${statusCode} - ${statusMessage}`,
+    const isHeadRequest = method.toUpperCase() === 'HEAD';
+    return response.ok({
+      body: isHeadRequest ? `${statusCode} - ${statusMessage}` : esIncomingMessage!,
       headers: {
         warning: warning || '',
-        'Content-Type': 'text/plain',
+        // We need to set the status code and status text as headers so that the client can access them
+        // in the response. This is needed because the client is using them to show the status of the request
+        // in the UI. By sending them as headers we avoid logging out users if the status code is 403. E.g.
+        // if the user is not authorized to access the cluster, we don't want to log them out. (See https://github.com/elastic/kibana/issues/140536)
+        'x-console-proxy-status-code': String(statusCode) || '',
+        'x-console-proxy-status-text': statusMessage || '',
+        ...(isHeadRequest && { 'Content-Type': 'text/plain' }),
       },
     });
   };

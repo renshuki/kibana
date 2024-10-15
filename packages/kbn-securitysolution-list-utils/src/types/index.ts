@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { DataViewFieldBase } from '@kbn/es-query';
@@ -26,6 +27,10 @@ import {
   EXCEPTION_LIST_NAMESPACE_AGNOSTIC,
 } from '@kbn/securitysolution-list-constants';
 
+export interface DataViewField extends DataViewFieldBase {
+  conflictDescriptions?: Record<string, string[]>;
+}
+
 export interface OperatorOption {
   message: string;
   value: string;
@@ -35,7 +40,7 @@ export interface OperatorOption {
 
 export interface FormattedBuilderEntry {
   id: string;
-  field: DataViewFieldBase | undefined;
+  field: DataViewField | undefined;
   operator: OperatorOption;
   value: string | string[] | undefined;
   nested: 'parent' | 'child' | undefined;

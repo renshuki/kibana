@@ -38,7 +38,6 @@ export const getAnomaliesUserTableColumns = (
         idPrefix: `anomalies-user-table-userName-${createCompoundAnomalyKey(
           anomaliesByUser.anomaly
         )}-userName`,
-        fieldType: 'keyword',
         render: (item) => <UserDetailsLink userName={item} />,
       }),
   },

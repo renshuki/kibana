@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -16,6 +17,7 @@ import type { IUnifiedSearchPluginServices } from '../types';
 import { FILTER_EDITOR_WIDTH } from '../filter_bar/filter_item/filter_item';
 import { FilterEditor } from '../filter_bar/filter_editor';
 import { fetchIndexPatterns } from './fetch_index_patterns';
+import { SuggestionsAbstraction } from '../typeahead/suggestions_component';
 
 interface QueryDslFilter {
   queryDsl: string;
@@ -26,27 +28,31 @@ interface FilterEditorWrapperProps {
   indexPatterns?: Array<DataView | string>;
   filters: Filter[];
   timeRangeForSuggestionsOverride?: boolean;
+  filtersForSuggestions?: Filter[];
   closePopoverOnAdd?: () => void;
   closePopoverOnCancel?: () => void;
   onFiltersUpdated?: (filters: Filter[]) => void;
   onLocalFilterUpdate?: (filter: Filter | QueryDslFilter) => void;
   onLocalFilterCreate?: (initialState: { filter: Filter; queryDslFilter: QueryDslFilter }) => void;
+  suggestionsAbstraction?: SuggestionsAbstraction;
 }
 
 export const FilterEditorWrapper = React.memo(function FilterEditorWrapper({
   indexPatterns,
   filters,
   timeRangeForSuggestionsOverride,
+  filtersForSuggestions,
   closePopoverOnAdd,
   closePopoverOnCancel,
   onFiltersUpdated,
   onLocalFilterUpdate,
   onLocalFilterCreate,
+  suggestionsAbstraction,
 }: FilterEditorWrapperProps) {
   const fetchIndexAbortController = useRef<AbortController>();
 
   const kibana = useKibana<IUnifiedSearchPluginServices>();
-  const { uiSettings, data, usageCollection, appName } = kibana.services;
+  const { uiSettings, data, usageCollection, appName, docLinks } = kibana.services;
   const reportUiCounter = usageCollection?.reportUiCounter.bind(usageCollection, appName);
   const [dataViews, setDataviews] = useState<DataView[]>([]);
   const [newFilter, setNewFilter] = useState<Filter | undefined>(undefined);
@@ -111,6 +117,10 @@ export const FilterEditorWrapper = React.memo(function FilterEditorWrapper({
           onLocalFilterUpdate={onLocalFilterUpdate}
           onLocalFilterCreate={onLocalFilterCreate}
           timeRangeForSuggestionsOverride={timeRangeForSuggestionsOverride}
+          filtersForSuggestions={filtersForSuggestions}
+          suggestionsAbstraction={suggestionsAbstraction}
+          docLinks={docLinks}
+          dataViews={data.dataViews}
         />
       )}
     </div>

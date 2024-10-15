@@ -5,10 +5,11 @@
  * 2.0.
  */
 
+import { ActionsCompletion } from '@kbn/alerting-state-types';
 import { RuleTaskStateAndMetrics } from '../task_runner/types';
 import { getReasonFromError } from './error_with_reason';
 import { getEsErrorMessage } from './errors';
-import { ActionsCompletion, RuleLastRunOutcomes } from '../../common';
+import { RuleLastRunOutcomeOrderMap, RuleLastRunOutcomes } from '../../common';
 import {
   RuleLastRunOutcomeValues,
   RuleExecutionStatusWarningReasons,
@@ -47,8 +48,13 @@ export const lastRunFromState = (
     outcomeMsg.push(translations.taskRunner.warning.maxAlerts);
   } else if (metrics.triggeredActionsStatus === ActionsCompletion.PARTIAL) {
     outcome = RuleLastRunOutcomeValues[1];
-    warning = RuleExecutionStatusWarningReasons.MAX_EXECUTABLE_ACTIONS;
-    outcomeMsg.push(translations.taskRunner.warning.maxExecutableActions);
+    if (metrics.hasReachedQueuedActionsLimit) {
+      warning = RuleExecutionStatusWarningReasons.MAX_QUEUED_ACTIONS;
+      outcomeMsg.push(translations.taskRunner.warning.maxQueuedActions);
+    } else {
+      warning = RuleExecutionStatusWarningReasons.MAX_EXECUTABLE_ACTIONS;
+      outcomeMsg.push(translations.taskRunner.warning.maxExecutableActions);
+    }
   }
 
   // Overwrite outcome to be error if last run reported any errors
@@ -65,6 +71,7 @@ export const lastRunFromState = (
   return {
     lastRun: {
       outcome,
+      outcomeOrder: RuleLastRunOutcomeOrderMap[outcome],
       outcomeMsg: outcomeMsg.length > 0 ? outcomeMsg : null,
       warning: warning || null,
       alertsCount: {
@@ -80,9 +87,11 @@ export const lastRunFromState = (
 
 export const lastRunFromError = (error: Error): ILastRun => {
   const esErrorMessage = getEsErrorMessage(error);
+  const outcome = RuleLastRunOutcomeValues[2];
   return {
     lastRun: {
-      outcome: RuleLastRunOutcomeValues[2],
+      outcome,
+      outcomeOrder: RuleLastRunOutcomeOrderMap[outcome],
       warning: getReasonFromError(error),
       outcomeMsg: esErrorMessage ? [esErrorMessage] : null,
       alertsCount: {},
@@ -104,5 +113,6 @@ export const lastRunToRaw = (lastRun: ILastRun['lastRun']): RawRuleLastRun => {
     },
     warning: warning ?? null,
     outcomeMsg: outcomeMsg && !Array.isArray(outcomeMsg) ? [outcomeMsg] : outcomeMsg,
+    outcomeOrder: RuleLastRunOutcomeOrderMap[lastRun.outcome],
   };
 };

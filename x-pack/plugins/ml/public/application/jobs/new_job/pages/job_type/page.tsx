@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, useState, useMemo } from 'react';
+import type { FC } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { i18n } from '@kbn/i18n';
 import {
   EuiTitle,
@@ -20,11 +21,9 @@ import { FormattedMessage } from '@kbn/i18n-react';
 import { ES_FIELD_TYPES } from '@kbn/field-types';
 import { useMlKibana, useNavigateToPath } from '../../../../contexts/kibana';
 
-import { useMlContext } from '../../../../contexts/ml';
-import { isSavedSearchSavedObject } from '../../../../../../common/types/kibana';
+import { useDataSource } from '../../../../contexts/ml';
 import { DataRecognizer } from '../../../../components/data_recognizer';
 import { addItemToRecentlyAccessed } from '../../../../util/recently_accessed';
-import { timeBasedIndexCheck } from '../../../../util/index_utils';
 import { LinkCard } from '../../../../components/link_card';
 import { CategorizationIcon } from './categorization_job_icon';
 import { ML_APP_LOCATOR, ML_PAGES } from '../../../../../../common/constants/locator';
@@ -35,10 +34,14 @@ import { MlPageHeader } from '../../../../components/page_header';
 
 export const Page: FC = () => {
   const {
-    services: { share },
+    services: {
+      chrome: { recentlyAccessed },
+      share,
+      notifications: { toasts },
+    },
   } = useMlKibana();
 
-  const mlContext = useMlContext();
+  const dataSourceContext = useDataSource();
   const navigateToPath = useNavigateToPath();
   const onSelectDifferentIndex = useCreateAndNavigateToMlLink(
     ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_SELECT_INDEX
@@ -46,43 +49,58 @@ export const Page: FC = () => {
 
   const [recognizerResultsCount, setRecognizerResultsCount] = useState(0);
 
-  const { currentSavedSearch, currentDataView } = mlContext;
+  const { selectedDataView, selectedSavedSearch } = dataSourceContext;
 
-  const isTimeBasedIndex = timeBasedIndexCheck(currentDataView);
+  const isTimeBasedIndex: boolean = selectedDataView.isTimeBased();
+
+  useEffect(() => {
+    if (!isTimeBasedIndex) {
+      toasts.addWarning({
+        title: i18n.translate('xpack.ml.dataViewNotBasedOnTimeSeriesNotificationTitle', {
+          defaultMessage: 'The data view {dataViewIndexPattern} is not based on a time series',
+          values: { dataViewIndexPattern: selectedDataView.getIndexPattern() },
+        }),
+        text: i18n.translate('xpack.ml.dataViewNotBasedOnTimeSeriesNotificationDescription', {
+          defaultMessage: 'Anomaly detection only runs over time-based indices',
+        }),
+      });
+    }
+  }, [isTimeBasedIndex, selectedDataView, toasts]);
+
   const hasGeoFields = useMemo(
     () =>
       [
-        ...currentDataView.fields.getByType(ES_FIELD_TYPES.GEO_POINT),
-        ...currentDataView.fields.getByType(ES_FIELD_TYPES.GEO_SHAPE),
+        ...selectedDataView.fields.getByType(ES_FIELD_TYPES.GEO_POINT),
+        ...selectedDataView.fields.getByType(ES_FIELD_TYPES.GEO_SHAPE),
       ].length > 0,
-    [currentDataView]
+    [selectedDataView]
   );
   const indexWarningTitle =
-    !isTimeBasedIndex && isSavedSearchSavedObject(currentSavedSearch)
+    !isTimeBasedIndex && selectedSavedSearch
       ? i18n.translate(
           'xpack.ml.newJob.wizard.jobType.dataViewFromSavedSearchNotTimeBasedMessage',
           {
             defaultMessage:
               '{savedSearchTitle} uses data view {dataViewName} which is not time based',
             values: {
-              savedSearchTitle: currentSavedSearch.attributes.title as string,
-              dataViewName: currentDataView.title,
+              savedSearchTitle: selectedSavedSearch.title ?? '',
+              dataViewName: selectedDataView.getName(),
             },
           }
         )
       : i18n.translate('xpack.ml.newJob.wizard.jobType.dataViewNotTimeBasedMessage', {
           defaultMessage: 'Data view {dataViewName} is not time based',
-          values: { dataViewName: currentDataView.title },
+          values: { dataViewName: selectedDataView.getName() },
         });
 
-  const pageTitleLabel = isSavedSearchSavedObject(currentSavedSearch)
+  const pageTitleLabel = selectedSavedSearch
     ? i18n.translate('xpack.ml.newJob.wizard.jobType.savedSearchPageTitleLabel', {
         defaultMessage: 'saved search {savedSearchTitle}',
-        values: { savedSearchTitle: currentSavedSearch.attributes.title as string },
+        values: { savedSearchTitle: selectedSavedSearch.title ?? '' },
       })
     : i18n.translate('xpack.ml.newJob.wizard.jobType.dataViewPageTitleLabel', {
         defaultMessage: 'data view {dataViewName}',
-        values: { dataViewName: currentDataView.getName() },
+        values: { dataViewName: selectedDataView.getName() },
       });
 
   const recognizerResults = {
@@ -93,30 +111,35 @@ export const Page: FC = () => {
   };
 
   const getUrlParams = () => {
-    return !isSavedSearchSavedObject(currentSavedSearch)
-      ? `?index=${currentDataView.id}`
-      : `?savedSearchId=${currentSavedSearch.id}`;
+    return !selectedSavedSearch
+      ? `?index=${selectedDataView.id}`
+      : `?savedSearchId=${selectedSavedSearch.id}`;
   };
 
   const addSelectionToRecentlyAccessed = async () => {
-    const title = !isSavedSearchSavedObject(currentSavedSearch)
-      ? currentDataView.title
-      : (currentSavedSearch.attributes.title as string);
+    const title = !selectedSavedSearch
+      ? selectedDataView.getName()
+      : selectedSavedSearch.title ?? '';
     const mlLocator = share.url.locators.get(ML_APP_LOCATOR)!;
 
     const dataVisualizerLink = await mlLocator.getUrl(
       {
         page: ML_PAGES.DATA_VISUALIZER_INDEX_VIEWER,
         pageState: {
-          ...(currentSavedSearch?.id
-            ? { savedSearchId: currentSavedSearch.id }
-            : { index: currentDataView.id }),
+          ...(selectedSavedSearch?.id
+            ? { savedSearchId: selectedSavedSearch.id }
+            : { index: selectedDataView.id }),
         },
       },
       { absolute: true }
     );
 
-    addItemToRecentlyAccessed(ML_PAGES.DATA_VISUALIZER_INDEX_VIEWER, title, dataVisualizerLink);
+    addItemToRecentlyAccessed(
+      ML_PAGES.DATA_VISUALIZER_INDEX_VIEWER,
+      title,
+      dataVisualizerLink,
+      recentlyAccessed
+    );
     navigateToPath(`/jobs/new_job/datavisualizer${getUrlParams()}`);
   };
 
@@ -167,7 +190,7 @@ export const Page: FC = () => {
       }),
       description: i18n.translate('xpack.ml.newJob.wizard.jobType.populationDescription', {
         defaultMessage:
-          'Detect activity that is unusual compared to the behavior of the population.',
+          'Detect unusual activity in a population. Recommended for high cardinality data.',
       }),
       id: 'mlJobTypeLinkPopulationJob',
     },
@@ -235,7 +258,7 @@ export const Page: FC = () => {
         defaultMessage: 'Geo',
       }),
       description: i18n.translate('xpack.ml.newJob.wizard.jobType.geoDescription', {
-        defaultMessage: 'Detect anomalies in the geographic location of the input data.',
+        defaultMessage: 'Detect anomalies in the geographic location of the data.',
       }),
       id: 'mlJobTypeLinkGeoJob',
     });
@@ -253,7 +276,7 @@ export const Page: FC = () => {
 
       {isTimeBasedIndex === false && (
         <>
-          <EuiCallOut title={indexWarningTitle} color="warning" iconType="alert">
+          <EuiCallOut title={indexWarningTitle} color="warning" iconType="warning">
             <FormattedMessage
               id="xpack.ml.newJob.wizard.jobType.howToRunAnomalyDetectionDescription"
               defaultMessage="Anomaly detection can only be run over indices which are time based."
@@ -294,8 +317,8 @@ export const Page: FC = () => {
 
         <EuiFlexGrid gutterSize="l" columns={4}>
           <DataRecognizer
-            indexPattern={currentDataView}
-            savedSearch={currentSavedSearch}
+            indexPattern={selectedDataView}
+            savedSearch={selectedSavedSearch}
             results={recognizerResults}
           />
         </EuiFlexGrid>

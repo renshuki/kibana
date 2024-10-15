@@ -5,30 +5,23 @@
  * 2.0.
  */
 
-import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
-import { Observable } from 'rxjs';
-import type { HttpStart } from '@kbn/core/public';
-import { HttpService } from '../http_service';
+import type { Observable } from 'rxjs';
 
-import { annotationsApiProvider } from './annotations';
-import { dataFrameAnalyticsApiProvider } from './data_frame_analytics';
-import { filtersApiProvider } from './filters';
-import { resultsApiProvider } from './results';
-import { jobsApiProvider } from './jobs';
-import { savedObjectsApiProvider } from './saved_objects';
-import { trainedModelsApiProvider } from './trained_models';
+import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+
+import type { RuntimeMappings } from '@kbn/ml-runtime-field-utils';
+
+import { isNumber } from 'lodash';
+import { ML_INTERNAL_BASE_PATH } from '../../../../common/constants/app';
 import type {
   MlServerDefaults,
   MlServerLimits,
   MlNodeCount,
 } from '../../../../common/types/ml_server_info';
-
 import type { MlCapabilitiesResponse } from '../../../../common/types/capabilities';
-import type { Calendar, CalendarId, UpdateCalendar } from '../../../../common/types/calendars';
-import type {
-  BucketSpanEstimatorData,
-  ResetJobsResponse,
-} from '../../../../common/types/job_service';
+import type { RecognizeModuleResult } from '../../../../common/types/modules';
+import type { MlCalendar, MlCalendarId, UpdateCalendar } from '../../../../common/types/calendars';
+import type { BucketSpanEstimatorData } from '../../../../common/types/job_service';
 import type {
   Job,
   JobStats,
@@ -39,12 +32,32 @@ import type {
   ModelSnapshot,
   IndicesOptions,
 } from '../../../../common/types/anomaly_detection_jobs';
-import type { FieldHistogramRequestConfig } from '../../datavisualizer/index_based/common/request';
-import type { DataRecognizerConfigResponse, Module } from '../../../../common/types/modules';
-import { getHttp } from '../../util/dependency_cache';
-import type { RuntimeMappings } from '../../../../common/types/fields';
+import type {
+  DataRecognizerConfigResponse,
+  Module,
+  RecognizeResult,
+} from '../../../../common/types/modules';
 import type { DatafeedValidationResponse } from '../../../../common/types/job_validation';
+
+import type { FieldHistogramRequestConfig } from '../../datavisualizer/index_based/common/request';
+
+import type { HttpService } from '../http_service';
+
+import { jsonSchemaProvider } from './json_schema';
+import { annotationsApiProvider } from './annotations';
+import { dataFrameAnalyticsApiProvider } from './data_frame_analytics';
+import { filtersApiProvider } from './filters';
+import { resultsApiProvider } from './results';
+import { jobsApiProvider } from './jobs';
+import { savedObjectsApiProvider } from './saved_objects';
+import { trainedModelsApiProvider } from './trained_models';
 import { notificationsProvider } from './notifications';
+import { inferenceModelsApiProvider } from './inference_models';
+
+export interface MlHasPrivilegesResponse {
+  hasPrivileges?: estypes.SecurityHasPrivilegesResponse;
+  upgradeInProgress: boolean;
+}
 
 export interface MlInfoResponse {
   defaults: MlServerDefaults;
@@ -56,6 +69,8 @@ export interface MlInfoResponse {
   upgrade_mode: boolean;
   cloudId?: string;
   isCloudTrial?: boolean;
+  cloudUrl?: string;
+  isMlAutoscalingEnabled: boolean;
 }
 
 export interface BucketSpanEstimatorResponse {
@@ -88,114 +103,103 @@ export interface GetModelSnapshotsResponse {
   model_snapshots: ModelSnapshot[];
 }
 
-export function basePath() {
-  return '/api/ml';
+export interface DeleteForecastResponse {
+  acknowledged: boolean;
 }
 
-/**
- * Temp solution to allow {@link ml} service to use http from
- * the dependency_cache.
- */
-const proxyHttpStart = new Proxy<HttpStart>({} as unknown as HttpStart, {
-  get(obj, prop: keyof HttpStart) {
-    try {
-      return getHttp()[prop];
-    } catch (e) {
-      if (prop === 'getLoadingCount$') {
-        return () => {};
-      }
-      // eslint-disable-next-line no-console
-      console.error(e);
-    }
-  },
-});
-
-export type MlApiServices = ReturnType<typeof mlApiServicesProvider>;
-
-export const ml = mlApiServicesProvider(new HttpService(proxyHttpStart));
-
-export function mlApiServicesProvider(httpService: HttpService) {
+export function mlApiProvider(httpService: HttpService) {
   return {
     getJobs(obj?: { jobId?: string }) {
       const jobId = obj && obj.jobId ? `/${obj.jobId}` : '';
       return httpService.http<{ jobs: Job[]; count: number }>({
-        path: `${basePath()}/anomaly_detectors${jobId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors${jobId}`,
+        version: '1',
+      });
+    },
+
+    getJobs$(obj?: { jobId?: string }) {
+      const jobId = obj && obj.jobId ? `/${obj.jobId}` : '';
+      return httpService.http$<{ count: number; jobs: Job[] }>({
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors${jobId}`,
+        version: '1',
       });
     },
 
     getJobStats(obj: { jobId?: string }) {
       const jobId = obj && obj.jobId ? `/${obj.jobId}` : '';
       return httpService.http<{ jobs: JobStats[]; count: number }>({
-        path: `${basePath()}/anomaly_detectors${jobId}/_stats`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors${jobId}/_stats`,
+        version: '1',
       });
     },
 
     addJob({ jobId, job }: { jobId: string; job: Job }) {
       const body = JSON.stringify(job);
       return httpService.http<estypes.MlPutJobResponse>({
-        path: `${basePath()}/anomaly_detectors/${jobId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}`,
         method: 'PUT',
         body,
+        version: '1',
       });
     },
 
     openJob({ jobId }: { jobId: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/_open`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/_open`,
         method: 'POST',
+        version: '1',
       });
     },
 
     closeJob({ jobId }: { jobId: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/_close`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/_close`,
         method: 'POST',
+        version: '1',
       });
     },
 
     forceCloseJob({ jobId }: { jobId: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/_close?force=true`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/_close?force=true`,
         method: 'POST',
+        version: '1',
       });
     },
 
     deleteJob({ jobId }: { jobId: string }) {
       return httpService.http<estypes.MlDeleteJobResponse>({
-        path: `${basePath()}/anomaly_detectors/${jobId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}`,
         method: 'DELETE',
+        version: '1',
       });
     },
 
     forceDeleteJob({ jobId }: { jobId: string }) {
       return httpService.http<estypes.MlDeleteJobResponse>({
-        path: `${basePath()}/anomaly_detectors/${jobId}?force=true`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}?force=true`,
         method: 'DELETE',
+        version: '1',
       });
     },
 
     updateJob({ jobId, job }: { jobId: string; job: Job }) {
       const body = JSON.stringify(job);
       return httpService.http<any>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/_update`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/_update`,
         method: 'POST',
         body,
-      });
-    },
-
-    resetJob({ jobId }: { jobId: string }) {
-      return httpService.http<ResetJobsResponse>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/_reset`,
-        method: 'POST',
+        version: '1',
       });
     },
 
     estimateBucketSpan(obj: BucketSpanEstimatorData) {
       const body = JSON.stringify(obj);
       return httpService.http<BucketSpanEstimatorResponse>({
-        path: `${basePath()}/validate/estimate_bucket_span`,
+        path: `${ML_INTERNAL_BASE_PATH}/validate/estimate_bucket_span`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
@@ -209,50 +213,56 @@ export function mlApiServicesProvider(httpService: HttpService) {
     }) {
       const body = JSON.stringify(payload);
       return httpService.http<any>({
-        path: `${basePath()}/validate/job`,
+        path: `${ML_INTERNAL_BASE_PATH}/validate/job`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     validateDatafeedPreview(payload: { job: CombinedJob; start?: number; end?: number }) {
       const body = JSON.stringify(payload);
       return httpService.http<DatafeedValidationResponse>({
-        path: `${basePath()}/validate/datafeed_preview`,
+        path: `${ML_INTERNAL_BASE_PATH}/validate/datafeed_preview`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     validateCardinality$(job: CombinedJob): Observable<CardinalityValidationResults> {
       const body = JSON.stringify(job);
       return httpService.http$({
-        path: `${basePath()}/validate/cardinality`,
+        path: `${ML_INTERNAL_BASE_PATH}/validate/cardinality`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     getDatafeeds(obj: { datafeedId: string }) {
       const datafeedId = obj && obj.datafeedId ? `/${obj.datafeedId}` : '';
       return httpService.http<any>({
-        path: `${basePath()}/datafeeds${datafeedId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds${datafeedId}`,
+        version: '1',
       });
     },
 
     getDatafeedStats(obj: { datafeedId: string }) {
       const datafeedId = obj && obj.datafeedId ? `/${obj.datafeedId}` : '';
       return httpService.http<any>({
-        path: `${basePath()}/datafeeds${datafeedId}/_stats`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds${datafeedId}/_stats`,
+        version: '1',
       });
     },
 
     addDatafeed({ datafeedId, datafeedConfig }: { datafeedId: string; datafeedConfig: Datafeed }) {
       const body = JSON.stringify(datafeedConfig);
       return httpService.http<estypes.MlPutDatafeedResponse>({
-        path: `${basePath()}/datafeeds/${datafeedId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds/${datafeedId}`,
         method: 'PUT',
         body,
+        version: '1',
       });
     },
 
@@ -265,23 +275,26 @@ export function mlApiServicesProvider(httpService: HttpService) {
     }) {
       const body = JSON.stringify(datafeedConfig);
       return httpService.http<any>({
-        path: `${basePath()}/datafeeds/${datafeedId}/_update`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds/${datafeedId}/_update`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     deleteDatafeed({ datafeedId }: { datafeedId: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/datafeeds/${datafeedId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds/${datafeedId}`,
         method: 'DELETE',
+        version: '1',
       });
     },
 
     forceDeleteDatafeed({ datafeedId }: { datafeedId: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/datafeeds/${datafeedId}?force=true`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds/${datafeedId}?force=true`,
         method: 'DELETE',
+        version: '1',
       });
     },
 
@@ -294,43 +307,53 @@ export function mlApiServicesProvider(httpService: HttpService) {
       start?: number;
       end?: number;
     }) {
+      // if the end timestamp is a number, add one ms to it to make it
+      // inclusive of the end of the data
+      if (isNumber(end)) {
+        end++;
+      }
+
       const body = JSON.stringify({
         ...(start !== undefined ? { start } : {}),
         ...(end !== undefined ? { end } : {}),
       });
 
       return httpService.http<any>({
-        path: `${basePath()}/datafeeds/${datafeedId}/_start`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds/${datafeedId}/_start`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     stopDatafeed({ datafeedId }: { datafeedId: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/datafeeds/${datafeedId}/_stop`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds/${datafeedId}/_stop`,
         method: 'POST',
+        version: '1',
       });
     },
 
     forceStopDatafeed({ datafeedId }: { datafeedId: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/datafeeds/${datafeedId}/_stop?force=true`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds/${datafeedId}/_stop?force=true`,
         method: 'POST',
+        version: '1',
       });
     },
 
     datafeedPreview({ datafeedId }: { datafeedId: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/datafeeds/${datafeedId}/_preview`,
+        path: `${ML_INTERNAL_BASE_PATH}/datafeeds/${datafeedId}/_preview`,
         method: 'GET',
+        version: '1',
       });
     },
 
     validateDetector({ detector }: { detector: Detector }) {
       const body = JSON.stringify(detector);
       return httpService.http<any>({
-        path: `${basePath()}/anomaly_detectors/_validate/detector`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/_validate/detector`,
         method: 'POST',
         body,
       });
@@ -342,9 +365,18 @@ export function mlApiServicesProvider(httpService: HttpService) {
       });
 
       return httpService.http<any>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/_forecast`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/_forecast`,
         method: 'POST',
         body,
+        version: '1',
+      });
+    },
+
+    deleteForecast({ jobId, forecastId }: { jobId: string; forecastId: string }) {
+      return httpService.http<DeleteForecastResponse>({
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/_forecast/${forecastId}`,
+        method: 'DELETE',
+        version: '1',
       });
     },
 
@@ -371,25 +403,28 @@ export function mlApiServicesProvider(httpService: HttpService) {
         ...(overallScore ? { overall_score: overallScore } : {}),
       });
       return httpService.http<any>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/results/overall_buckets`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/results/overall_buckets`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     hasPrivileges(obj: any) {
       const body = JSON.stringify(obj);
-      return httpService.http<any>({
-        path: `${basePath()}/_has_privileges`,
+      return httpService.http<MlHasPrivilegesResponse>({
+        path: `${ML_INTERNAL_BASE_PATH}/_has_privileges`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     checkMlCapabilities() {
       return httpService.http<MlCapabilitiesResponse>({
-        path: `${basePath()}/ml_capabilities`,
+        path: `${ML_INTERNAL_BASE_PATH}/ml_capabilities`,
         method: 'GET',
+        version: '1',
       });
     },
 
@@ -397,50 +432,61 @@ export function mlApiServicesProvider(httpService: HttpService) {
       const body = JSON.stringify({ indices });
 
       return httpService.http<Record<string, { exists: boolean }>>({
-        path: `${basePath()}/index_exists`,
+        path: `${ML_INTERNAL_BASE_PATH}/index_exists`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
-    getFieldCaps({ index, fields }: { index: string; fields: string[] }) {
-      const body = JSON.stringify({
-        ...(index !== undefined ? { index } : {}),
-        ...(fields !== undefined ? { fields } : {}),
-      });
-
-      return httpService.http<any>({
-        path: `${basePath()}/indices/field_caps`,
-        method: 'POST',
-        body,
-      });
-    },
-
-    recognizeIndex({ indexPatternTitle }: { indexPatternTitle: string }) {
-      return httpService.http<any>({
-        path: `${basePath()}/modules/recognize/${indexPatternTitle}`,
+    recognizeIndex({
+      indexPatternTitle,
+      filter,
+    }: {
+      indexPatternTitle: string;
+      filter?: string[];
+    }) {
+      return httpService.http<RecognizeResult[]>({
+        path: `${ML_INTERNAL_BASE_PATH}/modules/recognize/${indexPatternTitle}`,
         method: 'GET',
+        version: '1',
+        query: { filter: filter?.join(',') },
       });
     },
 
-    listDataRecognizerModules() {
+    recognizeModule({ moduleId, size }: { moduleId: string; size?: number }) {
+      return httpService.http<RecognizeModuleResult>({
+        path: `${ML_INTERNAL_BASE_PATH}/modules/recognize_by_module/${moduleId}`,
+        method: 'GET',
+        version: '1',
+        query: { size },
+      });
+    },
+
+    listDataRecognizerModules(filter?: string[]) {
       return httpService.http<any>({
-        path: `${basePath()}/modules/get_module`,
+        path: `${ML_INTERNAL_BASE_PATH}/modules/get_module`,
         method: 'GET',
+        version: '1',
+        query: { filter: filter?.join(',') },
       });
     },
 
-    getDataRecognizerModule({ moduleId }: { moduleId: string }) {
-      return httpService.http<Module>({
-        path: `${basePath()}/modules/get_module/${moduleId}`,
+    getDataRecognizerModule(params?: { moduleId: string; filter?: string[] }) {
+      const { moduleId, filter } = params || {};
+      return httpService.http<Module | Module[]>({
+        path: `${ML_INTERNAL_BASE_PATH}/modules/get_module/${moduleId ?? ''}`,
         method: 'GET',
+        version: '1',
+        query: { filter: filter?.join(',') },
       });
     },
 
     dataRecognizerModuleJobsExist({ moduleId }: { moduleId: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/modules/jobs_exist/${moduleId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/modules/jobs_exist/${moduleId}`,
         method: 'GET',
+        version: '1',
       });
     },
 
@@ -483,9 +529,10 @@ export function mlApiServicesProvider(httpService: HttpService) {
       });
 
       return httpService.http<DataRecognizerConfigResponse>({
-        path: `${basePath()}/modules/setup/${moduleId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/modules/setup/${moduleId}`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
@@ -510,18 +557,19 @@ export function mlApiServicesProvider(httpService: HttpService) {
       });
 
       return httpService.http<any>({
-        path: `${basePath()}/data_visualizer/get_field_histograms/${indexPattern}`,
+        path: `${ML_INTERNAL_BASE_PATH}/data_visualizer/get_field_histograms/${indexPattern}`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     /**
      * Gets a list of calendars
      * @param obj
-     * @returns {Promise<Calendar[]>}
+     * @returns {Promise<MlCalendar[]>}
      */
-    calendars(obj?: { calendarId?: CalendarId; calendarIds?: CalendarId[] }) {
+    calendars(obj?: { calendarId?: MlCalendarId; calendarIds?: MlCalendarId[] }) {
       const { calendarId, calendarIds } = obj || {};
       let calendarIdsPathComponent = '';
       if (calendarId) {
@@ -529,18 +577,20 @@ export function mlApiServicesProvider(httpService: HttpService) {
       } else if (calendarIds) {
         calendarIdsPathComponent = `/${calendarIds.join(',')}`;
       }
-      return httpService.http<Calendar[]>({
-        path: `${basePath()}/calendars${calendarIdsPathComponent}`,
+      return httpService.http<MlCalendar[]>({
+        path: `${ML_INTERNAL_BASE_PATH}/calendars${calendarIdsPathComponent}`,
         method: 'GET',
+        version: '1',
       });
     },
 
-    addCalendar(obj: Calendar) {
+    addCalendar(obj: MlCalendar) {
       const body = JSON.stringify(obj);
       return httpService.http<any>({
-        path: `${basePath()}/calendars`,
+        path: `${ML_INTERNAL_BASE_PATH}/calendars`,
         method: 'PUT',
         body,
+        version: '1',
       });
     },
 
@@ -548,30 +598,34 @@ export function mlApiServicesProvider(httpService: HttpService) {
       const calendarId = obj && obj.calendarId ? `/${obj.calendarId}` : '';
       const body = JSON.stringify(obj);
       return httpService.http<any>({
-        path: `${basePath()}/calendars${calendarId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/calendars${calendarId}`,
         method: 'PUT',
         body,
+        version: '1',
       });
     },
 
     deleteCalendar({ calendarId }: { calendarId?: string }) {
       return httpService.http<any>({
-        path: `${basePath()}/calendars/${calendarId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/calendars/${calendarId}`,
         method: 'DELETE',
+        version: '1',
       });
     },
 
     mlNodeCount() {
       return httpService.http<MlNodeCount>({
-        path: `${basePath()}/ml_node_count`,
+        path: `${ML_INTERNAL_BASE_PATH}/ml_node_count`,
         method: 'GET',
+        version: '1',
       });
     },
 
     mlInfo() {
       return httpService.http<MlInfoResponse>({
-        path: `${basePath()}/info`,
+        path: `${ML_INTERNAL_BASE_PATH}/info`,
         method: 'GET',
+        version: '1',
       });
     },
 
@@ -603,9 +657,10 @@ export function mlApiServicesProvider(httpService: HttpService) {
       });
 
       return httpService.http$<{ modelMemoryLimit: string }>({
-        path: `${basePath()}/validate/calculate_model_memory_limit`,
+        path: `${ML_INTERNAL_BASE_PATH}/validate/calculate_model_memory_limit`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
@@ -634,9 +689,10 @@ export function mlApiServicesProvider(httpService: HttpService) {
       });
 
       return httpService.http<any>({
-        path: `${basePath()}/fields_service/field_cardinality`,
+        path: `${ML_INTERNAL_BASE_PATH}/fields_service/field_cardinality`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
@@ -665,27 +721,30 @@ export function mlApiServicesProvider(httpService: HttpService) {
       });
 
       return httpService.http<GetTimeFieldRangeResponse>({
-        path: `${basePath()}/fields_service/time_field_range`,
+        path: `${ML_INTERNAL_BASE_PATH}/fields_service/time_field_range`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     esSearch(obj: any) {
       const body = JSON.stringify(obj);
       return httpService.http<any>({
-        path: `${basePath()}/es_search`,
+        path: `${ML_INTERNAL_BASE_PATH}/es_search`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
     esSearch$(obj: any) {
       const body = JSON.stringify(obj);
       return httpService.http$<any>({
-        path: `${basePath()}/es_search`,
+        path: `${ML_INTERNAL_BASE_PATH}/es_search`,
         method: 'POST',
         body,
+        version: '1',
       });
     },
 
@@ -694,14 +753,16 @@ export function mlApiServicesProvider(httpService: HttpService) {
       return httpService.http<Array<{ name: string }>>({
         path: `${tempBasePath}/index_management/indices`,
         method: 'GET',
+        version: '1',
       });
     },
 
     getModelSnapshots(jobId: string, snapshotId?: string) {
       return httpService.http<GetModelSnapshotsResponse>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/model_snapshots${
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/model_snapshots${
           snapshotId !== undefined ? `/${snapshotId}` : ''
         }`,
+        version: '1',
       });
     },
 
@@ -711,16 +772,35 @@ export function mlApiServicesProvider(httpService: HttpService) {
       body: { description?: string; retain?: boolean }
     ) {
       return httpService.http<any>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/model_snapshots/${snapshotId}/_update`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/model_snapshots/${snapshotId}/_update`,
         method: 'POST',
         body: JSON.stringify(body),
+        version: '1',
       });
     },
 
     deleteModelSnapshot(jobId: string, snapshotId: string) {
       return httpService.http<any>({
-        path: `${basePath()}/anomaly_detectors/${jobId}/model_snapshots/${snapshotId}`,
+        path: `${ML_INTERNAL_BASE_PATH}/anomaly_detectors/${jobId}/model_snapshots/${snapshotId}`,
         method: 'DELETE',
+        version: '1',
+      });
+    },
+
+    reindexWithPipeline(pipelineName: string, sourceIndex: string, destinationIndex: string) {
+      return httpService.http<estypes.ReindexResponse>({
+        path: `${ML_INTERNAL_BASE_PATH}/reindex_with_pipeline`,
+        method: 'POST',
+        body: JSON.stringify({
+          source: {
+            index: sourceIndex,
+          },
+          dest: {
+            index: destinationIndex,
+            pipeline: pipelineName,
+          },
+        }),
+        version: '1',
       });
     },
 
@@ -731,6 +811,10 @@ export function mlApiServicesProvider(httpService: HttpService) {
     jobs: jobsApiProvider(httpService),
     savedObjects: savedObjectsApiProvider(httpService),
     trainedModels: trainedModelsApiProvider(httpService),
+    inferenceModels: inferenceModelsApiProvider(httpService),
     notifications: notificationsProvider(httpService),
+    jsonSchema: jsonSchemaProvider(httpService),
   };
 }
+
+export type MlApi = ReturnType<typeof mlApiProvider>;

@@ -7,32 +7,21 @@
 
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { cloneDeep } from 'lodash';
+import rison from '@kbn/rison';
 import {
-  Query,
   fromKueryExpression,
   toElasticsearchQuery,
   buildEsQuery,
   buildQueryFromFilters,
-  DataViewBase,
 } from '@kbn/es-query';
-import { Filter } from '@kbn/es-query';
-import { IUiSettingsClient } from '@kbn/core/public';
+import type { Filter, Query, DataViewBase } from '@kbn/es-query';
+import type { IUiSettingsClient } from '@kbn/core/public';
 import { getEsQueryConfig } from '@kbn/data-plugin/public';
-import { SEARCH_QUERY_LANGUAGE } from '../../../../../common/constants/search';
-import { SavedSearchSavedObject } from '../../../../../common/types/kibana';
+import type { SavedSearch } from '@kbn/saved-search-plugin/public';
+import { getDefaultDSLQuery, SEARCH_QUERY_LANGUAGE } from '@kbn/ml-query-utils';
 import { getQueryFromSavedSearchObject } from '../../../util/index_utils';
 
 // Provider for creating the items used for searching and job creation.
-
-const DEFAULT_DSL_QUERY: estypes.QueryDslQueryContainer = {
-  bool: {
-    must: [
-      {
-        match_all: {},
-      },
-    ],
-  },
-};
 
 export const DEFAULT_QUERY: Query = {
   query: '',
@@ -40,7 +29,7 @@ export const DEFAULT_QUERY: Query = {
 };
 
 export function getDefaultDatafeedQuery() {
-  return cloneDeep(DEFAULT_DSL_QUERY);
+  return getDefaultDSLQuery();
 }
 
 export function getDefaultQuery() {
@@ -50,7 +39,7 @@ export function getDefaultQuery() {
 export function createSearchItems(
   kibanaConfig: IUiSettingsClient,
   indexPattern: DataViewBase | undefined,
-  savedSearch: SavedSearchSavedObject | null
+  savedSearch: SavedSearch | null
 ) {
   // query is only used by the data visualizer as it needs
   // a lucene query_string.
@@ -161,4 +150,15 @@ export function checkCardinalitySuccess(data: any) {
   }
 
   return response;
+}
+
+export function getRisonValue<T extends string | boolean | number | object | undefined | null>(
+  risonString: string,
+  defaultValue: T
+) {
+  try {
+    return rison.decode(risonString) as T;
+  } catch (error) {
+    return defaultValue;
+  }
 }

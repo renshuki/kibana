@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { CoreSetup, CoreStart, Plugin, PluginInitializerContext } from '@kbn/core/server';
@@ -31,9 +32,12 @@ export class HomeServerPlugin implements Plugin<HomeServerPluginSetup, HomeServe
   private readonly sampleDataRegistry: SampleDataRegistry;
   private customIntegrations?: CustomIntegrationsPluginSetup;
 
+  private readonly isDevMode: boolean;
+
   constructor(private readonly initContext: PluginInitializerContext) {
     this.sampleDataRegistry = new SampleDataRegistry(this.initContext);
     this.tutorialsRegistry = new TutorialsRegistry(this.initContext);
+    this.isDevMode = this.initContext.env.mode.dev;
   }
 
   public setup(core: CoreSetup, plugins: HomeServerPluginSetupDependencies): HomeServerPluginSetup {
@@ -48,7 +52,12 @@ export class HomeServerPlugin implements Plugin<HomeServerPluginSetup, HomeServe
     return {
       tutorials: { ...this.tutorialsRegistry.setup(core, plugins.customIntegrations) },
       sampleData: {
-        ...this.sampleDataRegistry.setup(core, plugins.usageCollection, plugins.customIntegrations),
+        ...this.sampleDataRegistry.setup(
+          core,
+          plugins.usageCollection,
+          plugins.customIntegrations,
+          this.isDevMode
+        ),
       },
     };
   }

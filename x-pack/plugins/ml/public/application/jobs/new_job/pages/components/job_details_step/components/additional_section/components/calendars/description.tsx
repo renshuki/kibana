@@ -5,13 +5,14 @@
  * 2.0.
  */
 
-import React, { memo, FC } from 'react';
+import type { FC, PropsWithChildren } from 'react';
+import React, { memo } from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { EuiDescribedFormGroup, EuiFormRow, EuiLink } from '@elastic/eui';
 import { useMlKibana } from '../../../../../../../../../contexts/kibana';
 
-export const Description: FC = memo(({ children }) => {
+export const Description: FC<PropsWithChildren<unknown>> = memo(({ children }) => {
   const {
     services: { docLinks },
   } = useMlKibana();
@@ -28,7 +29,7 @@ export const Description: FC = memo(({ children }) => {
       description={
         <FormattedMessage
           id="xpack.ml.newJob.wizard.jobDetailsStep.additionalSection.calendarsSelection.description"
-          defaultMessage="Contains a list of scheduled events that you want to ignore, such as planned system outages or public holidays. {learnMoreLink}"
+          defaultMessage="A list of scheduled events you want to ignore, such as planned system outages or public holidays. {learnMoreLink}"
           values={{
             learnMoreLink: (
               <EuiLink href={docsUrl} target="_blank">

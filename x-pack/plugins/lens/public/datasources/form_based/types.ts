@@ -4,7 +4,7 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-import type { DragDropIdentifier } from '../../drag_drop/providers';
+import type { DragDropIdentifier } from '@kbn/dom-drag-drop';
 import type { IncompleteColumn, GenericIndexPatternColumn } from './operations';
 import type { IndexPattern, IndexPatternField, DragDropOperation } from '../../types';
 
@@ -53,8 +53,9 @@ export interface FormBasedLayer {
   indexPatternId: string;
   linkToLayers?: string[];
   // Partial columns represent the temporary invalid states
-  incompleteColumns?: Record<string, IncompleteColumn>;
+  incompleteColumns?: Record<string, IncompleteColumn | undefined>;
   sampling?: number;
+  ignoreGlobalFilters?: boolean;
 }
 
 export interface FormBasedPersistedState {
@@ -66,7 +67,6 @@ export type PersistedIndexPatternLayer = Omit<FormBasedLayer, 'indexPatternId'>;
 export interface FormBasedPrivateState {
   currentIndexPatternId: string;
   layers: Record<string, FormBasedLayer>;
-  isDimensionClosePrevented?: boolean;
 }
 
 export interface DataViewDragDropOperation extends DragDropOperation {

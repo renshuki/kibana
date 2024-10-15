@@ -5,11 +5,11 @@
  * 2.0.
  */
 
-import { FindFileStructureResponse } from '@kbn/file-upload-plugin/common';
+import type { FindFileStructureResponse } from '@kbn/file-upload-plugin/common';
+import { roundToDecimalPlace } from '@kbn/ml-number-utils';
 import { getFieldNames, getSupportedFieldType } from './get_field_names';
-import { FileBasedFieldVisConfig } from '../stats_table/types';
+import type { FileBasedFieldVisConfig } from '../stats_table/types';
 import { SUPPORTED_FIELD_TYPES } from '../../../../../common/constants';
-import { roundToDecimalPlace } from '../utils';
 
 export function createFields(results: FindFileStructureResponse) {
   const {

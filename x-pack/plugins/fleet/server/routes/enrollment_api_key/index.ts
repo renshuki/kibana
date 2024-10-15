@@ -4,16 +4,26 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
+import { schema } from '@kbn/config-schema';
 
 import type { FleetAuthzRouter } from '../../services/security';
 
 import { ENROLLMENT_API_KEY_ROUTES } from '../../constants';
+import { API_VERSIONS } from '../../../common/constants';
+
 import {
   GetEnrollmentAPIKeysRequestSchema,
   GetOneEnrollmentAPIKeyRequestSchema,
   DeleteEnrollmentAPIKeyRequestSchema,
   PostEnrollmentAPIKeyRequestSchema,
+  EnrollmentAPIKeySchema,
+  EnrollmentAPIKeyResponseSchema,
+  DeleteEnrollmentAPIKeyResponseSchema,
 } from '../../types';
+
+import { genericErrorResponse } from '../schema/errors';
+
+import { ListResponseSchema } from '../schema/utils';
 
 import {
   getEnrollmentApiKeysHandler,
@@ -23,91 +33,189 @@ import {
 } from './handler';
 
 export const registerRoutes = (router: FleetAuthzRouter) => {
-  router.get(
-    {
+  router.versioned
+    .get({
       path: ENROLLMENT_API_KEY_ROUTES.INFO_PATTERN,
-      validate: GetOneEnrollmentAPIKeyRequestSchema,
       fleetAuthz: {
         fleet: { readEnrollmentTokens: true },
       },
-    },
-    getOneEnrollmentApiKeyHandler
-  );
+      description: `Get enrollment API key by ID`,
+      options: {
+        tags: ['oas-tag:Fleet enrollment API keys'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetOneEnrollmentAPIKeyRequestSchema,
+          response: {
+            200: {
+              body: () => EnrollmentAPIKeyResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getOneEnrollmentApiKeyHandler
+    );
 
-  router.delete(
-    {
+  router.versioned
+    .delete({
       path: ENROLLMENT_API_KEY_ROUTES.DELETE_PATTERN,
-      validate: DeleteEnrollmentAPIKeyRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    deleteEnrollmentApiKeyHandler
-  );
+      description: `Revoke enrollment API key by ID by marking it as inactive`,
+      options: {
+        tags: ['oas-tag:Fleet enrollment API keys'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: DeleteEnrollmentAPIKeyRequestSchema,
+          response: {
+            200: {
+              body: () => DeleteEnrollmentAPIKeyResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      deleteEnrollmentApiKeyHandler
+    );
 
-  router.get(
-    {
+  router.versioned
+    .get({
       path: ENROLLMENT_API_KEY_ROUTES.LIST_PATTERN,
-      validate: GetEnrollmentAPIKeysRequestSchema,
       fleetAuthz: {
         fleet: { readEnrollmentTokens: true },
       },
-    },
-    getEnrollmentApiKeysHandler
-  );
+      description: `List enrollment API keys`,
+      options: {
+        tags: ['oas-tag:Fleet enrollment API keys'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetEnrollmentAPIKeysRequestSchema,
+          response: {
+            200: {
+              body: () =>
+                ListResponseSchema(EnrollmentAPIKeySchema).extends({
+                  list: schema.arrayOf(EnrollmentAPIKeySchema, { meta: { deprecated: true } }),
+                }),
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getEnrollmentApiKeysHandler
+    );
 
-  router.post(
-    {
+  router.versioned
+    .post({
       path: ENROLLMENT_API_KEY_ROUTES.CREATE_PATTERN,
-      validate: PostEnrollmentAPIKeyRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    postEnrollmentApiKeyHandler
-  );
+      description: `Create enrollment API key`,
+      options: {
+        tags: ['oas-tag:Fleet enrollment API keys'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostEnrollmentAPIKeyRequestSchema,
+          response: {
+            200: {
+              body: () =>
+                EnrollmentAPIKeyResponseSchema.extends({
+                  action: schema.literal('created'),
+                }),
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postEnrollmentApiKeyHandler
+    );
 
-  router.get(
-    {
+  router.versioned
+    .get({
       path: ENROLLMENT_API_KEY_ROUTES.INFO_PATTERN_DEPRECATED,
-      validate: GetOneEnrollmentAPIKeyRequestSchema,
       fleetAuthz: {
         fleet: { readEnrollmentTokens: true },
       },
-    },
-    getOneEnrollmentApiKeyHandler
-  );
+      deprecated: true,
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: { request: GetOneEnrollmentAPIKeyRequestSchema },
+      },
+      getOneEnrollmentApiKeyHandler
+    );
 
-  router.delete(
-    {
+  router.versioned
+    .delete({
       path: ENROLLMENT_API_KEY_ROUTES.DELETE_PATTERN_DEPRECATED,
-      validate: DeleteEnrollmentAPIKeyRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allAgents: true },
       },
-    },
-    deleteEnrollmentApiKeyHandler
-  );
+      deprecated: true,
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: { request: DeleteEnrollmentAPIKeyRequestSchema },
+      },
+      deleteEnrollmentApiKeyHandler
+    );
 
-  router.get(
-    {
+  router.versioned
+    .get({
       path: ENROLLMENT_API_KEY_ROUTES.LIST_PATTERN_DEPRECATED,
-      validate: GetEnrollmentAPIKeysRequestSchema,
       fleetAuthz: {
         fleet: { readEnrollmentTokens: true },
       },
-    },
-    getEnrollmentApiKeysHandler
-  );
-
-  router.post(
-    {
-      path: ENROLLMENT_API_KEY_ROUTES.CREATE_PATTERN_DEPRECATED,
-      validate: PostEnrollmentAPIKeyRequestSchema,
-      fleetAuthz: {
-        fleet: { all: true },
+      deprecated: true,
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: { request: GetEnrollmentAPIKeysRequestSchema },
       },
-    },
-    postEnrollmentApiKeyHandler
-  );
+      getEnrollmentApiKeysHandler
+    );
+
+  router.versioned
+    .post({
+      path: ENROLLMENT_API_KEY_ROUTES.CREATE_PATTERN_DEPRECATED,
+      fleetAuthz: {
+        fleet: { allAgents: true },
+      },
+      deprecated: true,
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: { request: PostEnrollmentAPIKeyRequestSchema },
+      },
+      postEnrollmentApiKeyHandler
+    );
 };

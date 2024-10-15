@@ -7,29 +7,21 @@
 
 import { mount } from 'enzyme';
 import React from 'react';
-import { Router } from 'react-router-dom';
+import { Router } from '@kbn/shared-ux-router';
 import { waitFor } from '@testing-library/react';
-import '../../../common/mock/match_media';
 import type { Filter } from '@kbn/es-query';
-import { useSourcererDataView } from '../../../common/containers/sourcerer';
-import {
-  TestProviders,
-  mockGlobalState,
-  SUB_PLUGINS_REDUCER,
-  kibanaObservable,
-  createSecuritySolutionStorageMock,
-} from '../../../common/mock';
-import type { State } from '../../../common/store';
-import { createStore } from '../../../common/store';
+import { useSourcererDataView } from '../../../sourcerer/containers';
+import { TestProviders, createMockStore } from '../../../common/mock';
 import { inputsActions } from '../../../common/store/inputs';
 
 import { Network } from './network';
 import { NetworkRoutes } from './navigation';
 import { mockCasesContract } from '@kbn/cases-plugin/public/mocks';
-import { LandingPageComponent } from '../../../common/components/landing_page';
+
 import { InputsModelId } from '../../../common/store/inputs/constants';
 
-jest.mock('../../../common/containers/sourcerer');
+jest.mock('../../../common/components/empty_prompt');
+jest.mock('../../../sourcerer/containers');
 
 // Test will fail because we will to need to mock some core services to make the test work
 // For now let's forget about SiemSearchBar and QueryBar
@@ -39,9 +31,8 @@ jest.mock('../../../common/components/search_bar', () => ({
 jest.mock('../../../common/components/query_bar', () => ({
   QueryBar: () => null,
 }));
-jest.mock('../../../common/components/visualization_actions', () => ({
-  VisualizationActions: jest.fn(() => <div data-test-subj="mock-viz-actions" />),
-}));
+jest.mock('../../../common/components/visualization_actions/actions');
+jest.mock('../../../common/components/visualization_actions/lens_embeddable');
 
 type Action = 'PUSH' | 'POP' | 'REPLACE';
 const pop: Action = 'POP';
@@ -102,6 +93,9 @@ jest.mock('../../../common/lib/kibana', () => {
         cases: {
           ...mockCasesContract(),
         },
+        maps: {
+          Map: () => <div data-test-subj="MapPanel">{'mockMap'}</div>,
+        },
       },
     }),
     useToasts: jest.fn().mockReturnValue({
@@ -135,7 +129,7 @@ describe('Network page - rendering', () => {
       </TestProviders>
     );
 
-    expect(wrapper.find(LandingPageComponent).exists()).toBe(true);
+    expect(wrapper.find(`[data-test-subj="empty-prompt"]`).exists()).toBe(true);
   });
 
   test('it DOES NOT render getting started page when an index is available', async () => {
@@ -228,9 +222,7 @@ describe('Network page - rendering', () => {
       indicesExist: true,
       indexPattern: { fields: [], title: 'title' },
     });
-    const myState: State = mockGlobalState;
-    const { storage } = createSecuritySolutionStorageMock();
-    const myStore = createStore(myState, SUB_PLUGINS_REDUCER, kibanaObservable, storage);
+    const myStore = createMockStore();
     const wrapper = mount(
       <TestProviders store={myStore}>
         <Router history={mockHistory}>

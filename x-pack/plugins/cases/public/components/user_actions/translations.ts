@@ -101,3 +101,41 @@ export const UNSAVED_DRAFT_DESCRIPTION = i18n.translate(
     defaultMessage: 'You have unsaved edits for the description',
   }
 );
+
+export const SHOW_MORE = i18n.translate('xpack.cases.caseView.userActions.showMore', {
+  defaultMessage: 'Show more',
+});
+
+export const CREATE_CASE = i18n.translate('xpack.cases.caseView.userActions.createCase', {
+  defaultMessage: 'Created case',
+});
+
+export const CASE_INITIATED = i18n.translate('xpack.cases.caseView.userActions.caseInitiated', {
+  defaultMessage: 'Case initiated',
+});
+
+export const CASE_DELETED = i18n.translate('xpack.cases.caseView.userActions.caseDeleted', {
+  defaultMessage: `Case deleted`,
+});
+
+export const SEVERITY = i18n.translate('xpack.cases.caseView.userActions.severity', {
+  defaultMessage: 'Severity',
+});
+
+export const TITLE = i18n.translate('xpack.cases.caseView.userActions..title', {
+  defaultMessage: 'Title',
+});
+
+export const SETTING = i18n.translate('xpack.cases.caseView.userActions..settings', {
+  defaultMessage: 'Settings',
+});
+
+export const CUSTOM_FIELDS = i18n.translate('xpack.cases.caseView.userActions.customFields', {
+  defaultMessage: 'Custom Fields',
+});
+
+export const USER_ACTION_EDITED = (type: string) =>
+  i18n.translate('xpack.cases.caseView.userActions.edited', {
+    values: { type },
+    defaultMessage: `Edited "{type}"`,
+  });

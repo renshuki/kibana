@@ -17,8 +17,6 @@
     "@kbn/kibana-utils-plugin",
     "@kbn/ui-actions-plugin",
     "@kbn/licensing-plugin",
-    "@kbn/es-query",
-    "@kbn/test-jest-helpers",
     "@kbn/i18n",
     "@kbn/utility-types",
     "@kbn/i18n-react",
@@ -26,6 +24,7 @@
     "@kbn/rison",
     "@kbn/datemath",
     "@kbn/monaco",
+    "@kbn/presentation-publishing",
   ],
   "exclude": [
     "target/**/*",

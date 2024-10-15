@@ -20,13 +20,20 @@ const paramSchema = schema.object({
 export const deleteAlertRoute = (
   router: AlertingRouter,
   licenseState: ILicenseState,
-  usageCounter?: UsageCounter
+  usageCounter?: UsageCounter,
+  isServerless?: boolean
 ) => {
   router.delete(
     {
       path: `${LEGACY_BASE_ALERT_API_PATH}/alert/{id}`,
       validate: {
         params: paramSchema,
+      },
+      options: {
+        access: isServerless ? 'internal' : 'public',
+        summary: 'Delete an alert',
+        tags: ['oas-tag:alerting'],
+        deprecated: true,
       },
     },
     router.handleLegacyErrors(async function (context, req, res) {

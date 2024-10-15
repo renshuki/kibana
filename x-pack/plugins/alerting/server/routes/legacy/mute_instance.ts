@@ -24,13 +24,20 @@ const paramSchema = schema.object({
 export const muteAlertInstanceRoute = (
   router: AlertingRouter,
   licenseState: ILicenseState,
-  usageCounter?: UsageCounter
+  usageCounter?: UsageCounter,
+  isServerless?: boolean
 ) => {
   router.post(
     {
       path: `${LEGACY_BASE_ALERT_API_PATH}/alert/{alert_id}/alert_instance/{alert_instance_id}/_mute`,
       validate: {
         params: paramSchema,
+      },
+      options: {
+        access: isServerless ? 'internal' : 'public',
+        summary: 'Mute an alert',
+        tags: ['oas-tag:alerting'],
+        deprecated: true,
       },
     },
     router.handleLegacyErrors(async function (context, req, res) {

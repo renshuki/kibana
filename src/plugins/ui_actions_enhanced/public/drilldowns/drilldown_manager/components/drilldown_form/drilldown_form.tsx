@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React from 'react';
+import React, { FC, PropsWithChildren } from 'react';
 import { EuiFieldText, EuiForm, EuiFormRow, EuiSpacer, EuiCallOut, EuiCode } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { TriggerPicker, TriggerPickerProps } from '../trigger_picker';
@@ -43,7 +44,7 @@ export interface FormDrilldownWizardProps {
   disabled?: boolean;
 }
 
-export const DrilldownForm: React.FC<FormDrilldownWizardProps> = ({
+export const DrilldownForm: FC<PropsWithChildren<FormDrilldownWizardProps>> = ({
   name = '',
   onNameChange,
   triggers,
@@ -53,7 +54,7 @@ export const DrilldownForm: React.FC<FormDrilldownWizardProps> = ({
   if (!!triggers && !triggers.items.length) {
     // Below callout is not translated, because this message is only for developers.
     return (
-      <EuiCallOut title="Sorry, there was an error" color="danger" iconType="alert">
+      <EuiCallOut title="Sorry, there was an error" color="danger" iconType="warning">
         <p>
           No triggers provided in <EuiCode>triggers</EuiCode> prop.
         </p>

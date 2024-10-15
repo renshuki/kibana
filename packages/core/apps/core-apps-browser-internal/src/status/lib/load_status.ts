@@ -1,11 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+import numeral from '@elastic/numeral';
 import { i18n } from '@kbn/i18n';
 import type { HttpSetup } from '@kbn/core-http-browser';
 import type { NotificationsSetup } from '@kbn/core-notifications-browser';
@@ -58,15 +60,9 @@ function formatMetrics({ metrics }: StatusResponse): Metric[] {
 
   return [
     {
-      name: i18n.translate('core.statusPage.metricsTiles.columns.heapTotalHeader', {
-        defaultMessage: 'Heap total',
-      }),
-      value: metrics.process.memory.heap.size_limit,
-      type: 'byte',
-    },
-    {
       name: i18n.translate('core.statusPage.metricsTiles.columns.heapUsedHeader', {
-        defaultMessage: 'Heap used',
+        defaultMessage: 'Heap used out of {heapTotal}',
+        values: { heapTotal: numeral(metrics.process.memory.heap.size_limit).format('0.00 b') },
       }),
       value: metrics.process.memory.heap.used_in_bytes,
       type: 'byte',
@@ -76,6 +72,17 @@ function formatMetrics({ metrics }: StatusResponse): Metric[] {
         defaultMessage: 'Requests per second',
       }),
       value: (metrics.requests.total * 1000) / metrics.collection_interval_in_millis,
+      type: 'float',
+    },
+    {
+      name: i18n.translate('core.statusPage.metricsTiles.columns.utilizationHeader', {
+        defaultMessage: 'Utilization (active: {active} / idle: {idle})',
+        values: {
+          active: numeral(metrics.process.event_loop_utilization.active).format('0.00'),
+          idle: numeral(metrics.process.event_loop_utilization.idle).format('0.00'),
+        },
+      }),
+      value: metrics.process.event_loop_utilization.utilization,
       type: 'float',
     },
     {
@@ -183,7 +190,7 @@ export async function loadStatus({
   http,
   notifications,
 }: {
-  http: HttpSetup;
+  http: Pick<HttpSetup, 'get'>;
   notifications: NotificationsSetup;
 }) {
   let response: StatusResponse;

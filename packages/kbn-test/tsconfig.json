@@ -3,7 +3,10 @@
   "compilerOptions": {
     "outDir": "target/types",
     "stripInternal": true,
-    "types": ["jest", "node"]
+    "types": [
+      "jest",
+      "node"
+    ]
   },
   "include": [
     "**/*.ts",
@@ -31,5 +34,8 @@
     "@kbn/stdio-dev-helpers",
     "@kbn/babel-register",
     "@kbn/repo-packages",
+    "@kbn/core-saved-objects-api-server",
+    "@kbn/mock-idp-utils",
+    "@kbn/code-owners",
   ]
 }

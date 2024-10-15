@@ -23,16 +23,14 @@ import {
   useEuiTheme,
 } from '@elastic/eui';
 
-import { CoreStart, CoreTheme } from '@kbn/core/public';
+import { CoreStart } from '@kbn/core/public';
 
-import { Observable } from 'rxjs';
 import { getAppStyles } from '../../app.styles';
 import { BreadcrumbService } from '../services/breadcrumbs';
 
 interface CloudDataMigrationAppDeps {
   http: CoreStart['http'];
   breadcrumbService: BreadcrumbService;
-  theme$: Observable<CoreTheme>;
 }
 
 export const CloudDataMigrationApp = ({ http, breadcrumbService }: CloudDataMigrationAppDeps) => {
@@ -72,7 +70,7 @@ export const CloudDataMigrationApp = ({ http, breadcrumbService }: CloudDataMigr
             <h1>
               <FormattedMessage
                 id="xpack.cloudDataMigration.migrateToCloudTitle"
-                defaultMessage="Elastic Cloud helps your data work harder."
+                defaultMessage="Be faster and more efficient with Elastic Cloud"
               />
             </h1>
           </EuiTitle>
@@ -86,7 +84,7 @@ export const CloudDataMigrationApp = ({ http, breadcrumbService }: CloudDataMigr
                 <EuiText css={styles.listItemCss} size="s" color="subdued">
                   <FormattedMessage
                     id="xpack.cloudDataMigration.deployInSeconds.text"
-                    defaultMessage="Deploy Elastic quickly and scale up to petabytes of data with a click."
+                    defaultMessage="Deploy and scale a secure Elastic Stack in minutes"
                   />
                 </EuiText>
               }
@@ -97,8 +95,8 @@ export const CloudDataMigrationApp = ({ http, breadcrumbService }: CloudDataMigr
               label={
                 <EuiText css={styles.listItemCss} size="s" color="subdued">
                   <FormattedMessage
-                    id="xpack.cloudDataMigration.freeUpEngineering.text"
-                    defaultMessage="Streamline your Elastic workflow and free up your team. Manage multiple deployments from a single view and centralize your monitoring data."
+                    id="xpack.cloudDataMigration.monitorDeployments.text"
+                    defaultMessage="Monitor and manage multiple deployments from a single place"
                   />
                 </EuiText>
               }
@@ -109,8 +107,8 @@ export const CloudDataMigrationApp = ({ http, breadcrumbService }: CloudDataMigr
               label={
                 <EuiText css={styles.listItemCss} size="s" color="subdued">
                   <FormattedMessage
-                    id="xpack.cloudDataMigration.getHelpFromCreators.text"
-                    defaultMessage="Get support from the creators of Elastic to help you ingest all sorts of data and tune your performance."
+                    id="xpack.cloudDataMigration.upgrade.text"
+                    defaultMessage="Upgrade to newer versions much more easily"
                   />
                 </EuiText>
               }
@@ -121,8 +119,8 @@ export const CloudDataMigrationApp = ({ http, breadcrumbService }: CloudDataMigr
               label={
                 <EuiText css={styles.listItemCss} size="s" color="subdued">
                   <FormattedMessage
-                    id="xpack.cloudDataMigration.getInstantAccess.text"
-                    defaultMessage="Access the latest version of Elastic with features you want, like anomaly detection, searchable snapshots, advanced security, and so much more."
+                    id="xpack.cloudDataMigration.slaBackedSupport.text"
+                    defaultMessage="Get all of your questions answered with SLA-backed support"
                   />
                 </EuiText>
               }
@@ -141,7 +139,7 @@ export const CloudDataMigrationApp = ({ http, breadcrumbService }: CloudDataMigr
             >
               <FormattedMessage
                 id="xpack.cloudDataMigration.readInstructionsButtonLabel"
-                defaultMessage="Help me move"
+                defaultMessage="Move to Elastic Cloud"
               />
             </EuiButton>
           </div>

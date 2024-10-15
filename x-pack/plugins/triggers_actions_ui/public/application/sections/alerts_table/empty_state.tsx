@@ -16,7 +16,10 @@ import {
   EuiDataGridToolBarAdditionalControlsOptions,
 } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n-react';
+import { EsQuerySnapshot } from '@kbn/alerts-ui-shared';
 import icon from './assets/illustration_product_no_results_magnifying_glass.svg';
+import { InspectButton } from './toolbar/components/inspect';
+import { ALERTS_TABLE_TITLE } from './translations';
 
 const heights = {
   tall: 490,
@@ -30,14 +33,19 @@ const panelStyle = {
 export const EmptyState: React.FC<{
   height?: keyof typeof heights;
   controls?: EuiDataGridToolBarAdditionalControlsOptions;
-}> = ({ height = 'tall', controls }) => {
+  querySnapshot?: EsQuerySnapshot;
+  showInspectButton?: boolean;
+}> = ({ height = 'tall', controls, querySnapshot, showInspectButton }) => {
   return (
     <EuiPanel color="subdued" data-test-subj="alertsStateTableEmptyState">
-      {controls?.right && (
-        <EuiFlexGroup alignItems="flexEnd" justifyContent="flexEnd">
-          <EuiFlexItem grow={false}>{controls.right}</EuiFlexItem>
-        </EuiFlexGroup>
-      )}
+      <EuiFlexGroup alignItems="flexEnd" justifyContent="flexEnd">
+        {querySnapshot && showInspectButton && (
+          <EuiFlexItem grow={false}>
+            <InspectButton querySnapshot={querySnapshot} inspectTitle={ALERTS_TABLE_TITLE} />
+          </EuiFlexItem>
+        )}
+        {controls?.right && <EuiFlexItem grow={false}>{controls.right}</EuiFlexItem>}
+      </EuiFlexGroup>
       <EuiFlexGroup style={{ height: heights[height] }} alignItems="center" justifyContent="center">
         <EuiFlexItem grow={false}>
           <EuiPanel hasBorder={true} style={panelStyle}>

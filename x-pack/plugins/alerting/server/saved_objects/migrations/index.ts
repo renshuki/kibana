@@ -16,6 +16,7 @@ import { EncryptedSavedObjectsPluginSetup } from '@kbn/encrypted-saved-objects-p
 import { MigrateFunctionsObject, MigrateFunction } from '@kbn/kibana-utils-plugin/common';
 import { mergeSavedObjectMigrationMaps } from '@kbn/core/server';
 import { isSerializedSearchSource, SerializedSearchSourceFields } from '@kbn/data-plugin/common';
+import { Serializable } from '@kbn/utility-types';
 import { RawRule } from '../../types';
 import { getMigrations7100 } from './7.10';
 import { getMigrations7110, getMigrations7112 } from './7.11';
@@ -30,6 +31,7 @@ import { getMigrations841 } from './8.4';
 import { getMigrations850 } from './8.5';
 import { getMigrations860 } from './8.6';
 import { getMigrations870 } from './8.7';
+import { getMigrations880 } from './8.8';
 import { AlertLogMeta, AlertMigration } from './types';
 import { MINIMUM_SS_MIGRATION_VERSION } from './constants';
 import { createEsoMigration, isEsQueryRuleType, pipeMigrations } from './utils';
@@ -79,6 +81,7 @@ export function getMigrations(
       '8.5.0': executeMigrationWithErrorHandling(getMigrations850(encryptedSavedObjects), '8.5.0'),
       '8.6.0': executeMigrationWithErrorHandling(getMigrations860(encryptedSavedObjects), '8.6.0'),
       '8.7.0': executeMigrationWithErrorHandling(getMigrations870(encryptedSavedObjects), '8.7.0'),
+      '8.8.0': executeMigrationWithErrorHandling(getMigrations880(encryptedSavedObjects), '8.8.0'),
     },
     getSearchSourceMigrations(encryptedSavedObjects, searchSourceMigrations)
   );
@@ -109,8 +112,7 @@ function mapSearchSourceMigrationFunc(
   migrateSerializedSearchSourceFields: MigrateFunction<SerializedSearchSourceFields>
 ): MigrateFunction {
   return (doc) => {
-    const _doc = doc as { attributes: RawRule };
-
+    const _doc = doc as { attributes: { params: { searchConfiguration: Serializable } } };
     const serializedSearchSource = _doc.attributes.params.searchConfiguration;
 
     if (isSerializedSearchSource(serializedSearchSource)) {

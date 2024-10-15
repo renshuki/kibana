@@ -7,7 +7,7 @@
 import React, { ReactNode, useCallback, useMemo } from 'react';
 import { EuiTextColor } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
-import { Process } from '../../../common/types/process_tree';
+import type { Process } from '../../../common';
 import { DetailPanelAccordion } from '../detail_panel_accordion';
 import { DetailPanelCopy } from '../detail_panel_copy';
 import { DetailPanelDescriptionList } from '../detail_panel_description_list';
@@ -18,6 +18,7 @@ import { useStyles } from './styles';
 
 interface DetailPanelProcessTabDeps {
   selectedProcess: Process | null;
+  index: string;
 }
 
 type ListItems = Array<{
@@ -70,10 +71,13 @@ const LEADER_FIELD_PREFIX = [
 /**
  * Detail panel in the session view.
  */
-export const DetailPanelProcessTab = ({ selectedProcess }: DetailPanelProcessTabDeps) => {
+export const DetailPanelProcessTab = ({ selectedProcess, index }: DetailPanelProcessTabDeps) => {
   const styles = useStyles();
 
-  const processDetail = useMemo(() => getDetailPanelProcess(selectedProcess), [selectedProcess]);
+  const processDetail = useMemo(
+    () => getDetailPanelProcess(selectedProcess, index),
+    [selectedProcess, index]
+  );
   const renderExecs = useCallback(
     (executable: string[][]) =>
       executable.map((execTuple, idx) => {
@@ -111,7 +115,9 @@ export const DetailPanelProcessTab = ({ selectedProcess }: DetailPanelProcessTab
       args,
       executable,
       pid,
+      userId,
       userName,
+      groupId,
       groupName,
       entryMetaSourceIp,
     } = leader;
@@ -228,6 +234,17 @@ export const DetailPanelProcessTab = ({ selectedProcess }: DetailPanelProcessTab
         ),
       },
       {
+        title: <DetailPanelListItem>user.id</DetailPanelListItem>,
+        description: (
+          <DetailPanelCopy
+            textToCopy={`${LEADER_FIELD_PREFIX[idx]}.user.id: "${userId}"`}
+            tooltipContent={userId}
+          >
+            {userId}
+          </DetailPanelCopy>
+        ),
+      },
+      {
         title: <DetailPanelListItem>user.name</DetailPanelListItem>,
         description: (
           <DetailPanelCopy
@@ -235,6 +252,17 @@ export const DetailPanelProcessTab = ({ selectedProcess }: DetailPanelProcessTab
             tooltipContent={userName}
           >
             {userName}
+          </DetailPanelCopy>
+        ),
+      },
+      {
+        title: <DetailPanelListItem>group.id</DetailPanelListItem>,
+        description: (
+          <DetailPanelCopy
+            textToCopy={`${LEADER_FIELD_PREFIX[idx]}.group.id: "${groupId}"`}
+            tooltipContent={groupId}
+          >
+            {groupId}
           </DetailPanelCopy>
         ),
       },
@@ -296,7 +324,9 @@ export const DetailPanelProcessTab = ({ selectedProcess }: DetailPanelProcessTab
     pid,
     workingDirectory,
     interactive,
+    userId,
     userName,
+    groupId,
     groupName,
     args,
   } = processDetail;
@@ -417,6 +447,17 @@ export const DetailPanelProcessTab = ({ selectedProcess }: DetailPanelProcessTab
             ),
           },
           {
+            title: <DetailPanelListItem>user.id</DetailPanelListItem>,
+            description: (
+              <DetailPanelCopy
+                textToCopy={`${PROCESS_FIELD_PREFIX}.user.id: "${userId}"`}
+                tooltipContent={userId}
+              >
+                {userId}
+              </DetailPanelCopy>
+            ),
+          },
+          {
             title: <DetailPanelListItem>user.name</DetailPanelListItem>,
             description: (
               <DetailPanelCopy
@@ -424,6 +465,17 @@ export const DetailPanelProcessTab = ({ selectedProcess }: DetailPanelProcessTab
                 tooltipContent={userName}
               >
                 {userName}
+              </DetailPanelCopy>
+            ),
+          },
+          {
+            title: <DetailPanelListItem>group.id</DetailPanelListItem>,
+            description: (
+              <DetailPanelCopy
+                textToCopy={`${PROCESS_FIELD_PREFIX}.group.id: "${groupId}"`}
+                tooltipContent={groupId}
+              >
+                {groupId}
               </DetailPanelCopy>
             ),
           },

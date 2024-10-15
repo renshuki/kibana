@@ -5,18 +5,14 @@
  * 2.0.
  */
 
-import React, { FC, ReactNode, useMemo } from 'react';
-import {
-  EuiBasicTable,
-  EuiFlexItem,
-  EuiText,
-  HorizontalAlignment,
-  LEFT_ALIGNMENT,
-  RIGHT_ALIGNMENT,
-} from '@elastic/eui';
+import type { FC, ReactNode } from 'react';
+import React, { useMemo } from 'react';
+import type { HorizontalAlignment } from '@elastic/eui';
+import { EuiBasicTable, EuiFlexItem, EuiText, LEFT_ALIGNMENT, RIGHT_ALIGNMENT } from '@elastic/eui';
 
 import { FormattedMessage } from '@kbn/i18n-react';
 import { i18n } from '@kbn/i18n';
+import { isDefined } from '@kbn/ml-is-defined';
 import type { FieldDataRowProps } from '../../types/field_data_row';
 import { kibanaFieldFormat, numberAsOrdinal } from '../../../utils';
 import { MetricDistributionChart, buildChartDataFromStats } from '../metric_distribution_chart';
@@ -58,16 +54,20 @@ export const NumberContent: FC<FieldDataRowProps> = ({ config, onAddFilter }) =>
       ),
       value: kibanaFieldFormat(min, fieldFormat),
     },
-    {
-      function: 'median',
-      display: (
-        <FormattedMessage
-          id="xpack.dataVisualizer.dataGrid.fieldExpandedRow.numberContent.medianLabel"
-          defaultMessage="median"
-        />
-      ),
-      value: kibanaFieldFormat(median, fieldFormat),
-    },
+    ...(isDefined(median)
+      ? [
+          {
+            function: 'median',
+            display: (
+              <FormattedMessage
+                id="xpack.dataVisualizer.dataGrid.fieldExpandedRow.numberContent.medianLabel"
+                defaultMessage="median"
+              />
+            ),
+            value: kibanaFieldFormat(median, fieldFormat),
+          },
+        ]
+      : []),
     {
       function: 'max',
       display: (

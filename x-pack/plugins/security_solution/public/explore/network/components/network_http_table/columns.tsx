@@ -38,7 +38,6 @@ export const getNetworkHttpColumns = (tableId: string): NetworkHttpColumns => [
             fieldName: 'http.request.method',
             values: methods,
             idPrefix: escapeDataProviderId(`${tableId}-table-methods-${path}`),
-            fieldType: 'keyword',
             displayCount: 3,
           })
         : getEmptyTagValue();
@@ -52,7 +51,6 @@ export const getNetworkHttpColumns = (tableId: string): NetworkHttpColumns => [
             values: domains,
             fieldName: 'url.domain',
             idPrefix: escapeDataProviderId(`${tableId}-table-domains-${path}`),
-            fieldType: 'keyword',
           })
         : getEmptyTagValue(),
   },
@@ -65,7 +63,6 @@ export const getNetworkHttpColumns = (tableId: string): NetworkHttpColumns => [
             values: [path],
             fieldName: 'url.path',
             idPrefix: escapeDataProviderId(`${tableId}-table-path-${path}`),
-            fieldType: 'keyword',
           })
         : getEmptyTagValue(),
   },
@@ -77,7 +74,6 @@ export const getNetworkHttpColumns = (tableId: string): NetworkHttpColumns => [
             values: statuses,
             fieldName: 'http.response.status_code',
             idPrefix: escapeDataProviderId(`${tableId}-table-statuses-${path}`),
-            fieldType: 'keyword',
             displayCount: 3,
           })
         : getEmptyTagValue(),
@@ -90,7 +86,6 @@ export const getNetworkHttpColumns = (tableId: string): NetworkHttpColumns => [
             values: [lastHost],
             fieldName: 'host.name',
             idPrefix: escapeDataProviderId(`${tableId}-table-lastHost-${path}`),
-            fieldType: 'keyword',
           })
         : getEmptyTagValue(),
   },
@@ -102,7 +97,6 @@ export const getNetworkHttpColumns = (tableId: string): NetworkHttpColumns => [
             values: [lastSourceIp],
             fieldName: 'source.ip',
             idPrefix: escapeDataProviderId(`${tableId}-table-lastSourceIp-${path}`),
-            fieldType: 'keyword',
             render: () => <NetworkDetailsLink ip={lastSourceIp} />,
           })
         : getEmptyTagValue(),

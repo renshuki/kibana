@@ -1,62 +1,70 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { batch } from 'react-redux';
 import { Dispatch, SetStateAction, useCallback, useMemo, useState } from 'react';
+import { batch } from 'react-redux';
 
 import { ViewMode } from '@kbn/embeddable-plugin/public';
-import { TopNavMenuData } from '@kbn/navigation-plugin/public';
+import type { TopNavMenuData } from '@kbn/navigation-plugin/public';
+import useMountedState from 'react-use/lib/useMountedState';
 
-import { DashboardRedirect } from '../types';
+import { useBatchedPublishingSubjects } from '@kbn/presentation-publishing';
 import { UI_SETTINGS } from '../../../common';
+import { useDashboardApi } from '../../dashboard_api/use_dashboard_api';
+import { CHANGE_CHECK_DEBOUNCE } from '../../dashboard_constants';
+import { openSettingsFlyout } from '../../dashboard_container/embeddable/api';
+import { confirmDiscardUnsavedChanges } from '../../dashboard_listing/confirm_overlays';
+import { getDashboardBackupService } from '../../services/dashboard_backup_service';
+import { SaveDashboardReturn } from '../../services/dashboard_content_management_service/types';
+import { coreServices, shareService } from '../../services/kibana_services';
+import { getDashboardCapabilities } from '../../utils/get_dashboard_capabilities';
 import { topNavStrings } from '../_dashboard_app_strings';
 import { ShowShareModal } from './share/show_share_modal';
-import { pluginServices } from '../../services/plugin_services';
-import { CHANGE_CHECK_DEBOUNCE } from '../../dashboard_constants';
-import { SaveDashboardReturn } from '../../services/dashboard_saved_object/types';
-import { useDashboardContainerContext } from '../../dashboard_container/dashboard_container_renderer';
-import { confirmDiscardUnsavedChanges } from '../listing/confirm_overlays';
 
 export const useDashboardMenuItems = ({
-  redirectTo,
   isLabsShown,
   setIsLabsShown,
+  maybeRedirect,
+  showResetChange,
 }: {
-  redirectTo: DashboardRedirect;
   isLabsShown: boolean;
   setIsLabsShown: Dispatch<SetStateAction<boolean>>;
+  maybeRedirect: (result?: SaveDashboardReturn) => void;
+  showResetChange?: boolean;
 }) => {
-  const [isSaveInProgress, setIsSaveInProgress] = useState(false);
+  const isMounted = useMountedState();
 
-  /**
-   * Unpack dashboard services
-   */
-  const {
-    share,
-    settings: { uiSettings },
-    dashboardCapabilities: { showWriteControls },
-  } = pluginServices.getServices();
-  const isLabsEnabled = uiSettings.get(UI_SETTINGS.ENABLE_LABS_UI);
+  const [isSaveInProgress, setIsSaveInProgress] = useState(false);
 
   /**
    * Unpack dashboard state from redux
    */
-  const {
-    useEmbeddableDispatch,
-    useEmbeddableSelector: select,
-    embeddableInstance: dashboardContainer,
-    actions: { setViewMode, setFullScreenMode },
-  } = useDashboardContainerContext();
-  const dispatch = useEmbeddableDispatch();
+  const dashboardApi = useDashboardApi();
 
-  const hasUnsavedChanges = select((state) => state.componentState.hasUnsavedChanges);
-  const lastSavedId = select((state) => state.componentState.lastSavedId);
-  const dashboardTitle = select((state) => state.explicitInput.title);
+  const [
+    dashboardTitle,
+    hasOverlays,
+    hasRunMigrations,
+    hasUnsavedChanges,
+    lastSavedId,
+    managed,
+    viewMode,
+  ] = useBatchedPublishingSubjects(
+    dashboardApi.panelTitle,
+    dashboardApi.hasOverlays$,
+    dashboardApi.hasRunMigrations$,
+    dashboardApi.hasUnsavedChanges$,
+    dashboardApi.savedObjectId,
+    dashboardApi.managed$,
+    dashboardApi.viewMode
+  );
+  const disableTopNav = isSaveInProgress || hasOverlays;
 
   /**
    * Show the Dashboard app's share menu
@@ -68,25 +76,10 @@ export const useDashboardMenuItems = ({
         anchorElement,
         savedObjectId: lastSavedId,
         isDirty: Boolean(hasUnsavedChanges),
+        getPanelsState: () => dashboardApi.panels$.value,
       });
     },
-    [dashboardTitle, hasUnsavedChanges, lastSavedId]
-  );
-
-  const maybeRedirect = useCallback(
-    (result?: SaveDashboardReturn) => {
-      if (!result) return;
-      const { redirectRequired, id } = result;
-      if (redirectRequired) {
-        redirectTo({
-          id,
-          editMode: true,
-          useReplace: true,
-          destination: 'dashboard',
-        });
-      }
-    },
-    [redirectTo]
+    [dashboardTitle, hasUnsavedChanges, lastSavedId, dashboardApi]
   );
 
   /**
@@ -94,52 +87,63 @@ export const useDashboardMenuItems = ({
    */
   const quickSaveDashboard = useCallback(() => {
     setIsSaveInProgress(true);
-    dashboardContainer
+    dashboardApi
       .runQuickSave()
       .then(() => setTimeout(() => setIsSaveInProgress(false), CHANGE_CHECK_DEBOUNCE));
-  }, [dashboardContainer]);
+  }, [dashboardApi]);
 
   /**
-   * Show the dashboard's save modal
+   * initiate interactive dashboard copy action
    */
-  const saveDashboardAs = useCallback(() => {
-    dashboardContainer.runSaveAs().then((result) => maybeRedirect(result));
-  }, [maybeRedirect, dashboardContainer]);
+  const dashboardInteractiveSave = useCallback(() => {
+    dashboardApi.runInteractiveSave(viewMode).then((result) => maybeRedirect(result));
+  }, [maybeRedirect, dashboardApi, viewMode]);
 
   /**
-   * Clone the dashboard
+   * Show the dashboard's "Confirm reset changes" modal. If confirmed:
+   * (1) reset the dashboard to the last saved state, and
+   * (2) if `switchToViewMode` is `true`, set the dashboard to view mode.
    */
-  const clone = useCallback(() => {
-    dashboardContainer.runClone().then((result) => maybeRedirect(result));
-  }, [maybeRedirect, dashboardContainer]);
-
-  /**
-   * Returns to view mode. If the dashboard has unsaved changes shows a warning and resets to last saved state.
-   */
-  const returnToViewMode = useCallback(() => {
-    dashboardContainer.clearOverlays();
-    if (hasUnsavedChanges) {
+  const [isResetting, setIsResetting] = useState(false);
+  const resetChanges = useCallback(
+    (switchToViewMode: boolean = false) => {
+      dashboardApi.clearOverlays();
+      const switchModes = switchToViewMode
+        ? () => {
+            dashboardApi.setViewMode(ViewMode.VIEW);
+            getDashboardBackupService().storeViewMode(ViewMode.VIEW);
+          }
+        : undefined;
+      if (!hasUnsavedChanges) {
+        switchModes?.();
+        return;
+      }
       confirmDiscardUnsavedChanges(() => {
-        batch(() => {
-          dashboardContainer.resetToLastSavedState();
-          dispatch(setViewMode(ViewMode.VIEW));
+        batch(async () => {
+          setIsResetting(true);
+          await dashboardApi.asyncResetToLastSavedState();
+          if (isMounted()) {
+            setIsResetting(false);
+            switchModes?.();
+          }
         });
-      });
-      return;
-    }
-    dispatch(setViewMode(ViewMode.VIEW));
-  }, [dashboardContainer, dispatch, hasUnsavedChanges, setViewMode]);
+      }, viewMode as ViewMode);
+    },
+    [dashboardApi, hasUnsavedChanges, viewMode, isMounted]
+  );
 
   /**
    * Register all of the top nav configs that can be used by dashboard.
    */
+
   const menuItems = useMemo(() => {
     return {
       fullScreen: {
         ...topNavStrings.fullScreen,
         id: 'full-screen',
         testId: 'dashboardFullScreenMode',
-        run: () => dispatch(setFullScreenMode(true)),
+        run: () => dashboardApi.setFullScreenMode(true),
+        disableButton: disableTopNav,
       } as TopNavMenuData,
 
       labs: {
@@ -156,7 +160,12 @@ export const useDashboardMenuItems = ({
         iconType: 'pencil',
         testId: 'dashboardEditMode',
         className: 'eui-hideFor--s eui-hideFor--xs', // hide for small screens - editing doesn't work in mobile mode.
-        run: () => dispatch(setViewMode(ViewMode.EDIT)),
+        run: () => {
+          getDashboardBackupService().storeViewMode(ViewMode.EDIT);
+          dashboardApi.setViewMode(ViewMode.EDIT);
+          dashboardApi.clearOverlays();
+        },
+        disableButton: disableTopNav,
       } as TopNavMenuData,
 
       quickSave: {
@@ -166,91 +175,135 @@ export const useDashboardMenuItems = ({
         emphasize: true,
         isLoading: isSaveInProgress,
         testId: 'dashboardQuickSaveMenuItem',
-        disableButton: !hasUnsavedChanges || isSaveInProgress,
+        disableButton: disableTopNav || !(hasRunMigrations || hasUnsavedChanges),
         run: () => quickSaveDashboard(),
       } as TopNavMenuData,
 
-      saveAs: {
-        description: topNavStrings.saveAs.description,
-        disableButton: isSaveInProgress,
-        id: 'save',
+      interactiveSave: {
+        disableButton: disableTopNav,
         emphasize: !Boolean(lastSavedId),
-        testId: 'dashboardSaveMenuItem',
-        iconType: Boolean(lastSavedId) ? undefined : 'save',
-        label: Boolean(lastSavedId) ? topNavStrings.saveAs.label : topNavStrings.quickSave.label,
-        run: () => saveDashboardAs(),
+        id: 'interactive-save',
+        testId: 'dashboardInteractiveSaveMenuItem',
+        run: dashboardInteractiveSave,
+        label:
+          viewMode === ViewMode.VIEW
+            ? topNavStrings.viewModeInteractiveSave.label
+            : Boolean(lastSavedId)
+            ? topNavStrings.editModeInteractiveSave.label
+            : topNavStrings.quickSave.label,
+        description:
+          viewMode === ViewMode.VIEW
+            ? topNavStrings.viewModeInteractiveSave.description
+            : topNavStrings.editModeInteractiveSave.description,
       } as TopNavMenuData,
 
       switchToViewMode: {
         ...topNavStrings.switchToViewMode,
         id: 'cancel',
-        disableButton: isSaveInProgress || !lastSavedId,
+        disableButton: disableTopNav || !lastSavedId || isResetting,
+        isLoading: isResetting,
         testId: 'dashboardViewOnlyMode',
-        run: () => returnToViewMode(),
+        run: () => resetChanges(true),
       } as TopNavMenuData,
 
       share: {
         ...topNavStrings.share,
         id: 'share',
         testId: 'shareTopNavButton',
-        disableButton: isSaveInProgress,
+        disableButton: disableTopNav,
         run: showShare,
       } as TopNavMenuData,
 
-      options: {
-        ...topNavStrings.options,
-        id: 'options',
-        testId: 'dashboardOptionsButton',
-        disableButton: isSaveInProgress,
-        run: (anchor) => dashboardContainer.showOptions(anchor),
-      } as TopNavMenuData,
-
-      clone: {
-        ...topNavStrings.clone,
-        id: 'clone',
-        testId: 'dashboardClone',
-        disableButton: isSaveInProgress,
-        run: () => clone(),
-      } as TopNavMenuData,
+      settings: {
+        ...topNavStrings.settings,
+        id: 'settings',
+        testId: 'dashboardSettingsButton',
+        disableButton: disableTopNav,
+        run: () => openSettingsFlyout(dashboardApi),
+      },
     };
   }, [
-    quickSaveDashboard,
-    dashboardContainer,
-    hasUnsavedChanges,
-    setFullScreenMode,
+    disableTopNav,
     isSaveInProgress,
-    returnToViewMode,
-    saveDashboardAs,
-    setIsLabsShown,
+    hasRunMigrations,
+    hasUnsavedChanges,
     lastSavedId,
-    setViewMode,
-    isLabsShown,
+    dashboardInteractiveSave,
+    viewMode,
     showShare,
-    dispatch,
-    clone,
+    dashboardApi,
+    setIsLabsShown,
+    isLabsShown,
+    quickSaveDashboard,
+    resetChanges,
+    isResetting,
+  ]);
+
+  const resetChangesMenuItem = useMemo(() => {
+    return {
+      ...topNavStrings.resetChanges,
+      id: 'reset',
+      testId: 'dashboardDiscardChangesMenuItem',
+      disableButton:
+        isResetting ||
+        !hasUnsavedChanges ||
+        hasOverlays ||
+        (viewMode === ViewMode.EDIT && (isSaveInProgress || !lastSavedId)),
+      isLoading: isResetting,
+      run: () => resetChanges(),
+    };
+  }, [
+    hasOverlays,
+    lastSavedId,
+    resetChanges,
+    viewMode,
+    isSaveInProgress,
+    hasUnsavedChanges,
+    isResetting,
   ]);
 
   /**
    * Build ordered menus for view and edit mode.
    */
+  const isLabsEnabled = useMemo(() => coreServices.uiSettings.get(UI_SETTINGS.ENABLE_LABS_UI), []);
+
   const viewModeTopNavConfig = useMemo(() => {
+    const { showWriteControls } = getDashboardCapabilities();
+
     const labsMenuItem = isLabsEnabled ? [menuItems.labs] : [];
-    const shareMenuItem = share ? [menuItems.share] : [];
-    const writePermissionsMenuItems = showWriteControls ? [menuItems.clone, menuItems.edit] : [];
-    return [...labsMenuItem, menuItems.fullScreen, ...shareMenuItem, ...writePermissionsMenuItems];
-  }, [menuItems, share, showWriteControls, isLabsEnabled]);
+    const shareMenuItem = shareService ? [menuItems.share] : [];
+    const duplicateMenuItem = showWriteControls ? [menuItems.interactiveSave] : [];
+    const editMenuItem = showWriteControls && !managed ? [menuItems.edit] : [];
+    const mayberesetChangesMenuItem = showResetChange ? [resetChangesMenuItem] : [];
+
+    return [
+      ...labsMenuItem,
+      menuItems.fullScreen,
+      ...shareMenuItem,
+      ...duplicateMenuItem,
+      ...mayberesetChangesMenuItem,
+      ...editMenuItem,
+    ];
+  }, [isLabsEnabled, menuItems, managed, showResetChange, resetChangesMenuItem]);
 
   const editModeTopNavConfig = useMemo(() => {
     const labsMenuItem = isLabsEnabled ? [menuItems.labs] : [];
-    const shareMenuItem = share ? [menuItems.share] : [];
+    const shareMenuItem = shareService ? [menuItems.share] : [];
     const editModeItems: TopNavMenuData[] = [];
+
     if (lastSavedId) {
-      editModeItems.push(menuItems.saveAs, menuItems.switchToViewMode, menuItems.quickSave);
+      editModeItems.push(menuItems.interactiveSave, menuItems.switchToViewMode);
+
+      if (showResetChange) {
+        editModeItems.push(resetChangesMenuItem);
+      }
+
+      editModeItems.push(menuItems.quickSave);
     } else {
-      editModeItems.push(menuItems.switchToViewMode, menuItems.saveAs);
+      editModeItems.push(menuItems.switchToViewMode, menuItems.interactiveSave);
     }
-    return [...labsMenuItem, menuItems.options, ...shareMenuItem, ...editModeItems];
-  }, [lastSavedId, menuItems, share, isLabsEnabled]);
+    return [...labsMenuItem, menuItems.settings, ...shareMenuItem, ...editModeItems];
+  }, [isLabsEnabled, menuItems, lastSavedId, showResetChange, resetChangesMenuItem]);
 
   return { viewModeTopNavConfig, editModeTopNavConfig };
 };

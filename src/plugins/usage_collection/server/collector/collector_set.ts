@@ -1,10 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import { withTimeout } from '@kbn/std';
 import { snakeCase } from 'lodash';
 
@@ -16,8 +18,8 @@ import type {
   ExecutionContextSetup,
 } from '@kbn/core/server';
 import { Collector } from './collector';
-import type { ICollector, CollectorOptions, CollectorFetchContext } from './types';
-import { UsageCollector, UsageCollectorOptions } from './usage_collector';
+import type { ICollector, CollectorOptions, CollectorFetchContext, ICollectorSet } from './types';
+import { UsageCollector, type UsageCollectorOptions } from './usage_collector';
 import { DEFAULT_MAXIMUM_WAIT_TIME_FOR_ALL_COLLECTORS_IN_S } from '../../common/constants';
 import { createPerformanceObsHook, perfTimerify } from './measure_duration';
 import { usageCollectorsStatsCollector } from './collector_stats';
@@ -31,6 +33,12 @@ interface CollectorWithStatus {
   collector: AnyCollector;
 }
 
+interface FetchCollectorOutput {
+  result?: unknown;
+  status: 'failed' | 'success';
+  type: string;
+}
+
 export interface CollectorSetConfig {
   logger: Logger;
   executionContext: ExecutionContextSetup;
@@ -38,11 +46,12 @@ export interface CollectorSetConfig {
   collectors?: AnyCollector[];
 }
 
-export class CollectorSet {
+export class CollectorSet implements ICollectorSet {
   private readonly logger: Logger;
   private readonly executionContext: ExecutionContextSetup;
   private readonly maximumWaitTimeForAllCollectorsInS: number;
   private readonly collectors: Map<string, AnyCollector>;
+  private readonly fetchingCollectors = new WeakMap<AnyCollector, Promise<FetchCollectorOutput>>();
   constructor({
     logger,
     executionContext,
@@ -190,11 +199,7 @@ export class CollectorSet {
   private fetchCollector = async (
     collector: AnyCollector,
     context: CollectorFetchContext
-  ): Promise<{
-    result?: unknown;
-    status: 'failed' | 'success';
-    type: string;
-  }> => {
+  ): Promise<FetchCollectorOutput> => {
     const { type } = collector;
     this.logger.debug(`Fetching data from ${type} collector`);
     const executionContext: KibanaExecutionContext = {
@@ -231,12 +236,22 @@ export class CollectorSet {
 
     const fetchExecutions = await Promise.all(
       readyCollectors.map(async (collector) => {
-        const wrappedPromise = perfTimerify(
-          `fetch_${collector.type}`,
-          async () => await this.fetchCollector(collector, context)
-        );
+        // If the collector is processing from a concurrent request, reuse it.
+        let wrappedPromise = this.fetchingCollectors.get(collector);
 
-        return await wrappedPromise();
+        if (!wrappedPromise) {
+          // Otherwise, call it
+          wrappedPromise = perfTimerify(
+            `fetch_${collector.type}`,
+            async () => await this.fetchCollector(collector, context)
+          )();
+        }
+
+        this.fetchingCollectors.set(collector, wrappedPromise);
+
+        wrappedPromise.finally(() => this.fetchingCollectors.delete(collector));
+
+        return await wrappedPromise;
       })
     );
     const durationMarks = getMarks();

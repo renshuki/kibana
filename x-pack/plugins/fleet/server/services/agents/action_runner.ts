@@ -16,6 +16,7 @@ import moment from 'moment';
 import type { Agent } from '../../types';
 import { appContextService } from '..';
 import { SO_SEARCH_LIMIT } from '../../../common/constants';
+import { agentsKueryNamespaceFilter } from '../spaces/agent_namespaces';
 
 import { getAgentActions } from './actions';
 import { closePointInTime, getAgentsByKuery } from './crud';
@@ -29,6 +30,7 @@ export interface ActionParams {
   batchSize?: number;
   total?: number;
   actionId?: string;
+  spaceId?: string;
   // additional parameters specific to an action e.g. reassign to new policy id
   [key: string]: any;
 }
@@ -83,12 +85,12 @@ export abstract class ActionRunner {
     // create task to check result with some delay, this runs in case of kibana crash too
     this.checkTaskId = await this.createCheckResultTask();
 
-    withSpan({ name: this.getActionType(), type: 'action' }, () =>
+    await withSpan({ name: this.getActionType(), type: 'action' }, () =>
       this.processAgentsInBatches()
-        .then(() => {
+        .then(async () => {
           if (this.checkTaskId) {
             // no need for check task, action succeeded
-            this.bulkActionsResolver!.removeIfExists(this.checkTaskId);
+            await this.bulkActionsResolver!.removeIfExists(this.checkTaskId);
           }
         })
         .catch(async (error) => {
@@ -166,10 +168,17 @@ export abstract class ActionRunner {
       try {
         const actions = await getAgentActions(this.esClient, this.actionParams!.actionId!);
 
-        // skipping batch if there is already an action document present with last agent ids
         for (const action of actions) {
           if (action.agents?.[0] === agents[0].id) {
-            return { actionId: this.actionParams.actionId! };
+            if (action.type !== 'UPDATE_TAGS') {
+              appContextService
+                .getLogger()
+                .debug(
+                  `skipping batch as there is already an action document present with last agent ids, actionId: ${this
+                    .actionParams!.actionId!}`
+                );
+              return { actionId: this.actionParams.actionId! };
+            }
           }
         }
       } catch (error) {
@@ -186,15 +195,23 @@ export abstract class ActionRunner {
 
     const perPage = this.actionParams.batchSize ?? SO_SEARCH_LIMIT;
 
-    const getAgents = () =>
-      getAgentsByKuery(this.esClient, this.soClient, {
-        kuery: this.actionParams.kuery,
+    appContextService.getLogger().debug('kuery: ' + this.actionParams.kuery);
+
+    const getAgents = async () => {
+      const namespaceFilter = await agentsKueryNamespaceFilter(this.actionParams.spaceId);
+      const kuery = namespaceFilter
+        ? `${namespaceFilter} AND ${this.actionParams.kuery}`
+        : this.actionParams.kuery;
+
+      return getAgentsByKuery(this.esClient, this.soClient, {
+        kuery,
         showInactive: this.actionParams.showInactive ?? false,
         page: 1,
         perPage,
         pitId,
         searchAfter: this.retryParams.searchAfter,
       });
+    };
 
     const res = await getAgents();
 
@@ -224,7 +241,7 @@ export abstract class ActionRunner {
       allAgentsProcessed += currentAgents.length;
       if (this.checkTaskId) {
         // updating check task with latest checkpoint (this.retryParams.searchAfter)
-        this.bulkActionsResolver?.removeIfExists(this.checkTaskId);
+        await this.bulkActionsResolver?.removeIfExists(this.checkTaskId);
         this.checkTaskId = await this.createCheckResultTask();
       }
     }

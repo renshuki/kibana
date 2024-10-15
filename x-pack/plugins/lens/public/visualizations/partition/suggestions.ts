@@ -12,17 +12,18 @@ import type {
   TableSuggestionColumn,
   VisualizationSuggestion,
 } from '../../types';
+import { PieVisualizationState } from '../../../common/types';
 import {
   CategoryDisplay,
   LegendDisplay,
   NumberDisplay,
   PieChartTypes,
-  PieVisualizationState,
-} from '../../../common';
+} from '../../../common/constants';
 import { isPartitionShape } from '../../../common/visualizations';
 import type { PieChartType } from '../../../common/types';
 import { PartitionChartsMeta } from './partition_charts_meta';
 import { layerTypes } from '../..';
+import { getColorMappingDefaults } from '../../utils';
 
 function hasIntervalScale(columns: TableSuggestionColumn[]) {
   return columns.some((col) => col.operation.scale === 'interval');
@@ -96,6 +97,10 @@ export function suggestions({
     return [];
   }
 
+  if (metrics.length > 1 && !state?.layers[0].allowMultipleMetrics) {
+    return [];
+  }
+
   const incompleteConfiguration = metrics.length === 0 || groups.length === 0;
 
   if (incompleteConfiguration && state && !subVisualizationId) {
@@ -120,14 +125,14 @@ export function suggestions({
     const newShape = getNewShape(groups, subVisualizationId as PieVisualizationState['shape']);
     const baseSuggestion: VisualizationSuggestion<PieVisualizationState> = {
       title: i18n.translate('xpack.lens.pie.suggestionLabel', {
-        defaultMessage: 'As {chartName}',
+        defaultMessage: '{chartName}',
         values: { chartName: PartitionChartsMeta[newShape].label },
         description: 'chartName is already translated',
       }),
       score: state && !hasCustomSuggestionsExists(state.shape) ? 0.6 : 0.4,
       state: {
         shape: newShape,
-        palette: mainPalette || state?.palette,
+        palette: mainPalette?.type === 'legacyPalette' ? mainPalette.value : state?.palette,
         layers: [
           state?.layers[0]
             ? {
@@ -136,6 +141,11 @@ export function suggestions({
                 primaryGroups: groups.map((col) => col.columnId),
                 metrics: metricColumnIds,
                 layerType: layerTypes.DATA,
+                colorMapping: !mainPalette
+                  ? getColorMappingDefaults()
+                  : mainPalette?.type === 'colorMapping'
+                  ? mainPalette.value
+                  : state.layers[0].colorMapping,
               }
             : {
                 layerId: table.layerId,
@@ -146,10 +156,15 @@ export function suggestions({
                 legendDisplay: LegendDisplay.DEFAULT,
                 nestedLegend: false,
                 layerType: layerTypes.DATA,
+                colorMapping: !mainPalette
+                  ? getColorMappingDefaults()
+                  : mainPalette?.type === 'colorMapping'
+                  ? mainPalette.value
+                  : undefined,
               },
         ],
       },
-      previewIcon: 'bullseye',
+      previewIcon: PartitionChartsMeta[newShape].icon,
       // dont show suggestions for same type
       hide:
         table.changeType === 'reduced' ||
@@ -161,7 +176,7 @@ export function suggestions({
     results.push({
       ...baseSuggestion,
       title: i18n.translate('xpack.lens.pie.suggestionLabel', {
-        defaultMessage: 'As {chartName}',
+        defaultMessage: '{chartName}',
         values: {
           chartName:
             PartitionChartsMeta[
@@ -185,14 +200,14 @@ export function suggestions({
   ) {
     results.push({
       title: i18n.translate('xpack.lens.pie.treemapSuggestionLabel', {
-        defaultMessage: 'As Treemap',
+        defaultMessage: 'Treemap',
       }),
       // Use a higher score when currently active, to prevent chart type switching
       // on the user unintentionally
       score: state?.shape === PieChartTypes.TREEMAP ? 0.7 : 0.5,
       state: {
         shape: PieChartTypes.TREEMAP,
-        palette: mainPalette || state?.palette,
+        palette: mainPalette?.type === 'legacyPalette' ? mainPalette.value : state?.palette,
         layers: [
           state?.layers[0]
             ? {
@@ -205,6 +220,10 @@ export function suggestions({
                     ? CategoryDisplay.DEFAULT
                     : state.layers[0].categoryDisplay,
                 layerType: layerTypes.DATA,
+                colorMapping:
+                  mainPalette?.type === 'colorMapping'
+                    ? mainPalette.value
+                    : state.layers[0].colorMapping,
               }
             : {
                 layerId: table.layerId,
@@ -215,16 +234,12 @@ export function suggestions({
                 legendDisplay: LegendDisplay.DEFAULT,
                 nestedLegend: false,
                 layerType: layerTypes.DATA,
+                colorMapping: mainPalette?.type === 'colorMapping' ? mainPalette.value : undefined,
               },
         ],
       },
-      previewIcon: 'bullseye',
-      // hide treemap suggestions from bottom bar, but keep them for chart switcher
-      hide:
-        table.changeType === 'reduced' ||
-        !state ||
-        hasIntervalScale(groups) ||
-        (state && state.shape === PieChartTypes.TREEMAP),
+      previewIcon: PartitionChartsMeta.treemap.icon,
+      hide: table.changeType === 'reduced' || hasIntervalScale(groups),
     });
   }
 
@@ -234,12 +249,12 @@ export function suggestions({
   ) {
     results.push({
       title: i18n.translate('xpack.lens.pie.mosaicSuggestionLabel', {
-        defaultMessage: 'As Mosaic',
+        defaultMessage: 'Mosaic',
       }),
       score: state?.shape === PieChartTypes.MOSAIC ? 0.7 : 0.5,
       state: {
         shape: PieChartTypes.MOSAIC,
-        palette: mainPalette || state?.palette,
+        palette: mainPalette?.type === 'legacyPalette' ? mainPalette.value : state?.palette,
         layers: [
           state?.layers[0]
             ? {
@@ -251,6 +266,10 @@ export function suggestions({
                 categoryDisplay: CategoryDisplay.DEFAULT,
                 layerType: layerTypes.DATA,
                 allowMultipleMetrics: false,
+                colorMapping:
+                  mainPalette?.type === 'colorMapping'
+                    ? mainPalette.value
+                    : state.layers[0].colorMapping,
               }
             : {
                 layerId: table.layerId,
@@ -263,15 +282,12 @@ export function suggestions({
                 nestedLegend: false,
                 layerType: layerTypes.DATA,
                 allowMultipleMetrics: false,
+                colorMapping: mainPalette?.type === 'colorMapping' ? mainPalette.value : undefined,
               },
         ],
       },
-      previewIcon: 'bullseye',
-      hide:
-        groups.length !== 2 ||
-        table.changeType === 'reduced' ||
-        hasIntervalScale(groups) ||
-        (state && state.shape === 'mosaic'),
+      previewIcon: PartitionChartsMeta.mosaic.icon,
+      hide: groups.length !== 2 || table.changeType === 'reduced' || hasIntervalScale(groups),
     });
   }
 
@@ -281,12 +297,12 @@ export function suggestions({
   ) {
     results.push({
       title: i18n.translate('xpack.lens.pie.waffleSuggestionLabel', {
-        defaultMessage: 'As Waffle',
+        defaultMessage: 'Waffle',
       }),
       score: state?.shape === PieChartTypes.WAFFLE ? 0.7 : 0.4,
       state: {
         shape: PieChartTypes.WAFFLE,
-        palette: mainPalette || state?.palette,
+        palette: mainPalette?.type === 'legacyPalette' ? mainPalette.value : state?.palette,
         layers: [
           state?.layers[0]
             ? {
@@ -297,6 +313,10 @@ export function suggestions({
                 secondaryGroups: [],
                 categoryDisplay: CategoryDisplay.DEFAULT,
                 layerType: layerTypes.DATA,
+                colorMapping:
+                  mainPalette?.type === 'colorMapping'
+                    ? mainPalette.value
+                    : state.layers[0].colorMapping,
               }
             : {
                 layerId: table.layerId,
@@ -307,15 +327,12 @@ export function suggestions({
                 legendDisplay: LegendDisplay.DEFAULT,
                 nestedLegend: false,
                 layerType: layerTypes.DATA,
+                colorMapping: mainPalette?.type === 'colorMapping' ? mainPalette.value : undefined,
               },
         ],
       },
-      previewIcon: 'bullseye',
-      hide:
-        groups.length !== 1 ||
-        table.changeType === 'reduced' ||
-        hasIntervalScale(groups) ||
-        (state && state.shape === 'waffle'),
+      previewIcon: PartitionChartsMeta.waffle.icon,
+      hide: groups.length !== 1 || table.changeType === 'reduced' || hasIntervalScale(groups),
     });
   }
 
@@ -329,6 +346,12 @@ export function suggestions({
     .sort((a, b) => b.score - a.score)
     .map((suggestion) => ({
       ...suggestion,
-      hide: shouldHideSuggestion || incompleteConfiguration || suggestion.hide,
+      hide:
+        // avoid to suggest the same shape if already used
+        (state && state.shape === suggestion.state.shape) ||
+        shouldHideSuggestion ||
+        incompleteConfiguration ||
+        suggestion.hide,
+      incomplete: incompleteConfiguration,
     }));
 }

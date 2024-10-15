@@ -8,13 +8,14 @@
 import React from 'react';
 
 import type { EuiStepProps } from '@elastic/eui';
+import { EuiIconTip } from '@elastic/eui';
 import {
   EuiButton,
   EuiCallOut,
   EuiCode,
   EuiForm,
   EuiFormErrorText,
-  EuiButtonEmpty,
+  EuiLink,
   EuiSpacer,
   EuiText,
   EuiFormRow,
@@ -26,7 +27,7 @@ import { FormattedMessage } from '@kbn/i18n-react';
 
 import { MultiRowInput } from '../../../sections/settings/components/multi_row_input';
 
-import { useLink } from '../../../hooks';
+import { useAuthz, useLink } from '../../../hooks';
 
 import type { QuickStartCreateForm } from '../hooks';
 import { FleetServerHostSelect } from '../components';
@@ -52,6 +53,10 @@ const GettingStartedStepContent: React.FunctionComponent<QuickStartCreateForm> =
   onClose,
 }) => {
   const { getHref } = useLink();
+  const authz = useAuthz();
+  const canWritePolicies =
+    authz.fleet.allAgentPolicies && authz.integrations.writeIntegrationPolicies;
+  const isDisabled = fleetServerHosts.length === 0 && !canWritePolicies;
 
   if (status === 'success') {
     return (
@@ -73,12 +78,12 @@ const GettingStartedStepContent: React.FunctionComponent<QuickStartCreateForm> =
               hostUrl: <EuiCode>{selectedFleetServerHost?.host_urls[0]}</EuiCode>,
               fleetSettingsLink: (
                 // eslint-disable-next-line @elastic/eui/href-or-on-click
-                <EuiButtonEmpty href={getHref('settings')} onClick={onClose} flush="left">
+                <EuiLink href={getHref('settings')} onClick={onClose}>
                   <FormattedMessage
                     id="xpack.fleet.fleetServerSetup.fleetSettingsLink"
                     defaultMessage="Fleet Settings"
                   />
-                </EuiButtonEmpty>
+                </EuiLink>
               ),
             }}
           />
@@ -92,8 +97,24 @@ const GettingStartedStepContent: React.FunctionComponent<QuickStartCreateForm> =
       <EuiText>
         <FormattedMessage
           id="xpack.fleet.fleetServerSetup.getStartedInstructions"
-          defaultMessage="First, set the public IP or host name and port that agents will use to reach Fleet Server. It uses port {port} by default. We'll then generate a policy for you automatically."
-          values={{ port: <EuiCode>8220</EuiCode> }}
+          defaultMessage="First, set the public IP or host name and port that agents will use to reach Fleet Server. It uses port {port} by default {toolTip}. We'll then generate a policy for you automatically."
+          values={{
+            port: <EuiCode>8220</EuiCode>,
+            toolTip: (
+              <EuiIconTip
+                iconProps={{
+                  className: 'eui-alignTop',
+                }}
+                content={
+                  <FormattedMessage
+                    id="xpack.fleet.fleetServerSetup.getStartedInstructionsPortTooltips"
+                    defaultMessage="This can only be set during Fleet Server installation."
+                  />
+                }
+                position="right"
+              />
+            ),
+          }}
         />
       </EuiText>
 
@@ -126,6 +147,7 @@ const GettingStartedStepContent: React.FunctionComponent<QuickStartCreateForm> =
                   defaultMessage: 'Specify name',
                 })}
                 {...inputs.nameInput.props}
+                disabled={isDisabled}
               />
             </EuiFormRow>
             <EuiFormRow
@@ -141,6 +163,7 @@ const GettingStartedStepContent: React.FunctionComponent<QuickStartCreateForm> =
                 <MultiRowInput
                   data-test-subj="fleetServerSetup.multiRowInput"
                   {...inputs.hostUrlsInput.props}
+                  disabled={isDisabled}
                   placeholder={i18n.translate(
                     'xpack.fleet.fleetServerSetup.fleetServerHostsInputPlaceholder',
                     {
@@ -175,6 +198,7 @@ const GettingStartedStepContent: React.FunctionComponent<QuickStartCreateForm> =
           isLoading={status === 'loading'}
           onClick={submit}
           data-test-subj="generateFleetServerPolicyButton"
+          disabled={isDisabled}
         >
           {fleetServerHosts.length > 0 ? (
             <FormattedMessage

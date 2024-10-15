@@ -5,12 +5,15 @@
  * 2.0.
  */
 
-import React, { FC, useContext } from 'react';
-import { EuiComboBox, EuiComboBoxOptionOption } from '@elastic/eui';
+import type { FC } from 'react';
+import React, { useContext } from 'react';
+import type { EuiComboBoxOptionOption } from '@elastic/eui';
+import { EuiComboBox } from '@elastic/eui';
 
-import { useFieldStatsTrigger } from '../../../../../utils/use_field_stats_trigger';
+import type { Field } from '@kbn/ml-anomaly-utils';
+import { useFieldStatsTrigger } from '@kbn/ml-field-stats-flyout';
+
 import { JobCreatorContext } from '../../../job_creator_context';
-import { Field } from '../../../../../../../../../common/types/fields';
 import {
   createFieldOptions,
   createMlcategoryFieldOption,
@@ -39,6 +42,7 @@ export const InfluencersSelect: FC<Props> = ({ fields, changeHandler, selectedIn
 
   return (
     <EuiComboBox
+      singleSelection={false}
       options={options}
       selectedOptions={selection}
       onChange={onChange}

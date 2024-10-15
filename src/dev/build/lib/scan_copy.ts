@@ -1,23 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import Fs from 'fs';
 import Fsp from 'fs/promises';
 import * as Rx from 'rxjs';
 
-import { assertAbsolute, mkdirp } from './fs';
+import { assertAbsolute, mkdirp, fsReadDir$ } from './fs';
 import { type DirRecord, type FileRecord, type Record, SomePath } from './fs_records';
-
-const fsReadDir$ = Rx.bindNodeCallback(
-  (path: string, cb: (err: Error | null, ents: Fs.Dirent[]) => void) => {
-    Fs.readdir(path, { withFileTypes: true }, cb);
-  }
-);
 
 interface Options {
   /**
@@ -29,7 +24,9 @@ interface Options {
    */
   destination: string;
   /**
-   * function that is called with each Record
+   * function that is called with each Record. If a falsy value is returned the
+   * record will be dropped. If it is a directory none of its children will be
+   * considered.
    */
   filter?: (record: Readonly<Record>) => boolean;
   /**
@@ -41,7 +38,7 @@ interface Options {
    */
   time?: Date;
   /**
-   *
+   * function which can replace the records of files as they are copied
    */
   map?: (record: Readonly<FileRecord>) => Promise<undefined | FileRecord>;
 }
@@ -121,6 +118,6 @@ export async function scanCopy(options: Options) {
       type: 'dir',
       source: SomePath.fromAbs(source),
       dest: SomePath.fromAbs(destination),
-    })
+    }).pipe(Rx.defaultIfEmpty(undefined))
   );
 }

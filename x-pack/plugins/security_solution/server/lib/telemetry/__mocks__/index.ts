@@ -5,16 +5,23 @@
  * 2.0.
  */
 
+import { URL } from 'url';
 import moment from 'moment';
 import type { ConcreteTaskInstance } from '@kbn/task-manager-plugin/server';
+import type { TelemetryPluginSetup, TelemetryPluginStart } from '@kbn/telemetry-plugin/server';
 import { TaskStatus } from '@kbn/task-manager-plugin/server';
 import type { TelemetryEventsSender } from '../sender';
-import type { TelemetryReceiver } from '../receiver';
+import type { ITelemetryReceiver, TelemetryReceiver } from '../receiver';
 import type { SecurityTelemetryTaskConfig } from '../task';
 import type { PackagePolicy } from '@kbn/fleet-plugin/common/types/models/package_policy';
+import type { ITaskMetricsService } from '../task_metrics.types';
+import { type IUsageCounter } from '@kbn/usage-collection-plugin/server/usage_counters/usage_counter';
+import { type UsageCounters } from '@kbn/usage-collection-plugin/common/types';
 import { stubEndpointAlertResponse, stubProcessTree, stubFetchTimelineEvents } from './timeline';
-import { stubEndpointMetricsResponse } from './metrics';
+import { stubEndpointMetricsAbstractResponse, stubEndpointMetricsByIdResponse } from './metrics';
 import { prebuiltRuleAlertsResponse } from './prebuilt_rule_alerts';
+import type { ESClusterInfo, ESLicense } from '../types';
+import { stubFleetAgentResponse } from './fleet_agent_response';
 
 export const createMockTelemetryEventsSender = (
   enableTelemetry?: boolean,
@@ -28,6 +35,7 @@ export const createMockTelemetryEventsSender = (
     getTelemetryUsageCluster: jest.fn(),
     fetchTelemetryUrl: jest.fn(),
     queueTelemetryEvents: jest.fn(),
+    sendAsync: jest.fn(),
     processEvents: jest.fn(),
     isTelemetryOptedIn: jest.fn().mockReturnValue(enableTelemetry ?? jest.fn()),
     isTelemetryServicesReachable: jest.fn().mockReturnValue(canConnect ?? jest.fn()),
@@ -37,8 +45,7 @@ export const createMockTelemetryEventsSender = (
   } as unknown as jest.Mocked<TelemetryEventsSender>;
 };
 
-const stubClusterInfo = {
-  name: 'Stub-MacBook-Pro.local',
+export const stubClusterInfo: ESClusterInfo = {
   cluster_name: 'elasticsearch',
   cluster_uuid: '5Pr5PXRQQpGJUTn0czAvKQ',
   version: {
@@ -46,33 +53,60 @@ const stubClusterInfo = {
     build_type: 'tar',
     build_hash: '38537ab4a726b42ce8f034aad78d8fca4d4f3e51',
     build_date: moment().toISOString(),
+    build_flavor: 'DEFAULT',
     build_snapshot: true,
     lucene_version: '9.2.0',
     minimum_wire_compatibility_version: '7.17.0',
     minimum_index_compatibility_version: '7.0.0',
   },
-  tagline: 'You Know, for Search',
 };
 
-const stubLicenseInfo = {
+export const stubLicenseInfo: ESLicense = {
   status: 'active',
   uid: '4a7dde08-e5f8-4e50-80f8-bc85b72b4934',
   type: 'trial',
   issue_date: moment().toISOString(),
   issue_date_in_millis: 1653299879146,
   expiry_date: moment().toISOString(),
-  expiry_date_in_millis: 1655891879146,
+  expirty_date_in_millis: 1655891879146,
   max_nodes: 1000,
-  max_resource_units: null,
   issued_to: 'elasticsearch',
   issuer: 'elasticsearch',
   start_date_in_millis: -1,
 };
 
+export const createMockTelemetryPluginSetup = (): jest.Mocked<TelemetryPluginSetup> => {
+  return {
+    getTelemetryUrl: jest.fn(() => Promise.resolve(new URL('http://localhost/v3/send'))),
+  } as unknown as jest.Mocked<TelemetryPluginSetup>;
+};
+
+export const createMockTelemetryPluginStart = (): jest.Mocked<TelemetryPluginStart> => {
+  return {
+    getIsOptedIn: jest.fn(() => Promise.resolve(true)),
+  } as unknown as jest.Mocked<TelemetryPluginStart>;
+};
+
+export const createMockUsageCounter = (): jest.Mocked<IUsageCounter> => {
+  return {
+    incrementCounter: jest.fn((_: UsageCounters.v1.IncrementCounterParams) => {}),
+  } as unknown as jest.Mocked<IUsageCounter>;
+};
+
+export const createMockTaskMetrics = (): jest.Mocked<ITaskMetricsService> => {
+  return {
+    incrementCounter: jest.fn((_: UsageCounters.v1.IncrementCounterParams) => {}),
+    start: jest.fn(() => {
+      return { name: 'test-trace', startedAt: 0 };
+    }),
+    end: jest.fn(),
+  } as unknown as jest.Mocked<ITaskMetricsService>;
+};
+
 export const createMockTelemetryReceiver = (
   diagnosticsAlert?: unknown,
   emptyTimelineTree?: boolean
-): jest.Mocked<TelemetryReceiver> => {
+): jest.Mocked<ITelemetryReceiver> => {
   const processTreeResponse = emptyTimelineTree
     ? Promise.resolve([])
     : Promise.resolve(Promise.resolve(stubProcessTree()));
@@ -80,20 +114,25 @@ export const createMockTelemetryReceiver = (
   return {
     start: jest.fn(),
     fetchClusterInfo: jest.fn().mockReturnValue(stubClusterInfo),
+    getClusterInfo: jest.fn().mockReturnValue(stubClusterInfo),
     fetchLicenseInfo: jest.fn().mockReturnValue(stubLicenseInfo),
     copyLicenseFields: jest.fn(),
-    fetchFleetAgents: jest.fn(),
-    fetchDiagnosticAlerts: jest.fn().mockReturnValue(diagnosticsAlert ?? jest.fn()),
-    fetchEndpointMetrics: jest.fn().mockReturnValue(stubEndpointMetricsResponse),
-    fetchEndpointPolicyResponses: jest.fn(),
-    fetchPrebuiltRuleAlerts: jest.fn().mockReturnValue(prebuiltRuleAlertsResponse),
+    fetchPolicyConfigs: jest.fn().mockReturnValue(Promise.resolve(null)),
+    fetchFleetAgents: jest.fn().mockReturnValue(Promise.resolve(stubFleetAgentResponse)),
+    openPointInTime: jest.fn().mockReturnValue(Promise.resolve('test-pit-id')),
+    getAlertsIndex: jest.fn().mockReturnValue('alerts-*'),
+    fetchDiagnosticAlertsBatch: jest.fn().mockReturnValue(diagnosticsAlert ?? jest.fn()),
+    getExperimentalFeatures: jest.fn().mockReturnValue(undefined),
+    fetchEndpointMetricsAbstract: jest.fn().mockReturnValue(stubEndpointMetricsAbstractResponse),
+    fetchEndpointMetricsById: jest.fn().mockReturnValue(stubEndpointMetricsByIdResponse),
+    fetchEndpointPolicyResponses: jest.fn().mockReturnValue(Promise.resolve(new Map())),
+    fetchPrebuiltRuleAlertsBatch: jest.fn().mockReturnValue(prebuiltRuleAlertsResponse),
+    fetchDetectionRulesPackageVersion: jest.fn(),
     fetchTrustedApplications: jest.fn(),
     fetchEndpointList: jest.fn(),
     fetchDetectionRules: jest.fn().mockReturnValue({ body: null }),
-    fetchEndpointMetadata: jest.fn(),
-    fetchTimelineEndpointAlerts: jest
-      .fn()
-      .mockReturnValue(Promise.resolve(stubEndpointAlertResponse())),
+    fetchEndpointMetadata: jest.fn().mockReturnValue(Promise.resolve(new Map())),
+    fetchTimelineAlerts: jest.fn().mockReturnValue(Promise.resolve(stubEndpointAlertResponse())),
     buildProcessTree: jest.fn().mockReturnValue(processTreeResponse),
     fetchTimelineEvents: jest.fn().mockReturnValue(Promise.resolve(stubFetchTimelineEvents())),
     fetchValueListMetaData: jest.fn(),

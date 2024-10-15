@@ -8,8 +8,26 @@
 import { IRouter } from '@kbn/core/server';
 import { ILicenseState } from '../lib';
 import { AlertingRequestHandlerContext, INTERNAL_BASE_ALERTING_API_PATH } from '../types';
-import { verifyAccessAndContext } from './lib';
-import { API_PRIVILEGES } from '../../common';
+import { verifyAccessAndContext, RewriteResponseCase } from './lib';
+import { API_PRIVILEGES, RulesSettingsFlapping } from '../../common';
+
+const rewriteBodyRes: RewriteResponseCase<RulesSettingsFlapping> = ({
+  lookBackWindow,
+  statusChangeThreshold,
+  createdBy,
+  updatedBy,
+  createdAt,
+  updatedAt,
+  ...rest
+}) => ({
+  ...rest,
+  look_back_window: lookBackWindow,
+  status_change_threshold: statusChangeThreshold,
+  created_by: createdBy,
+  updated_by: updatedBy,
+  created_at: createdAt,
+  updated_at: updatedAt,
+});
 
 export const getFlappingSettingsRoute = (
   router: IRouter<AlertingRequestHandlerContext>,
@@ -20,6 +38,7 @@ export const getFlappingSettingsRoute = (
       path: `${INTERNAL_BASE_ALERTING_API_PATH}/rules/settings/_flapping`,
       validate: false,
       options: {
+        access: 'internal',
         tags: [`access:${API_PRIVILEGES.READ_FLAPPING_SETTINGS}`],
       },
     },
@@ -27,7 +46,7 @@ export const getFlappingSettingsRoute = (
       verifyAccessAndContext(licenseState, async function (context, req, res) {
         const rulesSettingsClient = (await context.alerting).getRulesSettingsClient();
         const flappingSettings = await rulesSettingsClient.flapping().get();
-        return res.ok({ body: flappingSettings });
+        return res.ok({ body: rewriteBodyRes(flappingSettings) });
       })
     )
   );

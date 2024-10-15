@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import { schema, TypeOf } from '@kbn/config-schema';
+import type { TypeOf } from '@kbn/config-schema';
+import { schema } from '@kbn/config-schema';
 
 export const transformHealthRuleParams = schema.object({
   includeTransforms: schema.arrayOf(schema.string()),
@@ -18,6 +19,11 @@ export const transformHealthRuleParams = schema.object({
         })
       ),
       errorMessages: schema.nullable(
+        schema.object({
+          enabled: schema.boolean({ defaultValue: false }),
+        })
+      ),
+      healthCheck: schema.nullable(
         schema.object({
           enabled: schema.boolean({ defaultValue: true }),
         })

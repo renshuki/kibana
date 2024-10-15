@@ -3,11 +3,7 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "target/types",
-    // there is still a decent amount of JS in this plugin and we are taking
-    // advantage of the fact that TS doesn't know the types of that code and
-    // gives us `any`. Once that code is converted to .ts we can remove this
-    // and allow TS to infer types from any JS file imported.
-    "allowJs": false
+    "allowJs": true
   },
   "include": [
     "*.ts",
@@ -32,7 +28,6 @@
     "@kbn/config-schema",
     "@kbn/i18n-react",
     "@kbn/inspector-plugin",
-    "@kbn/content-management-table-list",
     "@kbn/test-jest-helpers",
     "@kbn/data-views-plugin",
     "@kbn/es-query",
@@ -41,6 +36,21 @@
     "@kbn/std",
     "@kbn/utility-types",
     "@kbn/react-field",
+    "@kbn/shared-ux-router",
+    "@kbn/saved-objects-management-plugin",
+    "@kbn/saved-objects-finder-plugin",
+    "@kbn/core-saved-objects-server",
+    "@kbn/content-management-plugin",
+    "@kbn/object-versioning",
+    "@kbn/content-management-table-list-view-table",
+    "@kbn/content-management-table-list-view",
+    "@kbn/core-ui-settings-browser",
+    "@kbn/react-kibana-mount",
+    "@kbn/content-management-utils",
+    "@kbn/logging",
+    "@kbn/content-management-table-list-view-common",
+    "@kbn/visualization-utils",
+    "@kbn/react-kibana-context-render",
   ],
   "exclude": [
     "target/**/*",

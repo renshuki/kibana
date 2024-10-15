@@ -18,187 +18,7 @@
   },
   "common": {
     "classes": [],
-    "functions": [
-      {
-        "parentPluginId": "@kbn/guided-onboarding",
-        "id": "def-common.GuideCard",
-        "type": "Function",
-        "tags": [],
-        "label": "GuideCard",
-        "description": [],
-        "signature": [
-          "({ useCase, guides, activateGuide, isDarkTheme, addBasePath, }: ",
-          "GuideCardProps",
-          ") => JSX.Element"
-        ],
-        "path": "packages/kbn-guided-onboarding/src/components/landing_page/guide_card.tsx",
-        "deprecated": false,
-        "trackAdoption": false,
-        "children": [
-          {
-            "parentPluginId": "@kbn/guided-onboarding",
-            "id": "def-common.GuideCard.$1",
-            "type": "Object",
-            "tags": [],
-            "label": "{\n  useCase,\n  guides,\n  activateGuide,\n  isDarkTheme,\n  addBasePath,\n}",
-            "description": [],
-            "signature": [
-              "GuideCardProps"
-            ],
-            "path": "packages/kbn-guided-onboarding/src/components/landing_page/guide_card.tsx",
-            "deprecated": false,
-            "trackAdoption": false,
-            "isRequired": true
-          }
-        ],
-        "returnComment": [],
-        "initialIsOpen": false
-      },
-      {
-        "parentPluginId": "@kbn/guided-onboarding",
-        "id": "def-common.InfrastructureLinkCard",
-        "type": "Function",
-        "tags": [],
-        "label": "InfrastructureLinkCard",
-        "description": [],
-        "signature": [
-          "({ navigateToApp, isDarkTheme, addBasePath, }: { navigateToApp: (appId: string, options?: ",
-          {
-            "pluginId": "@kbn/core-application-browser",
-            "scope": "common",
-            "docId": "kibKbnCoreApplicationBrowserPluginApi",
-            "section": "def-common.NavigateToAppOptions",
-            "text": "NavigateToAppOptions"
-          },
-          " | undefined) => Promise<void>; isDarkTheme: boolean; addBasePath: (url: string) => string; }) => JSX.Element"
-        ],
-        "path": "packages/kbn-guided-onboarding/src/components/landing_page/infrastructure_link_card.tsx",
-        "deprecated": false,
-        "trackAdoption": false,
-        "children": [
-          {
-            "parentPluginId": "@kbn/guided-onboarding",
-            "id": "def-common.InfrastructureLinkCard.$1",
-            "type": "Object",
-            "tags": [],
-            "label": "{\n  navigateToApp,\n  isDarkTheme,\n  addBasePath,\n}",
-            "description": [],
-            "path": "packages/kbn-guided-onboarding/src/components/landing_page/infrastructure_link_card.tsx",
-            "deprecated": false,
-            "trackAdoption": false,
-            "children": [
-              {
-                "parentPluginId": "@kbn/guided-onboarding",
-                "id": "def-common.InfrastructureLinkCard.$1.navigateToApp",
-                "type": "Function",
-                "tags": [],
-                "label": "navigateToApp",
-                "description": [],
-                "signature": [
-                  "(appId: string, options?: ",
-                  {
-                    "pluginId": "@kbn/core-application-browser",
-                    "scope": "common",
-                    "docId": "kibKbnCoreApplicationBrowserPluginApi",
-                    "section": "def-common.NavigateToAppOptions",
-                    "text": "NavigateToAppOptions"
-                  },
-                  " | undefined) => Promise<void>"
-                ],
-                "path": "packages/kbn-guided-onboarding/src/components/landing_page/infrastructure_link_card.tsx",
-                "deprecated": false,
-                "trackAdoption": false,
-                "children": [
-                  {
-                    "parentPluginId": "@kbn/guided-onboarding",
-                    "id": "def-common.InfrastructureLinkCard.$1.navigateToApp.$1",
-                    "type": "string",
-                    "tags": [],
-                    "label": "appId",
-                    "description": [],
-                    "signature": [
-                      "string"
-                    ],
-                    "path": "packages/kbn-guided-onboarding/src/components/landing_page/infrastructure_link_card.tsx",
-                    "deprecated": false,
-                    "trackAdoption": false,
-                    "isRequired": true
-                  },
-                  {
-                    "parentPluginId": "@kbn/guided-onboarding",
-                    "id": "def-common.InfrastructureLinkCard.$1.navigateToApp.$2",
-                    "type": "Object",
-                    "tags": [],
-                    "label": "options",
-                    "description": [],
-                    "signature": [
-                      {
-                        "pluginId": "@kbn/core-application-browser",
-                        "scope": "common",
-                        "docId": "kibKbnCoreApplicationBrowserPluginApi",
-                        "section": "def-common.NavigateToAppOptions",
-                        "text": "NavigateToAppOptions"
-                      },
-                      " | undefined"
-                    ],
-                    "path": "packages/kbn-guided-onboarding/src/components/landing_page/infrastructure_link_card.tsx",
-                    "deprecated": false,
-                    "trackAdoption": false,
-                    "isRequired": false
-                  }
-                ],
-                "returnComment": []
-              },
-              {
-                "parentPluginId": "@kbn/guided-onboarding",
-                "id": "def-common.InfrastructureLinkCard.$1.isDarkTheme",
-                "type": "boolean",
-                "tags": [],
-                "label": "isDarkTheme",
-                "description": [],
-                "path": "packages/kbn-guided-onboarding/src/components/landing_page/infrastructure_link_card.tsx",
-                "deprecated": false,
-                "trackAdoption": false
-              },
-              {
-                "parentPluginId": "@kbn/guided-onboarding",
-                "id": "def-common.InfrastructureLinkCard.$1.addBasePath",
-                "type": "Function",
-                "tags": [],
-                "label": "addBasePath",
-                "description": [],
-                "signature": [
-                  "(url: string) => string"
-                ],
-                "path": "packages/kbn-guided-onboarding/src/components/landing_page/infrastructure_link_card.tsx",
-                "deprecated": false,
-                "trackAdoption": false,
-                "children": [
-                  {
-                    "parentPluginId": "@kbn/guided-onboarding",
-                    "id": "def-common.InfrastructureLinkCard.$1.addBasePath.$1",
-                    "type": "string",
-                    "tags": [],
-                    "label": "url",
-                    "description": [],
-                    "signature": [
-                      "string"
-                    ],
-                    "path": "packages/kbn-guided-onboarding/src/components/landing_page/infrastructure_link_card.tsx",
-                    "deprecated": false,
-                    "trackAdoption": false,
-                    "isRequired": true
-                  }
-                ],
-                "returnComment": []
-              }
-            ]
-          }
-        ],
-        "returnComment": [],
-        "initialIsOpen": false
-      }
-    ],
+    "functions": [],
     "interfaces": [
       {
         "parentPluginId": "@kbn/guided-onboarding",
@@ -326,7 +146,7 @@
             "label": "guideId",
             "description": [],
             "signature": [
-              "\"search\" | \"kubernetes\" | \"siem\" | \"testGuide\""
+              "\"siem\" | \"kubernetes\" | \"appSearch\" | \"websiteSearch\" | \"databaseSearch\" | \"testGuide\""
             ],
             "path": "packages/kbn-guided-onboarding/src/types.ts",
             "deprecated": false,
@@ -380,6 +200,27 @@
             "path": "packages/kbn-guided-onboarding/src/types.ts",
             "deprecated": false,
             "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/guided-onboarding",
+            "id": "def-common.GuideState.params",
+            "type": "Object",
+            "tags": [],
+            "label": "params",
+            "description": [],
+            "signature": [
+              {
+                "pluginId": "@kbn/guided-onboarding",
+                "scope": "common",
+                "docId": "kibKbnGuidedOnboardingPluginApi",
+                "section": "def-common.GuideParams",
+                "text": "GuideParams"
+              },
+              " | undefined"
+            ],
+            "path": "packages/kbn-guided-onboarding/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
           }
         ],
         "initialIsOpen": false
@@ -403,7 +244,7 @@
             "label": "id",
             "description": [],
             "signature": [
-              "\"add_data\" | \"view_dashboard\" | \"tour_observability\" | \"rules\" | \"alertsCases\" | \"search_experience\" | \"step1\" | \"step2\" | \"step3\""
+              "\"rules\" | \"add_data\" | \"view_dashboard\" | \"tour_observability\" | \"alertsCases\" | \"search_experience\" | \"step1\" | \"step2\" | \"step3\" | \"step4\""
             ],
             "path": "packages/kbn-guided-onboarding/src/types.ts",
             "deprecated": false,
@@ -417,7 +258,7 @@
             "label": "status",
             "description": [],
             "signature": [
-              "\"complete\" | \"in_progress\" | \"active\" | \"inactive\" | \"ready_to_complete\""
+              "\"complete\" | \"active\" | \"inactive\" | \"in_progress\" | \"ready_to_complete\""
             ],
             "path": "packages/kbn-guided-onboarding/src/types.ts",
             "deprecated": false,
@@ -445,7 +286,7 @@
             "label": "id",
             "description": [],
             "signature": [
-              "\"add_data\" | \"view_dashboard\" | \"tour_observability\" | \"rules\" | \"alertsCases\" | \"search_experience\" | \"step1\" | \"step2\" | \"step3\""
+              "\"rules\" | \"add_data\" | \"view_dashboard\" | \"tour_observability\" | \"alertsCases\" | \"search_experience\" | \"step1\" | \"step2\" | \"step3\" | \"step4\""
             ],
             "path": "packages/kbn-guided-onboarding/src/types.ts",
             "deprecated": false,
@@ -638,28 +479,28 @@
     "misc": [
       {
         "parentPluginId": "@kbn/guided-onboarding",
-        "id": "def-common.GuideCardUseCase",
-        "type": "Type",
-        "tags": [],
-        "label": "GuideCardUseCase",
-        "description": [],
-        "signature": [
-          "\"search\" | \"kubernetes\" | \"siem\""
-        ],
-        "path": "packages/kbn-guided-onboarding/src/components/landing_page/guide_card.tsx",
-        "deprecated": false,
-        "trackAdoption": false,
-        "initialIsOpen": false
-      },
-      {
-        "parentPluginId": "@kbn/guided-onboarding",
         "id": "def-common.GuideId",
         "type": "Type",
         "tags": [],
         "label": "GuideId",
         "description": [],
         "signature": [
-          "\"search\" | \"kubernetes\" | \"siem\" | \"testGuide\""
+          "\"siem\" | \"kubernetes\" | \"appSearch\" | \"websiteSearch\" | \"databaseSearch\" | \"testGuide\""
+        ],
+        "path": "packages/kbn-guided-onboarding/src/types.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "@kbn/guided-onboarding",
+        "id": "def-common.GuideParams",
+        "type": "Type",
+        "tags": [],
+        "label": "GuideParams",
+        "description": [],
+        "signature": [
+          "{ [x: string]: string; }"
         ],
         "path": "packages/kbn-guided-onboarding/src/types.ts",
         "deprecated": false,
@@ -691,7 +532,7 @@
         "label": "GuideStepIds",
         "description": [],
         "signature": [
-          "\"add_data\" | \"view_dashboard\" | \"tour_observability\" | \"rules\" | \"alertsCases\" | \"search_experience\" | \"step1\" | \"step2\" | \"step3\""
+          "\"rules\" | \"add_data\" | \"view_dashboard\" | \"tour_observability\" | \"alertsCases\" | \"search_experience\" | \"step1\" | \"step2\" | \"step3\" | \"step4\""
         ],
         "path": "packages/kbn-guided-onboarding/src/types.ts",
         "deprecated": false,
@@ -708,7 +549,7 @@
           "\nAllowed states for each step in a guide:\n inactive: Step has not started\n active: Step is ready to start (i.e., the guide has been started)\n in_progress: Step has been started and is in progress\n ready_to_complete: Step can be manually completed\n complete: Step has been completed"
         ],
         "signature": [
-          "\"complete\" | \"in_progress\" | \"active\" | \"inactive\" | \"ready_to_complete\""
+          "\"complete\" | \"active\" | \"inactive\" | \"in_progress\" | \"ready_to_complete\""
         ],
         "path": "packages/kbn-guided-onboarding/src/types.ts",
         "deprecated": false,
@@ -723,7 +564,7 @@
         "label": "testGuideId",
         "description": [],
         "signature": [
-          "\"search\" | \"kubernetes\" | \"siem\" | \"testGuide\""
+          "\"siem\" | \"kubernetes\" | \"appSearch\" | \"websiteSearch\" | \"databaseSearch\" | \"testGuide\""
         ],
         "path": "packages/kbn-guided-onboarding/src/common/test_guide_config.ts",
         "deprecated": false,
@@ -865,7 +706,7 @@
             "label": "steps",
             "description": [],
             "signature": [
-              "({ id: \"step1\"; title: string; descriptionList: string[]; location: { appID: string; path: string; }; integration: string; } | { id: \"step2\"; title: string; descriptionList: (string | { descriptionText: string; linkText: string; linkUrl: string; isLinkExternal: true; })[]; location: { appID: string; path: string; }; manualCompletion: { title: string; description: string; readyToCompleteOnNavigation: true; }; } | { id: \"step3\"; title: string; description: string; manualCompletion: { title: string; description: string; }; location: { appID: string; path: string; }; })[]"
+              "({ id: \"step1\"; title: string; descriptionList: string[]; location: { appID: string; path: string; }; integration: string; } | { id: \"step2\"; title: string; descriptionList: (string | { descriptionText: string; linkText: string; linkUrl: string; isLinkExternal: true; })[]; location: { appID: string; path: string; }; manualCompletion: { title: string; description: string; readyToCompleteOnNavigation: true; }; } | { id: \"step3\"; title: string; description: string; manualCompletion: { title: string; description: string; }; location: { appID: string; path: string; }; } | { id: \"step4\"; title: string; description: string; location: { appID: string; path: string; }; })[]"
             ],
             "path": "packages/kbn-guided-onboarding/src/common/test_guide_config.ts",
             "deprecated": false,

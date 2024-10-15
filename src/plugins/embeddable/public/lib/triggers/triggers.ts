@@ -1,22 +1,27 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { i18n } from '@kbn/i18n';
+import type { EmbeddableApiContext } from '@kbn/presentation-publishing';
 import { Datatable, DatatableColumnMeta } from '@kbn/expressions-plugin/common';
 import { Trigger, RowClickContext } from '@kbn/ui-actions-plugin/public';
+import { BooleanRelation } from '@kbn/es-query';
 import { IEmbeddable } from '..';
 
+/**
+ * @deprecated use `EmbeddableApiContext` from `@kbn/presentation-publishing`
+ */
 export interface EmbeddableContext<T extends IEmbeddable = IEmbeddable> {
   embeddable: T;
 }
 
-export interface ValueClickContext<T extends IEmbeddable = IEmbeddable> {
-  embeddable?: T;
+export type ValueClickContext = Partial<EmbeddableApiContext> & {
   data: {
     data: Array<{
       table: Pick<Datatable, 'rows' | 'columns'>;
@@ -27,30 +32,44 @@ export interface ValueClickContext<T extends IEmbeddable = IEmbeddable> {
     timeFieldName?: string;
     negate?: boolean;
   };
-}
+};
 
-export interface CellValueContext<T extends IEmbeddable = IEmbeddable> {
-  embeddable: T;
+export type MultiValueClickContext = Partial<EmbeddableApiContext> & {
+  data: {
+    data: Array<{
+      table: Pick<Datatable, 'rows' | 'columns'>;
+      cells: Array<{
+        column: number;
+        row: number;
+      }>;
+      relation?: BooleanRelation;
+    }>;
+    timeFieldName?: string;
+    negate?: boolean;
+  };
+};
+
+export type CellValueContext = Partial<EmbeddableApiContext> & {
   data: Array<{
     value?: any;
     eventId?: string;
     columnMeta?: DatatableColumnMeta;
   }>;
-}
+};
 
-export interface RangeSelectContext<T extends IEmbeddable = IEmbeddable> {
-  embeddable?: T;
+export type RangeSelectContext = Partial<EmbeddableApiContext> & {
   data: {
     table: Datatable;
     column: number;
     range: number[];
     timeFieldName?: string;
   };
-}
+};
 
-export type ChartActionContext<T extends IEmbeddable = IEmbeddable> =
-  | ValueClickContext<T>
-  | RangeSelectContext<T>
+export type ChartActionContext =
+  | ValueClickContext
+  | MultiValueClickContext
+  | RangeSelectContext
   | RowClickContext;
 
 export const CONTEXT_MENU_TRIGGER = 'CONTEXT_MENU_TRIGGER';
@@ -61,6 +80,17 @@ export const contextMenuTrigger: Trigger = {
   }),
   description: i18n.translate('embeddableApi.contextMenuTrigger.description', {
     defaultMessage: "A new action will be added to the panel's context menu",
+  }),
+};
+
+export const PANEL_HOVER_TRIGGER = 'PANEL_HOVER_TRIGGER';
+export const panelHoverTrigger: Trigger = {
+  id: PANEL_HOVER_TRIGGER,
+  title: i18n.translate('embeddableApi.panelHoverTrigger.title', {
+    defaultMessage: 'Panel hover',
+  }),
+  description: i18n.translate('embeddableApi.panelHoverTrigger.description', {
+    defaultMessage: "A new action will be added to the panel's hover menu",
   }),
 };
 
@@ -108,6 +138,17 @@ export const valueClickTrigger: Trigger = {
   }),
 };
 
+export const MULTI_VALUE_CLICK_TRIGGER = 'MULTI_VALUE_CLICK_TRIGGER';
+export const multiValueClickTrigger: Trigger = {
+  id: MULTI_VALUE_CLICK_TRIGGER,
+  title: i18n.translate('embeddableApi.multiValueClickTrigger.title', {
+    defaultMessage: 'Multi click',
+  }),
+  description: i18n.translate('embeddableApi.multiValueClickTrigger.description', {
+    defaultMessage: 'Selecting multiple values of a single dimension on the visualization',
+  }),
+};
+
 export const CELL_VALUE_TRIGGER = 'CELL_VALUE_TRIGGER';
 export const cellValueTrigger: Trigger = {
   id: CELL_VALUE_TRIGGER,
@@ -121,7 +162,27 @@ export const cellValueTrigger: Trigger = {
 
 export const isValueClickTriggerContext = (
   context: ChartActionContext
-): context is ValueClickContext => context.data && 'data' in context.data;
+): context is ValueClickContext => {
+  return (
+    context.data &&
+    'data' in context.data &&
+    Array.isArray(context.data.data) &&
+    context.data.data.length > 0 &&
+    'column' in context.data.data[0]
+  );
+};
+
+export const isMultiValueClickTriggerContext = (
+  context: ChartActionContext
+): context is MultiValueClickContext => {
+  return (
+    context.data &&
+    'data' in context.data &&
+    Array.isArray(context.data.data) &&
+    context.data.data.length > 0 &&
+    'cells' in context.data.data[0]
+  );
+};
 
 export const isRangeSelectTriggerContext = (
   context: ChartActionContext

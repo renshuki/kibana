@@ -6,16 +6,22 @@
  */
 
 import { i18n } from '@kbn/i18n';
-import type { BaseIndexPatternColumn, OperationDefinition } from '..';
+import { uniqBy } from 'lodash';
+import type {
+  BaseIndexPatternColumn,
+  FieldBasedOperationErrorMessage,
+  OperationDefinition,
+} from '..';
 import type { ReferenceBasedIndexPatternColumn } from '../column_types';
 import type { IndexPattern } from '../../../../../types';
 import { runASTValidation, tryToParse } from './validation';
 import { WrappedFormulaEditor } from './editor';
 import { insertOrReplaceFormulaColumn } from './parse';
 import { generateFormula } from './generate';
-import { filterByVisibleOperation, nonNullable } from './util';
+import { filterByVisibleOperation } from './util';
 import { getManagedColumnsFrom } from '../../layer_helpers';
-import { getFilter, isColumnFormatted } from '../helpers';
+import { generateMissingFieldMessage, getFilter, isColumnFormatted } from '../helpers';
+import { FORMULA_LAYER_ONLY_STATIC_VALUES } from '../../../../../user_messages_ids';
 
 const defaultLabel = i18n.translate('xpack.lens.indexPattern.formulaLabel', {
   defaultMessage: 'Formula',
@@ -46,7 +52,7 @@ export const formulaOperation: OperationDefinition<FormulaIndexPatternColumn, 'm
   {
     type: 'formula',
     displayName: defaultLabel,
-    getDefaultLabel: (column, indexPattern) => column.params.formula ?? defaultLabel,
+    getDefaultLabel: (column) => column.params.formula ?? defaultLabel,
     input: 'managedReference',
     hidden: true,
     filterable: {
@@ -62,20 +68,20 @@ export const formulaOperation: OperationDefinition<FormulaIndexPatternColumn, 'm
     getDisabledStatus(indexPattern: IndexPattern) {
       return undefined;
     },
-    getErrorMessage(layer, columnId, indexPattern, dateRange, operationDefinitionMap) {
+    getErrorMessage(layer, columnId, indexPattern, dateRange, operationDefinitionMap, targetBars) {
       const column = layer.columns[columnId] as FormulaIndexPatternColumn;
       if (!column.params.formula || !operationDefinitionMap) {
-        return;
+        return [];
       }
 
       const visibleOperationsMap = filterByVisibleOperation(operationDefinitionMap);
-      const { root, error } = tryToParse(column.params.formula, visibleOperationsMap);
-      if (error || root == null) {
-        return error?.message ? [error.message] : [];
+      const parseResponse = tryToParse(column.params.formula, visibleOperationsMap);
+      if ('error' in parseResponse) {
+        return [{ uniqueId: parseResponse.error.id, message: parseResponse.error.message }];
       }
 
       const errors = runASTValidation(
-        root,
+        parseResponse.root,
         layer,
         indexPattern,
         visibleOperationsMap,
@@ -85,26 +91,39 @@ export const formulaOperation: OperationDefinition<FormulaIndexPatternColumn, 'm
 
       if (errors.length) {
         // remove duplicates
-        return Array.from(new Set(errors.map(({ message }) => message)));
+        return uniqBy(errors, ({ message }) => message).map(({ id, message, meta }) =>
+          id === 'missingField' && meta.fieldList.length > 0
+            ? generateMissingFieldMessage(meta.fieldList, columnId) // TODO: add missing field List
+            : {
+                uniqueId: id,
+                message,
+              }
+        );
       }
 
       const managedColumns = getManagedColumnsFrom(columnId, layer.columns);
-      const innerErrors = managedColumns
-        .flatMap(([id, col]) => {
-          const def = visibleOperationsMap[col.operationType];
-          if (def?.getErrorMessage) {
-            const messages = def.getErrorMessage(
-              layer,
-              id,
-              indexPattern,
-              dateRange,
-              visibleOperationsMap
+      const innerErrors = [
+        ...managedColumns
+          .flatMap(([id, col]) => {
+            const def = visibleOperationsMap[col.operationType];
+            // TOOD: it would be nice to have nicer column names here rather than `Part of <formula content>`
+            return (
+              def?.getErrorMessage?.(
+                layer,
+                id,
+                indexPattern,
+                dateRange,
+                visibleOperationsMap,
+                targetBars
+              ) ?? []
             );
-            return messages ? { message: messages.join(', ') } : [];
-          }
-          return [];
-        })
-        .filter(nonNullable);
+          })
+          // dedup messages with the same content
+          .reduce((memo, message) => {
+            memo.add(message);
+            return memo;
+          }, new Set<FieldBasedOperationErrorMessage>()),
+      ];
       const hasBuckets = layer.columnOrder.some((colId) => layer.columns[colId].isBucketed);
       const hasOtherMetrics = layer.columnOrder.some((colId) => {
         const col = layer.columns[colId];
@@ -123,6 +142,7 @@ export const formulaOperation: OperationDefinition<FormulaIndexPatternColumn, 'm
 
       if (hasBuckets && !hasOtherMetrics && hasBeenEvaluated) {
         innerErrors.push({
+          uniqueId: FORMULA_LAYER_ONLY_STATIC_VALUES,
           message: i18n.translate('xpack.lens.indexPattern.noRealMetricError', {
             defaultMessage:
               'A layer with only static values will not show results, use at least one dynamic metric',
@@ -130,7 +150,7 @@ export const formulaOperation: OperationDefinition<FormulaIndexPatternColumn, 'm
         });
       }
 
-      return innerErrors.length ? innerErrors.map(({ message }) => message) : undefined;
+      return innerErrors;
     },
     getPossibleOperation() {
       return {
@@ -144,11 +164,7 @@ export const formulaOperation: OperationDefinition<FormulaIndexPatternColumn, 'm
       const params = currentColumn.params;
       // TODO: improve this logic
       const useDisplayLabel = currentColumn.label !== defaultLabel;
-      const label = !params?.isFormulaBroken
-        ? useDisplayLabel
-          ? currentColumn.label
-          : params?.formula ?? defaultLabel
-        : defaultLabel;
+      const label = useDisplayLabel ? currentColumn.label : params?.formula ?? defaultLabel;
 
       return [
         {

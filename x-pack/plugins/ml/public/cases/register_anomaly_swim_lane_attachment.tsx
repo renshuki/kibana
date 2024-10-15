@@ -5,29 +5,20 @@
  * 2.0.
  */
 
-import React from 'react';
+import type { CasesPublicSetup } from '@kbn/cases-plugin/public';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
-import type { CasesUiSetup } from '@kbn/cases-plugin/public';
-import type { CoreStart } from '@kbn/core/public';
-import { getEmbeddableComponent } from '../embeddables';
-import type { MlStartDependencies } from '../plugin';
-import { ANOMALY_SWIMLANE_EMBEDDABLE_TYPE } from '..';
+import React from 'react';
 import { PLUGIN_ICON } from '../../common/constants/app';
+import { CASE_ATTACHMENT_TYPE_ID_ANOMALY_SWIMLANE } from '../../common/constants/cases';
+import type { MlStartDependencies } from '../plugin';
 
 export function registerAnomalySwimLaneCasesAttachment(
-  cases: CasesUiSetup,
-  coreStart: CoreStart,
+  cases: CasesPublicSetup,
   pluginStart: MlStartDependencies
 ) {
-  const EmbeddableComponent = getEmbeddableComponent(
-    ANOMALY_SWIMLANE_EMBEDDABLE_TYPE,
-    coreStart,
-    pluginStart
-  );
-
   cases.attachmentFramework.registerPersistableState({
-    id: ANOMALY_SWIMLANE_EMBEDDABLE_TYPE,
+    id: CASE_ATTACHMENT_TYPE_ID_ANOMALY_SWIMLANE,
     icon: PLUGIN_ICON,
     displayName: i18n.translate('xpack.ml.cases.anomalySwimLane.displayName', {
       defaultMessage: 'Anomaly swim lane',
@@ -43,7 +34,7 @@ export function registerAnomalySwimLaneCasesAttachment(
       children: React.lazy(async () => {
         const { initComponent } = await import('./anomaly_swim_lane_attachment');
         return {
-          default: initComponent(pluginStart.fieldFormats, EmbeddableComponent),
+          default: initComponent(pluginStart.fieldFormats),
         };
       }),
     }),

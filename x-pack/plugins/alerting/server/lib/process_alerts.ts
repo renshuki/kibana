@@ -10,6 +10,7 @@ import { cloneDeep } from 'lodash';
 import { Alert } from '../alert';
 import { AlertInstanceState, AlertInstanceContext } from '../types';
 import { updateFlappingHistory } from './flapping_utils';
+import { RulesSettingsFlappingProperties } from '../../common/rules_settings';
 
 interface ProcessAlertsOpts<
   State extends AlertInstanceState,
@@ -21,8 +22,8 @@ interface ProcessAlertsOpts<
   hasReachedAlertLimit: boolean;
   alertLimit: number;
   autoRecoverAlerts: boolean;
-  // flag used to determine whether or not we want to push the flapping state on to the flappingHistory array
-  setFlapping: boolean;
+  startedAt?: string | null;
+  flappingSettings: RulesSettingsFlappingProperties;
 }
 interface ProcessAlertsResult<
   State extends AlertInstanceState,
@@ -49,7 +50,8 @@ export function processAlerts<
   hasReachedAlertLimit,
   alertLimit,
   autoRecoverAlerts,
-  setFlapping,
+  flappingSettings,
+  startedAt,
 }: ProcessAlertsOpts<State, Context>): ProcessAlertsResult<
   State,
   Context,
@@ -62,14 +64,16 @@ export function processAlerts<
         existingAlerts,
         previouslyRecoveredAlerts,
         alertLimit,
-        setFlapping
+        flappingSettings,
+        startedAt
       )
     : processAlertsHelper(
         alerts,
         existingAlerts,
         previouslyRecoveredAlerts,
         autoRecoverAlerts,
-        setFlapping
+        flappingSettings,
+        startedAt
       );
 }
 
@@ -83,19 +87,20 @@ function processAlertsHelper<
   existingAlerts: Record<string, Alert<State, Context>>,
   previouslyRecoveredAlerts: Record<string, Alert<State, Context>>,
   autoRecoverAlerts: boolean,
-  setFlapping: boolean
+  flappingSettings: RulesSettingsFlappingProperties,
+  startedAt?: string | null
 ): ProcessAlertsResult<State, Context, ActionGroupIds, RecoveryActionGroupId> {
   const existingAlertIds = new Set(Object.keys(existingAlerts));
   const previouslyRecoveredAlertsIds = new Set(Object.keys(previouslyRecoveredAlerts));
 
-  const currentTime = new Date().toISOString();
+  const currentTime = startedAt ?? new Date().toISOString();
   const newAlerts: Record<string, Alert<State, Context, ActionGroupIds>> = {};
   const activeAlerts: Record<string, Alert<State, Context, ActionGroupIds>> = {};
   const currentRecoveredAlerts: Record<string, Alert<State, Context, RecoveryActionGroupId>> = {};
   const recoveredAlerts: Record<string, Alert<State, Context, RecoveryActionGroupId>> = {};
 
   for (const id in alerts) {
-    if (alerts.hasOwnProperty(id)) {
+    if (Object.hasOwn(alerts, id)) {
       // alerts with scheduled actions are considered "active"
       if (alerts[id].hasScheduledActions()) {
         activeAlerts[id] = alerts[id];
@@ -106,30 +111,31 @@ function processAlertsHelper<
           const state = newAlerts[id].getState();
           newAlerts[id].replaceState({ ...state, start: currentTime, duration: '0' });
 
-          if (setFlapping) {
+          if (flappingSettings.enabled) {
             if (previouslyRecoveredAlertsIds.has(id)) {
               // this alert has flapped from recovered to active
               newAlerts[id].setFlappingHistory(previouslyRecoveredAlerts[id].getFlappingHistory());
               previouslyRecoveredAlertsIds.delete(id);
             }
-            updateAlertFlappingHistory(newAlerts[id], true);
+            updateAlertFlappingHistory(flappingSettings, newAlerts[id], true);
           }
         } else {
           // this alert did exist in previous run
           // calculate duration to date for active alerts
           const state = existingAlerts[id].getState();
+          const currentState = activeAlerts[id].getState();
           const durationInMs =
             new Date(currentTime).valueOf() - new Date(state.start as string).valueOf();
           const duration = state.start ? millisToNanos(durationInMs) : undefined;
           activeAlerts[id].replaceState({
-            ...state,
+            ...currentState,
             ...(state.start ? { start: state.start } : {}),
             ...(duration !== undefined ? { duration } : {}),
           });
 
           // this alert is still active
-          if (setFlapping) {
-            updateAlertFlappingHistory(activeAlerts[id], false);
+          if (flappingSettings.enabled) {
+            updateAlertFlappingHistory(flappingSettings, activeAlerts[id], false);
           }
         }
       } else if (existingAlertIds.has(id) && autoRecoverAlerts) {
@@ -147,8 +153,8 @@ function processAlertsHelper<
           ...(state.start ? { end: currentTime } : {}),
         });
         // this alert has flapped from active to recovered
-        if (setFlapping) {
-          updateAlertFlappingHistory(recoveredAlerts[id], true);
+        if (flappingSettings.enabled) {
+          updateAlertFlappingHistory(flappingSettings, recoveredAlerts[id], true);
         }
       }
     }
@@ -157,8 +163,8 @@ function processAlertsHelper<
   // alerts are still recovered
   for (const id of previouslyRecoveredAlertsIds) {
     recoveredAlerts[id] = previouslyRecoveredAlerts[id];
-    if (setFlapping) {
-      updateAlertFlappingHistory(recoveredAlerts[id], false);
+    if (flappingSettings.enabled) {
+      updateAlertFlappingHistory(flappingSettings, recoveredAlerts[id], false);
     }
   }
 
@@ -175,7 +181,8 @@ function processAlertsLimitReached<
   existingAlerts: Record<string, Alert<State, Context>>,
   previouslyRecoveredAlerts: Record<string, Alert<State, Context>>,
   alertLimit: number,
-  setFlapping: boolean
+  flappingSettings: RulesSettingsFlappingProperties,
+  startedAt?: string | null
 ): ProcessAlertsResult<State, Context, ActionGroupIds, RecoveryActionGroupId> {
   const existingAlertIds = new Set(Object.keys(existingAlerts));
   const previouslyRecoveredAlertsIds = new Set(Object.keys(previouslyRecoveredAlerts));
@@ -185,7 +192,7 @@ function processAlertsLimitReached<
   // - pass through all existing alerts as active
   // - add any new alerts, up to the max allowed
 
-  const currentTime = new Date().toISOString();
+  const currentTime = startedAt ?? new Date().toISOString();
   const newAlerts: Record<string, Alert<State, Context, ActionGroupIds>> = {};
 
   // all existing alerts stay active
@@ -195,8 +202,8 @@ function processAlertsLimitReached<
 
   // update duration for existing alerts
   for (const id in activeAlerts) {
-    if (activeAlerts.hasOwnProperty(id)) {
-      if (alerts.hasOwnProperty(id)) {
+    if (Object.hasOwn(activeAlerts, id)) {
+      if (Object.hasOwn(alerts, id)) {
         activeAlerts[id] = alerts[id];
       }
       const state = existingAlerts[id].getState();
@@ -210,8 +217,8 @@ function processAlertsLimitReached<
       });
 
       // this alert is still active
-      if (setFlapping) {
-        updateAlertFlappingHistory(activeAlerts[id], false);
+      if (flappingSettings.enabled) {
+        updateAlertFlappingHistory(flappingSettings, activeAlerts[id], false);
       }
     }
   }
@@ -227,7 +234,7 @@ function processAlertsLimitReached<
 
   // look for new alerts and add until we hit capacity
   for (const id in alerts) {
-    if (alerts.hasOwnProperty(id) && alerts[id].hasScheduledActions()) {
+    if (Object.hasOwn(alerts, id) && alerts[id].hasScheduledActions()) {
       // if this alert did not exist in previous run, it is considered "new"
       if (!existingAlertIds.has(id)) {
         activeAlerts[id] = alerts[id];
@@ -236,12 +243,12 @@ function processAlertsLimitReached<
         const state = newAlerts[id].getState();
         newAlerts[id].replaceState({ ...state, start: currentTime, duration: '0' });
 
-        if (setFlapping) {
+        if (flappingSettings.enabled) {
           if (previouslyRecoveredAlertsIds.has(id)) {
             // this alert has flapped from recovered to active
             newAlerts[id].setFlappingHistory(previouslyRecoveredAlerts[id].getFlappingHistory());
           }
-          updateAlertFlappingHistory(newAlerts[id], true);
+          updateAlertFlappingHistory(flappingSettings, newAlerts[id], true);
         }
 
         if (!hasCapacityForNewAlerts()) {
@@ -258,7 +265,15 @@ export function updateAlertFlappingHistory<
   Context extends AlertInstanceContext,
   ActionGroupIds extends string,
   RecoveryActionGroupId extends string
->(alert: Alert<State, Context, ActionGroupIds | RecoveryActionGroupId>, state: boolean) {
-  const updatedFlappingHistory = updateFlappingHistory(alert.getFlappingHistory() || [], state);
+>(
+  flappingSettings: RulesSettingsFlappingProperties,
+  alert: Alert<State, Context, ActionGroupIds | RecoveryActionGroupId>,
+  state: boolean
+) {
+  const updatedFlappingHistory = updateFlappingHistory(
+    flappingSettings,
+    alert.getFlappingHistory() || [],
+    state
+  );
   alert.setFlappingHistory(updatedFlappingHistory);
 }

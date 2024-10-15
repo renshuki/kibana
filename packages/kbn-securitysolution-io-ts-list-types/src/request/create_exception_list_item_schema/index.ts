@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import * as t from 'io-ts';
@@ -25,6 +26,7 @@ import { meta } from '../../common/meta';
 import { namespace_type } from '../../common/namespace_type';
 import { tags } from '../../common/tags';
 import { nonEmptyEntriesArray } from '../../common/non_empty_entries_array';
+import { ExpireTimeOrUndefined, expireTimeOrUndefined } from '../../common';
 
 export const createExceptionListItemSchema = t.intersection([
   t.exact(
@@ -39,6 +41,7 @@ export const createExceptionListItemSchema = t.intersection([
   t.exact(
     t.partial({
       comments: DefaultCreateCommentsArray, // defaults to empty array if not set during decode
+      expire_time: expireTimeOrUndefined,
       item_id: DefaultUuid, // defaults to GUID (uuid v4) if not set during decode
       meta, // defaults to undefined if not set during decode
       namespace_type, // defaults to 'single' if not set during decode
@@ -53,9 +56,10 @@ export type CreateExceptionListItemSchema = t.OutputOf<typeof createExceptionLis
 // This type is used after a decode since some things are defaults after a decode.
 export type CreateExceptionListItemSchemaDecoded = Omit<
   RequiredKeepUndefined<t.TypeOf<typeof createExceptionListItemSchema>>,
-  'tags' | 'item_id' | 'entries' | 'namespace_type' | 'comments'
+  'tags' | 'item_id' | 'entries' | 'namespace_type' | 'comments' | 'expire_time'
 > & {
   comments: CreateCommentsArray;
+  expire_time: ExpireTimeOrUndefined;
   tags: Tags;
   item_id: ItemId;
   entries: EntriesArray;

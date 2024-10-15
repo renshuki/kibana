@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 const NODE_PRESET = require.resolve('@kbn/babel-preset/node_preset');
@@ -21,14 +22,7 @@ const cwd = process.cwd();
 function getBabelOptions(path, config = {}) {
   return {
     filename: path,
-    presets: [
-      [
-        NODE_PRESET,
-        {
-          'kibana/ignoredPkgIds': config.ignoredPkgIds,
-        },
-      ],
-    ],
+    presets: [NODE_PRESET],
     cwd,
     babelrc: false,
     sourceMaps: config.disableSourceMaps ? false : 'both',

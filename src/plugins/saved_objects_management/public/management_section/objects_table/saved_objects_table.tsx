@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { Component } from 'react';
@@ -13,14 +14,13 @@ import { saveAs } from '@elastic/filesaver';
 import { EuiSpacer, Query, CriteriaWithPagination } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { HttpStart, OverlayStart, NotificationsStart, ApplicationStart } from '@kbn/core/public';
-import type { SavedObjectsFindOptions } from '@kbn/core-saved-objects-api-server';
-import { RedirectAppLinks } from '@kbn/kibana-react-plugin/public';
+import { RedirectAppLinks } from '@kbn/shared-ux-link-redirect-app';
 import { SavedObjectsTaggingApi } from '@kbn/saved-objects-tagging-oss-plugin/public';
 import { DataViewsContract } from '@kbn/data-views-plugin/public';
 import { DataPublicPluginStart } from '@kbn/data-plugin/public';
 import { CustomBrandingStart } from '@kbn/core-custom-branding-browser';
 import { Subscription } from 'rxjs';
-import type { SavedObjectManagementTypeInfo } from '../../../common/types';
+import type { SavedObjectManagementTypeInfo, FindQueryHTTP } from '../../../common/types/latest';
 import {
   parseQuery,
   getSavedObjectCounts,
@@ -34,6 +34,7 @@ import {
   SavedObjectsExportResultDetails,
   getTagFindReferences,
 } from '../../lib';
+
 import { SavedObjectWithMetadata } from '../../types';
 import {
   SavedObjectsManagementActionServiceStart,
@@ -232,17 +233,15 @@ export class SavedObjectsTable extends Component<SavedObjectsTableProps, SavedOb
 
     // "searchFields" is missing from the "findOptions" but gets injected via the API.
     // The API extracts the fields from each uiExports.savedObjectsManagement "defaultSearchField" attribute
-    const findOptions: SavedObjectsFindOptions = {
+    const findOptions: FindQueryHTTP = {
       search: queryText ? `${queryText}*` : undefined,
       perPage,
       page: page + 1,
-      fields: ['id'],
       type: searchTypes,
+      sortField: sort?.field,
+      sortOrder: sort?.direction,
+      hasReference: getTagFindReferences({ selectedTags, taggingApi }),
     };
-    findOptions.sortField = sort?.field;
-    findOptions.sortOrder = sort?.direction;
-
-    findOptions.hasReference = getTagFindReferences({ selectedTags, taggingApi });
 
     try {
       const resp = await findObjects(http, findOptions);
@@ -257,7 +256,7 @@ export class SavedObjectsTable extends Component<SavedObjectsTableProps, SavedOb
         }
 
         return {
-          savedObjects: resp.savedObjects,
+          savedObjects: resp.saved_objects,
           filteredItemCount: resp.total,
           isSearching: false,
         };
@@ -708,7 +707,11 @@ export class SavedObjectsTable extends Component<SavedObjectsTableProps, SavedOb
           filteredCount={filteredItemCount}
         />
         <EuiSpacer size="l" />
-        <RedirectAppLinks application={applications}>
+        <RedirectAppLinks
+          coreStart={{
+            application: applications,
+          }}
+        >
           <Table
             basePath={http.basePath}
             taggingApi={taggingApi}

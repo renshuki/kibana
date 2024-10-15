@@ -1,15 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import supertest from 'supertest';
 import { ContextService } from '@kbn/core-http-context-server-internal';
 import type { HttpService, InternalHttpServiceSetup } from '@kbn/core-http-server-internal';
-import { createHttpServer, createCoreContext } from '@kbn/core-http-server-mocks';
+import { createHttpService, createCoreContext } from '@kbn/core-http-server-mocks';
 import { savedObjectsClientMock } from '@kbn/core-saved-objects-api-server-mocks';
 import { executionContextServiceMock } from '@kbn/core-execution-context-server-mocks';
 import type { ICoreUsageStatsClient } from '@kbn/core-usage-data-base-server-internal';
@@ -23,9 +24,10 @@ import {
   type InternalSavedObjectsRequestHandlerContext,
 } from '@kbn/core-saved-objects-server-internal';
 import { createHiddenTypeVariants } from '@kbn/core-test-helpers-test-utils';
+import { loggerMock } from '@kbn/logging-mocks';
+import { setupConfig } from './routes_test_utils';
 
 const coreId = Symbol('core');
-
 const testTypes = [
   { name: 'index-pattern', hide: false },
   { name: 'hidden-type', hide: true },
@@ -38,10 +40,11 @@ describe('GET /api/saved_objects/{type}/{id}', () => {
   let handlerContext: ReturnType<typeof coreMock.createRequestHandlerContext>;
   let savedObjectsClient: ReturnType<typeof savedObjectsClientMock.create>;
   let coreUsageStatsClient: jest.Mocked<ICoreUsageStatsClient>;
+  let loggerWarnSpy: jest.SpyInstance;
 
   beforeEach(async () => {
     const coreContext = createCoreContext({ coreId });
-    server = createHttpServer(coreContext);
+    server = createHttpService(coreContext);
     await server.preboot({ context: contextServiceMock.createPrebootContract() });
 
     const contextService = new ContextService(coreContext);
@@ -69,10 +72,18 @@ describe('GET /api/saved_objects/{type}/{id}', () => {
 
     const router =
       httpSetup.createRouter<InternalSavedObjectsRequestHandlerContext>('/api/saved_objects/');
+
     coreUsageStatsClient = coreUsageStatsClientMock.create();
     coreUsageStatsClient.incrementSavedObjectsGet.mockRejectedValue(new Error('Oh no!')); // intentionally throw this error, which is swallowed, so we can assert that the operation does not fail
     const coreUsageData = coreUsageDataServiceMock.createSetupContract(coreUsageStatsClient);
-    registerGetRoute(router, { coreUsageData });
+
+    const logger = loggerMock.create();
+    loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
+
+    const config = setupConfig();
+    const access = 'public';
+
+    registerGetRoute(router, { config, coreUsageData, logger, access });
 
     await server.start();
   });
@@ -96,29 +107,41 @@ describe('GET /api/saved_objects/{type}/{id}', () => {
 
     const result = await supertest(httpSetup.server.listener)
       .get('/api/saved_objects/index-pattern/logstash-*')
+      .set('x-elastic-internal-origin', 'kibana')
       .expect(200);
 
     expect(result.body).toEqual(clientResponse);
     expect(coreUsageStatsClient.incrementSavedObjectsGet).toHaveBeenCalledWith({
       request: expect.anything(),
+      types: ['index-pattern'],
     });
   });
 
   it('calls upon savedObjectClient.get', async () => {
     await supertest(httpSetup.server.listener)
       .get('/api/saved_objects/index-pattern/logstash-*')
+      .set('x-elastic-internal-origin', 'kibana')
       .expect(200);
 
     expect(savedObjectsClient.get).toHaveBeenCalled();
-
-    const args = savedObjectsClient.get.mock.calls[0];
-    expect(args).toEqual(['index-pattern', 'logstash-*']);
+    expect(savedObjectsClient.get).nthCalledWith(1, 'index-pattern', 'logstash-*', {
+      migrationVersionCompatibility: 'compatible',
+    });
   });
 
   it('returns with status 400 when a type is hidden from the http APIs', async () => {
     const result = await supertest(httpSetup.server.listener)
       .get('/api/saved_objects/hidden-from-http/hiddenId')
+      .set('x-elastic-internal-origin', 'kibana')
       .expect(400);
     expect(result.body.message).toContain("Unsupported saved object type: 'hidden-from-http'");
+  });
+
+  it('logs a warning message when called', async () => {
+    await supertest(httpSetup.server.listener)
+      .get('/api/saved_objects/index-pattern/logstash-*')
+      .set('x-elastic-internal-origin', 'kibana')
+      .expect(200);
+    expect(loggerWarnSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { createContext, useContext, useMemo, useEffect } from 'react';
-import type { FunctionComponent } from 'react';
+import type { FC, PropsWithChildren } from 'react';
 import { useFilesContext, FilesContextValue } from '@kbn/shared-ux-file-context';
 import { FileJSON } from '@kbn/shared-ux-file-types';
 import { FilePickerState, createFilePickerState } from './file_picker_state';
@@ -15,6 +16,7 @@ import { FilePickerState, createFilePickerState } from './file_picker_state';
 interface FilePickerContextValue extends FilesContextValue {
   state: FilePickerState;
   kind: string;
+  uploadMeta?: unknown;
   shouldAllowDelete?: (file: FileJSON) => boolean;
 }
 
@@ -26,14 +28,16 @@ interface FilePickerContextProps
   extends Pick<FilePickerContextValue, 'kind' | 'shouldAllowDelete'> {
   pageSize: number;
   multiple: boolean;
+  uploadMeta?: unknown;
 }
 
-export const FilePickerContext: FunctionComponent<FilePickerContextProps> = ({
+export const FilePickerContext: FC<PropsWithChildren<FilePickerContextProps>> = ({
   kind,
   shouldAllowDelete,
   pageSize,
   multiple,
   children,
+  uploadMeta,
 }) => {
   const filesContext = useFilesContext();
   const { client } = filesContext;
@@ -43,7 +47,7 @@ export const FilePickerContext: FunctionComponent<FilePickerContextProps> = ({
   );
   useEffect(() => state.dispose, [state]);
   return (
-    <FilePickerCtx.Provider value={{ state, kind, shouldAllowDelete, ...filesContext }}>
+    <FilePickerCtx.Provider value={{ state, kind, shouldAllowDelete, uploadMeta, ...filesContext }}>
       {children}
     </FilePickerCtx.Provider>
   );

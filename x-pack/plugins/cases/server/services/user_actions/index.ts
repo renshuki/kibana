@@ -6,78 +6,47 @@
  */
 
 import type {
-  SavedObject,
-  SavedObjectReference,
   SavedObjectsFindResponse,
+  SavedObjectsFindResult,
   SavedObjectsRawDoc,
 } from '@kbn/core/server';
 
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import type { KueryNode } from '@kbn/es-query';
-import type {
-  CaseUserActionAttributesWithoutConnectorId,
-  CaseUserActionInjectedAttributesWithoutActionId,
-  CaseUserActionResponse,
-} from '../../../common/api';
-import { ActionTypes } from '../../../common/api';
+import type { CaseUserActionDeprecatedResponse } from '../../../common/types/api';
+import { UserActionTypes } from '../../../common/types/domain';
+import { decodeOrThrow } from '../../common/runtime_types';
 import {
   CASE_SAVED_OBJECT,
   CASE_USER_ACTION_SAVED_OBJECT,
   MAX_DOCS_PER_PAGE,
 } from '../../../common/constants';
 import { buildFilter, combineFilters } from '../../client/utils';
-import type { CaseConnectorActivity, CaseConnectorFields, PushInfo, ServiceContext } from './types';
+import type {
+  CaseConnectorActivity,
+  CaseConnectorFields,
+  ConnectorActivityAggsResult,
+  ConnectorFieldsBeforePushAggsResult,
+  GetUsersResponse,
+  MultipleCasesUserActionsTotalAggsResult,
+  ParticipantsAggsResult,
+  PushInfo,
+  PushTimeFrameInfo,
+  ServiceContext,
+  TimeFrameInfo,
+  TopHits,
+  UserActionsStatsAggsResult,
+} from './types';
 import { defaultSortField } from '../../common/utils';
 import { UserActionPersister } from './operations/create';
 import { UserActionFinder } from './operations/find';
 import { transformToExternalModel, legacyTransformFindResponseToExternalModel } from './transform';
-
-export interface UserActionItem {
-  attributes: CaseUserActionAttributesWithoutConnectorId;
-  references: SavedObjectReference[];
-}
-
-interface MostRecentResults {
-  mostRecent: {
-    hits: {
-      total: number;
-      hits: SavedObjectsRawDoc[];
-    };
-  };
-}
-
-interface ConnectorActivityAggsResult {
-  references: {
-    connectors: {
-      ids: {
-        buckets: Array<{
-          key: string;
-          reverse: {
-            connectorActivity: {
-              buckets: {
-                changeConnector: MostRecentResults;
-                createCase: MostRecentResults;
-                pushInfo: MostRecentResults;
-              };
-            };
-          };
-        }>;
-      };
-    };
-  };
-}
-
-interface ConnectorFieldsBeforePushAggsResult {
-  references: {
-    connectors: {
-      reverse: {
-        ids: {
-          buckets: Record<string, MostRecentResults>;
-        };
-      };
-    };
-  };
-}
+import type {
+  UserActionPersistedAttributes,
+  UserActionSavedObjectTransformed,
+} from '../../common/types/user_actions';
+import { UserActionTransformedAttributesRt } from '../../common/types/user_actions';
+import { CaseUserActionDeprecatedResponseRt } from '../../../common/types/api';
 
 export class CaseUserActionService {
   private readonly _creator: UserActionPersister;
@@ -110,14 +79,14 @@ export class CaseUserActionService {
       }
 
       const connectorsFilter = buildFilter({
-        filters: [ActionTypes.connector, ActionTypes.create_case],
+        filters: [UserActionTypes.connector, UserActionTypes.create_case],
         field: 'type',
         operator: 'or',
         type: CASE_USER_ACTION_SAVED_OBJECT,
       });
 
       const response = await this.context.unsecuredSavedObjectsClient.find<
-        CaseUserActionAttributesWithoutConnectorId,
+        UserActionPersistedAttributes,
         ConnectorFieldsBeforePushAggsResult
       >({
         type: CASE_USER_ACTION_SAVED_OBJECT,
@@ -243,14 +212,20 @@ export class CaseUserActionService {
       if (fields.mostRecent.hits.hits.length > 0) {
         const rawFieldsDoc = fields.mostRecent.hits.hits[0];
         const doc =
-          this.context.savedObjectsSerializer.rawToSavedObject<CaseUserActionAttributesWithoutConnectorId>(
+          this.context.savedObjectsSerializer.rawToSavedObject<UserActionPersistedAttributes>(
             rawFieldsDoc
           );
 
-        const fieldsDoc = transformToExternalModel(
+        const res = transformToExternalModel(
           doc,
           this.context.persistableStateAttachmentTypeRegistry
         );
+
+        const decodeRes = decodeOrThrow(UserActionTransformedAttributesRt)(res.attributes);
+
+        const fieldsDoc = Object.assign(res, {
+          attributes: decodeRes,
+        });
 
         connectorFields.set(connectorId, fieldsDoc);
       }
@@ -260,8 +235,9 @@ export class CaseUserActionService {
   }
 
   public async getMostRecentUserAction(
-    caseId: string
-  ): Promise<SavedObject<CaseUserActionInjectedAttributesWithoutActionId> | undefined> {
+    caseId: string,
+    isCasesWebhook = false
+  ): Promise<UserActionSavedObjectTransformed | undefined> {
     try {
       this.context.log.debug(
         `Attempting to retrieve the most recent user action for case id: ${caseId}`
@@ -272,10 +248,16 @@ export class CaseUserActionService {
 
       const connectorsFilter = buildFilter({
         filters: [
-          ActionTypes.comment,
-          ActionTypes.description,
-          ActionTypes.tags,
-          ActionTypes.title,
+          UserActionTypes.comment,
+          UserActionTypes.description,
+          UserActionTypes.tags,
+          UserActionTypes.title,
+          /**
+           * TODO: Remove when all connectors support the status and
+           * the severity user actions or if there is a mechanism to
+           * define supported user actions per connector type
+           */
+          ...(isCasesWebhook ? [UserActionTypes.severity, UserActionTypes.status] : []),
         ],
         field: 'type',
         operator: 'or',
@@ -283,26 +265,31 @@ export class CaseUserActionService {
       });
 
       const userActions =
-        await this.context.unsecuredSavedObjectsClient.find<CaseUserActionAttributesWithoutConnectorId>(
-          {
-            type: CASE_USER_ACTION_SAVED_OBJECT,
-            hasReference: { type, id },
-            page: 1,
-            perPage: 1,
-            sortField: 'created_at',
-            sortOrder: 'desc',
-            filter: connectorsFilter,
-          }
-        );
+        await this.context.unsecuredSavedObjectsClient.find<UserActionPersistedAttributes>({
+          type: CASE_USER_ACTION_SAVED_OBJECT,
+          hasReference: { type, id },
+          page: 1,
+          perPage: 1,
+          sortField: 'created_at',
+          sortOrder: 'desc',
+          filter: connectorsFilter,
+        });
 
       if (userActions.saved_objects.length <= 0) {
         return;
       }
 
-      return transformToExternalModel(
+      const res = transformToExternalModel(
         userActions.saved_objects[0],
         this.context.persistableStateAttachmentTypeRegistry
       );
+
+      const decodeRes = decodeOrThrow(UserActionTransformedAttributesRt)(res.attributes);
+
+      return {
+        ...res,
+        attributes: decodeRes,
+      };
     } catch (error) {
       this.context.log.error(
         `Error while retrieving the most recent user action for case id: ${caseId}: ${error}`
@@ -316,14 +303,14 @@ export class CaseUserActionService {
       this.context.log.debug(`Attempting to find connector information for case id: ${caseId}`);
 
       const connectorsFilter = buildFilter({
-        filters: [ActionTypes.connector, ActionTypes.create_case, ActionTypes.pushed],
+        filters: [UserActionTypes.connector, UserActionTypes.create_case, UserActionTypes.pushed],
         field: 'type',
         operator: 'or',
         type: CASE_USER_ACTION_SAVED_OBJECT,
       });
 
       const response = await this.context.unsecuredSavedObjectsClient.find<
-        CaseUserActionAttributesWithoutConnectorId,
+        UserActionPersistedAttributes,
         ConnectorActivityAggsResult
       >({
         type: CASE_USER_ACTION_SAVED_OBJECT,
@@ -368,41 +355,30 @@ export class CaseUserActionService {
         rawFieldsDoc = createCase.mostRecent.hits.hits[0];
       }
 
-      let fieldsDoc: SavedObject<CaseUserActionInjectedAttributesWithoutActionId> | undefined;
+      let fieldsDoc: UserActionSavedObjectTransformed | undefined;
       if (rawFieldsDoc != null) {
         const doc =
-          this.context.savedObjectsSerializer.rawToSavedObject<CaseUserActionAttributesWithoutConnectorId>(
+          this.context.savedObjectsSerializer.rawToSavedObject<UserActionPersistedAttributes>(
             rawFieldsDoc
           );
 
-        fieldsDoc = transformToExternalModel(
+        const res = transformToExternalModel(
           doc,
           this.context.persistableStateAttachmentTypeRegistry
         );
+
+        const decodeRes = decodeOrThrow(UserActionTransformedAttributesRt)(res.attributes);
+
+        fieldsDoc = { ...res, attributes: decodeRes };
       }
 
-      const pushInfo = connectorInfo.reverse.connectorActivity.buckets.pushInfo;
-      let pushDoc: SavedObject<CaseUserActionInjectedAttributesWithoutActionId> | undefined;
-
-      if (pushInfo.mostRecent.hits.hits.length > 0) {
-        const rawPushDoc = pushInfo.mostRecent.hits.hits[0];
-
-        const doc =
-          this.context.savedObjectsSerializer.rawToSavedObject<CaseUserActionAttributesWithoutConnectorId>(
-            rawPushDoc
-          );
-
-        pushDoc = transformToExternalModel(
-          doc,
-          this.context.persistableStateAttachmentTypeRegistry
-        );
-      }
+      const pushDocs = this.getPushDocs(connectorInfo.reverse.connectorActivity.buckets.pushInfo);
 
       if (fieldsDoc != null) {
         caseConnectorInfo.push({
           connectorId: connectorInfo.key,
           fields: fieldsDoc,
-          push: pushDoc,
+          push: pushDocs,
         });
       } else {
         this.context.log.warn(`Unable to find fields for connector id: ${connectorInfo.key}`);
@@ -410,6 +386,37 @@ export class CaseUserActionService {
     }
 
     return caseConnectorInfo;
+  }
+
+  private getPushDocs(pushTimeFrameInfo: TimeFrameInfo): PushTimeFrameInfo | undefined {
+    const mostRecentPushDoc = this.getTopHitsDoc(pushTimeFrameInfo.mostRecent);
+    const oldestPushDoc = this.getTopHitsDoc(pushTimeFrameInfo.oldest);
+
+    if (mostRecentPushDoc && oldestPushDoc) {
+      return {
+        mostRecent: mostRecentPushDoc,
+        oldest: oldestPushDoc,
+      };
+    }
+  }
+
+  private getTopHitsDoc(topHits: TopHits): UserActionSavedObjectTransformed | undefined {
+    if (topHits.hits.hits.length > 0) {
+      const rawPushDoc = topHits.hits.hits[0];
+
+      const doc =
+        this.context.savedObjectsSerializer.rawToSavedObject<UserActionPersistedAttributes>(
+          rawPushDoc
+        );
+
+      const res = transformToExternalModel(
+        doc,
+        this.context.persistableStateAttachmentTypeRegistry
+      );
+
+      const decodeRes = decodeOrThrow(UserActionTransformedAttributesRt)(res.attributes);
+      return { ...res, attributes: decodeRes };
+    }
   }
 
   private static buildConnectorInfoAggs(): Record<
@@ -447,7 +454,7 @@ export class CaseUserActionService {
                             changeConnector: {
                               term: {
                                 [`${CASE_USER_ACTION_SAVED_OBJECT}.attributes.type`]:
-                                  ActionTypes.connector,
+                                  UserActionTypes.connector,
                               },
                             },
                             // If the case was initialized with a connector, the fields could exist in the create_case
@@ -455,14 +462,14 @@ export class CaseUserActionService {
                             createCase: {
                               term: {
                                 [`${CASE_USER_ACTION_SAVED_OBJECT}.attributes.type`]:
-                                  ActionTypes.create_case,
+                                  UserActionTypes.create_case,
                               },
                             },
                             // Also grab the most recent push occurrence for the connector
                             pushInfo: {
                               term: {
                                 [`${CASE_USER_ACTION_SAVED_OBJECT}.attributes.type`]:
-                                  ActionTypes.pushed,
+                                  UserActionTypes.pushed,
                               },
                             },
                           },
@@ -474,6 +481,18 @@ export class CaseUserActionService {
                                 {
                                   [`${CASE_USER_ACTION_SAVED_OBJECT}.created_at`]: {
                                     order: 'desc',
+                                  },
+                                },
+                              ],
+                              size: 1,
+                            },
+                          },
+                          oldest: {
+                            top_hits: {
+                              sort: [
+                                {
+                                  [`${CASE_USER_ACTION_SAVED_OBJECT}.created_at`]: {
+                                    order: 'asc',
                                   },
                                 },
                               ],
@@ -493,27 +512,39 @@ export class CaseUserActionService {
     };
   }
 
-  public async getAll(caseId: string): Promise<SavedObjectsFindResponse<CaseUserActionResponse>> {
+  public async getAll(
+    caseId: string
+  ): Promise<SavedObjectsFindResponse<CaseUserActionDeprecatedResponse>> {
     try {
       const id = caseId;
       const type = CASE_SAVED_OBJECT;
 
       const userActions =
-        await this.context.unsecuredSavedObjectsClient.find<CaseUserActionAttributesWithoutConnectorId>(
-          {
-            type: CASE_USER_ACTION_SAVED_OBJECT,
-            hasReference: { type, id },
-            page: 1,
-            perPage: MAX_DOCS_PER_PAGE,
-            sortField: 'created_at',
-            sortOrder: 'asc',
-          }
-        );
+        await this.context.unsecuredSavedObjectsClient.find<UserActionPersistedAttributes>({
+          type: CASE_USER_ACTION_SAVED_OBJECT,
+          hasReference: { type, id },
+          page: 1,
+          perPage: MAX_DOCS_PER_PAGE,
+          sortField: 'created_at',
+          sortOrder: 'asc',
+        });
 
-      return legacyTransformFindResponseToExternalModel(
+      const transformedUserActions = legacyTransformFindResponseToExternalModel(
         userActions,
         this.context.persistableStateAttachmentTypeRegistry
       );
+
+      const validatedUserActions: Array<SavedObjectsFindResult<CaseUserActionDeprecatedResponse>> =
+        [];
+      for (const so of transformedUserActions.saved_objects) {
+        const validatedAttributes = decodeOrThrow(CaseUserActionDeprecatedResponseRt)(
+          so.attributes
+        );
+
+        validatedUserActions.push(Object.assign(so, { attributes: validatedAttributes }));
+      }
+
+      return Object.assign(transformedUserActions, { saved_objects: validatedUserActions });
     } catch (error) {
       this.context.log.error(`Error on GET case user action case id: ${caseId}: ${error}`);
       throw error;
@@ -526,6 +557,8 @@ export class CaseUserActionService {
         `Attempting to retrieve user actions associated with cases: [${caseIds}]`
       );
 
+      // We are intentionally not adding the type here because we only want to interact with the id and this function
+      // should not use the attributes
       const finder = this.context.unsecuredSavedObjectsClient.createPointInTimeFinder({
         type: CASE_USER_ACTION_SAVED_OBJECT,
         hasReference: caseIds.map((id) => ({ id, type: CASE_SAVED_OBJECT })),
@@ -562,7 +595,7 @@ export class CaseUserActionService {
     try {
       this.context.log.debug(`Attempting to count connectors for case id ${caseId}`);
       const connectorsFilter = buildFilter({
-        filters: [ActionTypes.connector, ActionTypes.create_case],
+        filters: [UserActionTypes.connector, UserActionTypes.create_case],
         field: 'type',
         operator: 'or',
         type: CASE_USER_ACTION_SAVED_OBJECT,
@@ -571,7 +604,7 @@ export class CaseUserActionService {
       const combinedFilter = combineFilters([connectorsFilter, filter]);
 
       const response = await this.context.unsecuredSavedObjectsClient.find<
-        CaseUserActionAttributesWithoutConnectorId,
+        UserActionPersistedAttributes,
         { references: { connectors: { ids: { buckets: Array<{ key: string }> } } } }
       >({
         type: CASE_USER_ACTION_SAVED_OBJECT,
@@ -622,6 +655,183 @@ export class CaseUserActionService {
               },
             },
           },
+        },
+      },
+    };
+  }
+
+  public async getMultipleCasesUserActionsTotal({
+    caseIds,
+  }: {
+    caseIds: string[];
+  }): Promise<Record<string, number>> {
+    const response = await this.context.unsecuredSavedObjectsClient.find<
+      unknown,
+      MultipleCasesUserActionsTotalAggsResult
+    >({
+      type: CASE_USER_ACTION_SAVED_OBJECT,
+      hasReference: caseIds.map((id) => ({ type: CASE_SAVED_OBJECT, id })),
+      hasReferenceOperator: 'OR',
+      page: 1,
+      perPage: 1,
+      sortField: defaultSortField,
+      aggs: CaseUserActionService.buildMultipleCasesUserActionsTotalAgg(caseIds.length),
+    });
+
+    const result: Record<string, number> = {};
+
+    response?.aggregations?.references.caseUserActions.buckets.forEach(
+      ({ key, doc_count: totalUserActions }: { key: string; doc_count: number }) => {
+        result[key] = totalUserActions;
+      }
+    );
+
+    return result;
+  }
+
+  private static buildMultipleCasesUserActionsTotalAgg(
+    idsLength: number
+  ): Record<string, estypes.AggregationsAggregationContainer> {
+    return {
+      references: {
+        nested: {
+          path: `${CASE_USER_ACTION_SAVED_OBJECT}.references`,
+        },
+        aggregations: {
+          caseUserActions: {
+            terms: {
+              field: `${CASE_USER_ACTION_SAVED_OBJECT}.references.id`,
+              size: idsLength,
+            },
+          },
+        },
+      },
+    };
+  }
+
+  public async getCaseUserActionStats({ caseId }: { caseId: string }) {
+    const response = await this.context.unsecuredSavedObjectsClient.find<
+      unknown,
+      UserActionsStatsAggsResult
+    >({
+      type: CASE_USER_ACTION_SAVED_OBJECT,
+      hasReference: { type: CASE_SAVED_OBJECT, id: caseId },
+      page: 1,
+      perPage: 1,
+      sortField: defaultSortField,
+      aggs: CaseUserActionService.buildUserActionStatsAgg(),
+    });
+
+    const result = {
+      total: response.total,
+      total_comments: 0,
+      total_other_actions: 0,
+    };
+
+    response.aggregations?.totals.buckets.forEach(({ key, doc_count: docCount }) => {
+      if (key === 'user') {
+        result.total_comments = docCount;
+      }
+    });
+
+    result.total_other_actions = result.total - result.total_comments;
+
+    return result;
+  }
+
+  private static buildUserActionStatsAgg(): Record<
+    string,
+    estypes.AggregationsAggregationContainer
+  > {
+    return {
+      totals: {
+        terms: {
+          field: `${CASE_USER_ACTION_SAVED_OBJECT}.attributes.payload.comment.type`,
+          size: 100,
+        },
+      },
+    };
+  }
+
+  public async getUsers({ caseId }: { caseId: string }): Promise<GetUsersResponse> {
+    const response = await this.context.unsecuredSavedObjectsClient.find<
+      unknown,
+      ParticipantsAggsResult
+    >({
+      type: CASE_USER_ACTION_SAVED_OBJECT,
+      hasReference: { type: CASE_SAVED_OBJECT, id: caseId },
+      page: 1,
+      perPage: 1,
+      sortField: defaultSortField,
+      aggs: CaseUserActionService.buildParticipantsAgg(),
+    });
+
+    const assignedAndUnassignedUsers: GetUsersResponse['assignedAndUnassignedUsers'] =
+      new Set<string>();
+    const participants: GetUsersResponse['participants'] = [];
+    const participantsBuckets = response.aggregations?.participants.buckets ?? [];
+    const assigneesBuckets = response.aggregations?.assignees.buckets ?? [];
+
+    for (const bucket of participantsBuckets) {
+      const rawDoc = bucket.docs.hits.hits[0];
+      const user =
+        this.context.savedObjectsSerializer.rawToSavedObject<UserActionPersistedAttributes>(rawDoc);
+
+      /**
+       * We are interested only for the created_by
+       * and the owner. For that reason, there is no
+       * need to call transformToExternalModel which
+       * injects the references ids to the document.
+       */
+      participants.push({
+        id: user.id,
+        user: user.attributes.created_by,
+        owner: user.attributes.owner,
+      });
+    }
+
+    /**
+     * The users set includes any
+     * user that got assigned in the
+     * case even if they removed as
+     * assignee at some point in time.
+     */
+    for (const bucket of assigneesBuckets) {
+      assignedAndUnassignedUsers.add(bucket.key);
+    }
+
+    return { participants, assignedAndUnassignedUsers };
+  }
+
+  private static buildParticipantsAgg(): Record<string, estypes.AggregationsAggregationContainer> {
+    return {
+      participants: {
+        terms: {
+          field: `${CASE_USER_ACTION_SAVED_OBJECT}.attributes.created_by.username`,
+          size: MAX_DOCS_PER_PAGE,
+          order: { _key: 'asc' },
+          missing: 'Unknown',
+        },
+        aggregations: {
+          docs: {
+            top_hits: {
+              size: 1,
+              sort: [
+                {
+                  [`${CASE_USER_ACTION_SAVED_OBJECT}.created_at`]: {
+                    order: 'desc',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      assignees: {
+        terms: {
+          field: `${CASE_USER_ACTION_SAVED_OBJECT}.attributes.payload.assignees.uid`,
+          size: MAX_DOCS_PER_PAGE,
+          order: { _key: 'asc' },
         },
       },
     };

@@ -5,23 +5,21 @@
  * 2.0.
  */
 
+import moment from 'moment';
 import React, { FunctionComponent } from 'react';
-import { i18n } from '@kbn/i18n';
+
 import {
+  EuiCallOut,
   EuiDescriptionList,
   EuiDescriptionListProps,
-  EuiTitle,
-  EuiCallOut,
   EuiSpacer,
+  EuiTitle,
 } from '@elastic/eui';
-import moment from 'moment';
+import { i18n } from '@kbn/i18n';
+import { VisualReportingSoftDisabledError } from '@kbn/reporting-common/errors';
 
+import { Job, useKibana } from '@kbn/reporting-public';
 import { USES_HEADLESS_JOB_TYPES } from '../../../common/constants';
-import { VisualReportingSoftDisabledError } from '../../../common/errors';
-
-import type { Job } from '../../lib/job';
-import { useKibana } from '../../shared_imports';
-
 import { sharedI18nTexts } from '../../shared_i18n_texts';
 
 // TODO: Move all of these i18n texts to ./i18n_texts.tsx
@@ -65,6 +63,7 @@ export const ReportInfoFlyoutContent: FunctionComponent<Props> = ({ info }) => {
   const memoryInMegabytes =
     info.metrics?.pdf?.memoryInMegabytes ?? info.metrics?.png?.memoryInMegabytes;
   const hasCsvRows = info.metrics?.csv?.rows != null;
+  const hasPagingStrategy = info.pagingStrategy != null;
   const hasScreenshot = USES_HEADLESS_JOB_TYPES.includes(info.jobtype);
   const hasPdfPagesMetric = info.metrics?.pdf?.pages != null;
 
@@ -116,6 +115,12 @@ export const ReportInfoFlyoutContent: FunctionComponent<Props> = ({ info }) => {
       }),
       description: info.metrics?.csv?.rows?.toString() || NA,
     },
+    hasPagingStrategy && {
+      title: i18n.translate('xpack.reporting.listing.infoPanel.csvSearchStrategy', {
+        defaultMessage: 'Search strategy',
+      }),
+      description: info.pagingStrategy || NA,
+    },
 
     hasScreenshot && {
       title: i18n.translate('xpack.reporting.listing.infoPanel.dimensionsInfoHeight', {
@@ -140,6 +145,12 @@ export const ReportInfoFlyoutContent: FunctionComponent<Props> = ({ info }) => {
       description: info.metrics?.pdf?.pages,
     },
 
+    {
+      title: i18n.translate('xpack.reporting.listing.infoPanel.jobId', {
+        defaultMessage: 'Report job ID',
+      }),
+      description: info.id,
+    },
     {
       title: i18n.translate('xpack.reporting.listing.infoPanel.processedByInfo', {
         defaultMessage: 'Processed by',

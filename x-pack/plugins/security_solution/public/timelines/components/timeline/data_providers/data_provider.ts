@@ -4,7 +4,9 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-
+import type { QueryType } from '@kbn/elastic-assistant';
+import type { DataProviderType } from '../../../../../common/api/timeline';
+import type { PrimitiveOrArrayOfPrimitives } from '../../../../common/lib/kuery';
 /** Represents the Timeline data providers */
 
 /** The `is` operator in a KQL query */
@@ -19,16 +21,11 @@ export const IS_ONE_OF_OPERATOR = 'includes';
 /** The operator applied to a field */
 export type QueryOperator = typeof IS_OPERATOR | typeof EXISTS_OPERATOR | typeof IS_ONE_OF_OPERATOR;
 
-export enum DataProviderType {
-  default = 'default',
-  template = 'template',
-}
-
 export interface QueryMatch {
   field: string;
   displayField?: string;
-  value: string | number | Array<string | number>;
-  displayValue?: string | number;
+  value: PrimitiveOrArrayOfPrimitives;
+  displayValue?: string | number | boolean;
   operator: QueryOperator;
 }
 
@@ -62,11 +59,13 @@ export interface DataProvider {
   /**
    * Returns a DataProviderType
    */
-  type?: DataProviderType.default | DataProviderType.template;
+  type?: DataProviderType;
   /**
    * Array of multiple values for a field
    */
   valueArray?: string[] | null;
+
+  queryType?: QueryType;
 }
 
 export type DataProvidersAnd = Pick<DataProvider, Exclude<keyof DataProvider, 'and'>>;

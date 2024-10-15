@@ -7,7 +7,7 @@
 
 import sinon from 'sinon';
 import moment from 'moment';
-import set from 'lodash/set';
+import set from '@kbn/safer-lodash-set/set';
 import cloneDeep from 'lodash/cloneDeep';
 
 import type { ExceptionListItemSchema } from '@kbn/securitysolution-io-ts-list-types';
@@ -33,16 +33,11 @@ import {
 import type { CreateTimeline, UpdateTimelineLoading } from './types';
 import type { EcsSecurityExtension as Ecs } from '@kbn/securitysolution-ecs';
 import type { DataProvider } from '../../../../common/types/timeline';
-import {
-  TimelineId,
-  TimelineType,
-  TimelineStatus,
-  TimelineTabs,
-} from '../../../../common/types/timeline';
+import { TimelineTypeEnum, TimelineStatusEnum } from '../../../../common/api/timeline';
+import { TimelineId, TimelineTabs } from '../../../../common/types/timeline';
 import type { ISearchStart } from '@kbn/data-plugin/public';
 import { searchServiceMock } from '@kbn/data-plugin/public/search/mocks';
 import { getTimelineTemplate } from '../../../timelines/containers/api';
-import { defaultHeaders } from '../../../timelines/components/timeline/body/column_headers/default_headers';
 import { KibanaServices } from '../../../common/lib/kibana';
 import {
   DEFAULT_FROM_MOMENT,
@@ -61,7 +56,8 @@ import {
   USER,
 } from '@kbn/lists-plugin/common/constants.mock';
 import { of } from 'rxjs';
-import { timelineDefaults } from '../../../timelines/store/timeline/defaults';
+import { timelineDefaults } from '../../../timelines/store/defaults';
+import { defaultUdtHeaders } from '../../../timelines/components/timeline/unified_components/default_headers';
 
 jest.mock('../../../timelines/containers/api', () => ({
   getTimelineTemplate: jest.fn(),
@@ -78,6 +74,7 @@ export const getExceptionListItemSchemaMock = (
   created_by: USER,
   description: DESCRIPTION,
   entries: ENTRIES,
+  expire_time: undefined,
   id: '1',
   item_id: 'endpoint_list_item',
   list_id: 'endpoint_list_id',
@@ -103,6 +100,7 @@ const getExpectedcreateTimelineParam = (
   notes: null,
   timeline: {
     ...timelineDefaults,
+    excludedRowRendererIds: [],
     dataProviders,
     id: TimelineId.active,
     indexNames: [],
@@ -268,8 +266,6 @@ describe('alert actions', () => {
     // jest carries state between mocked implementations when using
     // spyOn. So now we're doing all three of these.
     // https://github.com/facebook/jest/issues/7136#issuecomment-565976599
-    jest.resetAllMocks();
-    jest.restoreAllMocks();
     jest.clearAllMocks();
     mockGetExceptionFilter = jest.fn().mockResolvedValue(undefined);
 
@@ -337,40 +333,35 @@ describe('alert actions', () => {
                 id: '@timestamp',
                 type: 'date',
                 esTypes: ['date'],
-                initialWidth: 190,
+                initialWidth: 215,
               },
               {
                 columnHeaderType: 'not-filtered',
                 id: 'message',
-                initialWidth: 180,
+                initialWidth: 360,
               },
               {
                 columnHeaderType: 'not-filtered',
                 id: 'event.category',
-                initialWidth: 180,
               },
               {
                 columnHeaderType: 'not-filtered',
                 id: 'host.name',
-                initialWidth: 180,
               },
               {
                 columnHeaderType: 'not-filtered',
                 id: 'source.ip',
-                initialWidth: 180,
               },
               {
                 columnHeaderType: 'not-filtered',
                 id: 'destination.ip',
-                initialWidth: 180,
               },
               {
                 columnHeaderType: 'not-filtered',
                 id: 'user.name',
-                initialWidth: 180,
               },
             ],
-            defaultColumns: defaultHeaders,
+            defaultColumns: defaultUdtHeaders,
             dataProviders: [],
             dataViewId: null,
             dateRange: {
@@ -390,7 +381,6 @@ describe('alert actions', () => {
             eventIdToNoteIds: {},
             eventType: 'all',
             excludedRowRendererIds: [],
-            expandedDetail: {},
             filters: [
               {
                 $state: {
@@ -450,15 +440,19 @@ describe('alert actions', () => {
                 sortDirection: 'desc',
               },
             ],
-            status: TimelineStatus.draft,
+            status: TimelineStatusEnum.draft,
             title: '',
-            timelineType: TimelineType.default,
+            timelineType: TimelineTypeEnum.default,
             templateTimelineId: null,
             templateTimelineVersion: null,
             version: null,
+            savedSearchId: null,
+            savedSearch: null,
+            isDataProviderVisible: false,
+            rowHeight: 3,
+            sampleSize: 500,
           },
           to: '2018-11-05T19:03:25.937Z',
-          resolveTimelineConfig: undefined,
           ruleNote: '# this is some markdown documentation',
           ruleAuthor: ['elastic'],
         };
@@ -555,10 +549,13 @@ describe('alert actions', () => {
           getExceptionFilter: mockGetExceptionFilter,
         });
 
+        const expectedTimelineProps = structuredClone(defaultTimelineProps);
+        expectedTimelineProps.timeline.excludedRowRendererIds = [];
+
         expect(updateTimelineIsLoading).not.toHaveBeenCalled();
         expect(mockGetExceptionFilter).not.toHaveBeenCalled();
         expect(createTimeline).toHaveBeenCalledTimes(1);
-        expect(createTimeline).toHaveBeenCalledWith(defaultTimelineProps);
+        expect(createTimeline).toHaveBeenCalledWith(expectedTimelineProps);
       });
     });
 
@@ -582,10 +579,13 @@ describe('alert actions', () => {
           getExceptionFilter: mockGetExceptionFilter,
         });
 
+        const expectedTimelineProps = structuredClone(defaultTimelineProps);
+        expectedTimelineProps.timeline.excludedRowRendererIds = [];
+
         expect(updateTimelineIsLoading).not.toHaveBeenCalled();
         expect(mockGetExceptionFilter).not.toHaveBeenCalled();
         expect(createTimeline).toHaveBeenCalledTimes(1);
-        expect(createTimeline).toHaveBeenCalledWith(defaultTimelineProps);
+        expect(createTimeline).toHaveBeenCalledWith(expectedTimelineProps);
       });
     });
 
@@ -620,6 +620,7 @@ describe('alert actions', () => {
           ...defaultTimelineProps,
           timeline: {
             ...defaultTimelineProps.timeline,
+            excludedRowRendererIds: [],
             resolveTimelineConfig: undefined,
             dataProviders: [
               {
@@ -648,6 +649,9 @@ describe('alert actions', () => {
           },
         };
 
+        const expectedTimelineProps = structuredClone(defaultTimelineProps);
+        expectedTimelineProps.timeline.excludedRowRendererIds = [];
+
         await sendAlertToTimelineAction({
           createTimeline,
           ecsData: ecsDataMock,
@@ -659,7 +663,7 @@ describe('alert actions', () => {
         expect(updateTimelineIsLoading).not.toHaveBeenCalled();
         expect(mockGetExceptionFilter).not.toHaveBeenCalled();
         expect(createTimeline).toHaveBeenCalledTimes(1);
-        expect(createTimeline).toHaveBeenCalledWith(defaultTimelineProps);
+        expect(createTimeline).toHaveBeenCalledWith(expectedTimelineProps);
       });
     });
 
@@ -743,6 +747,7 @@ describe('alert actions', () => {
           ...defaultTimelineProps,
           timeline: {
             ...defaultTimelineProps.timeline,
+            excludedRowRendererIds: [],
             dataProviders: [
               {
                 and: [],
@@ -896,7 +901,9 @@ describe('alert actions', () => {
           ...defaultTimelineProps,
           timeline: {
             ...defaultTimelineProps.timeline,
+            excludedRowRendererIds: [],
             columns: mockGetOneTimelineResult.columns,
+            defaultColumns: defaultUdtHeaders,
             dataProviders: [],
             dateRange: {
               start: expectedFrom,
@@ -1013,9 +1020,9 @@ describe('alert actions', () => {
       });
 
       test('it uses ecs.Data.timestamp if one is provided', () => {
-        const ecsDataMock: Ecs = {
+        const ecsDataMock = {
           ...mockEcsDataWithAlert,
-          timestamp: '2020-03-20T17:59:46.349Z',
+          '@timestamp': '2020-03-20T17:59:46.349Z',
         };
         const result = determineToAndFrom({ ecs: ecsDataMock });
 
@@ -1024,7 +1031,8 @@ describe('alert actions', () => {
       });
 
       test('it uses current time timestamp if ecsData.timestamp is not provided', () => {
-        const { timestamp, ...ecsDataMock } = mockEcsDataWithAlert;
+        // @ts-ignore // TODO remove when EcsSecurityExtension has been cleaned https://github.com/elastic/kibana/issues/156879
+        const { '@timestamp': timestamp, ...ecsDataMock } = mockEcsDataWithAlert;
         const result = determineToAndFrom({ ecs: ecsDataMock });
 
         expect(result.from).toEqual('2020-03-01T17:54:46.349Z');
@@ -1047,6 +1055,7 @@ describe('alert actions', () => {
           ...defaultTimelineProps,
           timeline: {
             ...defaultTimelineProps.timeline,
+            excludedRowRendererIds: [],
             filters: [
               {
                 meta: {
@@ -1110,6 +1119,8 @@ describe('alert actions', () => {
           timeline: {
             ...defaultTimelineProps.timeline,
             dataProviders: [],
+            columns: defaultUdtHeaders,
+            defaultColumns: defaultUdtHeaders,
             dateRange: {
               start: expectedFrom,
               end: expectedTo,

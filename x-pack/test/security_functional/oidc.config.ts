@@ -6,26 +6,25 @@
  */
 
 import { resolve } from 'path';
-import { FtrConfigProviderContext } from '@kbn/test';
-import { services } from '../functional/services';
+
+import type { FtrConfigProviderContext } from '@kbn/test';
+
 import { pageObjects } from '../functional/page_objects';
+import { services } from '../functional/services';
 
 // the default export of config files must be a config provider
 // that returns an object with the projects config values
 export default async function ({ readConfigFile }: FtrConfigProviderContext) {
   const kibanaCommonConfig = await readConfigFile(
-    require.resolve('../../../test/common/config.js')
+    require.resolve('@kbn/test-suites-src/common/config')
   );
   const kibanaFunctionalConfig = await readConfigFile(
-    require.resolve('../../../test/functional/config.base.js')
+    require.resolve('@kbn/test-suites-src/functional/config.base')
   );
 
   const kibanaPort = kibanaFunctionalConfig.get('servers.kibana.port');
-  const jwksPath = resolve(__dirname, '../security_api_integration/fixtures/oidc/jwks.json');
-  const oidcOpPPlugin = resolve(
-    __dirname,
-    '../security_api_integration/fixtures/oidc/oidc_provider'
-  );
+  const jwksPath = require.resolve('@kbn/security-api-integration-helpers/oidc/jwks.json');
+  const oidcOpPPlugin = resolve(__dirname, '../security_api_integration/plugins/oidc_provider');
 
   const testEndpointsPlugin = resolve(__dirname, './plugins/test_endpoints');
 
@@ -70,6 +69,7 @@ export default async function ({ readConfigFile }: FtrConfigProviderContext) {
         '--xpack.security.authc.providers.oidc.oidc1.order=0',
         '--xpack.security.authc.providers.oidc.oidc1.realm=oidc1',
         '--xpack.security.authc.providers.basic.basic1.order=1',
+        '--server.restrictInternalApis=false',
       ],
     },
     uiSettings: {

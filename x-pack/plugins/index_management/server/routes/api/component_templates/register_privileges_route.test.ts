@@ -46,6 +46,13 @@ describe('GET privileges', () => {
       router,
       config: {
         isSecurityEnabled: () => true,
+        isLegacyTemplatesEnabled: true,
+        isIndexStatsEnabled: true,
+        isSizeAndDocCountEnabled: false,
+        isDataStreamStatsEnabled: true,
+        enableMappingsSourceFieldSection: true,
+        enableTogglingDataRetention: true,
+        enableProjectLevelRetentionChecks: false,
       },
       indexDataEnricher: mockedIndexDataEnricher,
       lib: {
@@ -112,6 +119,13 @@ describe('GET privileges', () => {
         router,
         config: {
           isSecurityEnabled: () => false,
+          isLegacyTemplatesEnabled: true,
+          isIndexStatsEnabled: true,
+          isSizeAndDocCountEnabled: false,
+          isDataStreamStatsEnabled: true,
+          enableMappingsSourceFieldSection: true,
+          enableTogglingDataRetention: true,
+          enableProjectLevelRetentionChecks: false,
         },
         indexDataEnricher: mockedIndexDataEnricher,
         lib: {

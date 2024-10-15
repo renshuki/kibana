@@ -16,6 +16,7 @@ import type {
 
 export interface FleetConfigType {
   enabled: boolean;
+  isAirGapped?: boolean;
   registryUrl?: string;
   registryProxyUrl?: string;
   agents: {
@@ -23,11 +24,27 @@ export interface FleetConfigType {
     elasticsearch: {
       hosts?: string[];
       ca_sha256?: string;
+      ca_trusted_fingerprint?: string;
     };
     fleet_server?: {
       hosts?: string[];
     };
   };
+  agentless?: {
+    enabled: boolean;
+    api?: {
+      url?: string;
+      tls?: {
+        certificate?: string;
+        key?: string;
+        ca?: string;
+      };
+    };
+  };
+  spaceSettings?: Array<{
+    space_id: string;
+    allowed_namespace_prefixes: string[] | null;
+  }>;
   agentPolicies?: PreconfiguredAgentPolicy[];
   packages?: PreconfiguredPackage[];
   outputs?: PreconfiguredOutput[];
@@ -36,10 +53,34 @@ export interface FleetConfigType {
   packageVerification?: {
     gpgKeyPath?: string;
   };
+  setup?: {
+    agentPolicySchemaUpgradeBatchSize?: number;
+    uninstallTokenVerificationBatchSize?: number;
+  };
   developer?: {
+    maxAgentPoliciesWithInactivityTimeout?: number;
     disableRegistryVersionCheck?: boolean;
     bundledPackageLocation?: string;
+    testSecretsIndex?: string;
+    disableBundledPackagesCache?: boolean;
   };
+  internal?: {
+    disableILMPolicies: boolean;
+    fleetServerStandalone: boolean;
+    onlyAllowAgentUpgradeToKnownVersions: boolean;
+    activeAgentsSoftLimit?: number;
+    retrySetupOnBoot: boolean;
+    registry: {
+      kibanaVersionCheckEnabled: boolean;
+      capabilities: string[];
+      spec?: {
+        min?: string;
+        max?: string;
+      };
+      excludePackages: string[];
+    };
+  };
+  createArtifactsBulkBatchSize?: number;
 }
 
 // Calling Object.entries(PackagesGroupedByStatus) gave `status: string`

@@ -140,14 +140,6 @@
             "section": "def-common.Adapters",
             "text": "Adapters"
           },
-          ", ",
-          {
-            "pluginId": "@kbn/utility-types",
-            "scope": "common",
-            "docId": "kibKbnUtilityTypesPluginApi",
-            "section": "def-common.SerializableRecord",
-            "text": "SerializableRecord"
-          },
           ">>"
         ],
         "path": "src/plugins/chart_expressions/expression_partition_vis/common/expression_functions/partition_labels_function.ts",
@@ -709,13 +701,20 @@
           },
           {
             "parentPluginId": "expressionPartitionVis",
-            "id": "def-common.PartitionVisParams.showValuesInLegend",
-            "type": "CompoundType",
+            "id": "def-common.PartitionVisParams.legendStats",
+            "type": "Array",
             "tags": [],
-            "label": "showValuesInLegend",
+            "label": "legendStats",
             "description": [],
             "signature": [
-              "boolean | undefined"
+              {
+                "pluginId": "visualizations",
+                "scope": "common",
+                "docId": "kibVisualizationsPluginApi",
+                "section": "def-common.PartitionLegendValue",
+                "text": "PartitionLegendValue"
+              },
+              "[] | undefined"
             ],
             "path": "src/plugins/chart_expressions/expression_partition_vis/common/types/expression_renderers.ts",
             "deprecated": false,
@@ -1004,11 +1003,21 @@
           },
           {
             "parentPluginId": "expressionPartitionVis",
-            "id": "def-common.WaffleVisConfig.showValuesInLegend",
-            "type": "boolean",
+            "id": "def-common.WaffleVisConfig.legendStats",
+            "type": "Array",
             "tags": [],
-            "label": "showValuesInLegend",
+            "label": "legendStats",
             "description": [],
+            "signature": [
+              {
+                "pluginId": "visualizations",
+                "scope": "common",
+                "docId": "kibVisualizationsPluginApi",
+                "section": "def-common.PartitionLegendValue",
+                "text": "PartitionLegendValue"
+              },
+              "[] | undefined"
+            ],
             "path": "src/plugins/chart_expressions/expression_partition_vis/common/types/expression_renderers.ts",
             "deprecated": false,
             "trackAdoption": false
@@ -1068,6 +1077,31 @@
       }
     ],
     "misc": [
+      {
+        "parentPluginId": "expressionPartitionVis",
+        "id": "def-common.AllowedPartitionOverrides",
+        "type": "Type",
+        "tags": [],
+        "label": "AllowedPartitionOverrides",
+        "description": [],
+        "signature": [
+          "{ partition?: { animation?: ",
+          {
+            "pluginId": "@kbn/chart-expressions-common",
+            "scope": "common",
+            "docId": "kibKbnChartExpressionsCommonPluginApi",
+            "section": "def-common.MakeOverridesSerializable",
+            "text": "MakeOverridesSerializable"
+          },
+          "<{ duration: number; } | undefined>; valueGetter?: ",
+          "ValueGetter",
+          " | undefined; fillOutside?: boolean | undefined; radiusOutside?: number | undefined; fillRectangleWidth?: number | undefined; fillRectangleHeight?: number | undefined; topGroove?: number | undefined; percentFormatter?: \"ignore\" | undefined; clockwiseSectors?: boolean | undefined; maxRowCount?: number | undefined; specialFirstInnermostSector?: boolean | undefined; smallMultiples?: string | undefined; drilldown?: boolean | undefined; } | undefined; }"
+        ],
+        "path": "src/plugins/chart_expressions/expression_partition_vis/common/types/expression_functions.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "initialIsOpen": false
+      },
       {
         "parentPluginId": "expressionPartitionVis",
         "id": "def-common.ExpressionValuePartitionLabels",
@@ -1154,7 +1188,7 @@
             "text": "ExpressionValueRender"
           },
           "<",
-          "RenderValue",
+          "PartitionChartProps",
           ">, ",
           {
             "pluginId": "expressions",
@@ -1170,14 +1204,6 @@
             "docId": "kibInspectorPluginApi",
             "section": "def-common.Adapters",
             "text": "Adapters"
-          },
-          ", ",
-          {
-            "pluginId": "@kbn/utility-types",
-            "scope": "common",
-            "docId": "kibKbnUtilityTypesPluginApi",
-            "section": "def-common.SerializableRecord",
-            "text": "SerializableRecord"
           },
           ">>"
         ],
@@ -1265,14 +1291,6 @@
             "section": "def-common.Adapters",
             "text": "Adapters"
           },
-          ", ",
-          {
-            "pluginId": "@kbn/utility-types",
-            "scope": "common",
-            "docId": "kibKbnUtilityTypesPluginApi",
-            "section": "def-common.SerializableRecord",
-            "text": "SerializableRecord"
-          },
           ">>"
         ],
         "path": "src/plugins/chart_expressions/expression_partition_vis/common/types/expression_functions.ts",
@@ -1335,7 +1353,7 @@
             "text": "ExpressionValueRender"
           },
           "<",
-          "RenderValue",
+          "PartitionChartProps",
           ">, ",
           {
             "pluginId": "expressions",
@@ -1351,14 +1369,6 @@
             "docId": "kibInspectorPluginApi",
             "section": "def-common.Adapters",
             "text": "Adapters"
-          },
-          ", ",
-          {
-            "pluginId": "@kbn/utility-types",
-            "scope": "common",
-            "docId": "kibKbnUtilityTypesPluginApi",
-            "section": "def-common.SerializableRecord",
-            "text": "SerializableRecord"
           },
           ">>"
         ],
@@ -1452,7 +1462,7 @@
             "text": "ExpressionValueRender"
           },
           "<",
-          "RenderValue",
+          "PartitionChartProps",
           ">, ",
           {
             "pluginId": "expressions",
@@ -1468,14 +1478,6 @@
             "docId": "kibInspectorPluginApi",
             "section": "def-common.Adapters",
             "text": "Adapters"
-          },
-          ", ",
-          {
-            "pluginId": "@kbn/utility-types",
-            "scope": "common",
-            "docId": "kibKbnUtilityTypesPluginApi",
-            "section": "def-common.SerializableRecord",
-            "text": "SerializableRecord"
           },
           ">>"
         ],
@@ -1539,7 +1541,7 @@
             "text": "ExpressionValueRender"
           },
           "<",
-          "RenderValue",
+          "PartitionChartProps",
           ">, ",
           {
             "pluginId": "expressions",
@@ -1555,14 +1557,6 @@
             "docId": "kibInspectorPluginApi",
             "section": "def-common.Adapters",
             "text": "Adapters"
-          },
-          ", ",
-          {
-            "pluginId": "@kbn/utility-types",
-            "scope": "common",
-            "docId": "kibKbnUtilityTypesPluginApi",
-            "section": "def-common.SerializableRecord",
-            "text": "SerializableRecord"
           },
           ">>"
         ],

@@ -1,35 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import * as Rx from 'rxjs';
+import type { UsageCounters } from '../../common';
 
-export interface CounterMetric {
+export interface UsageCounterParams {
   domainId: string;
-  counterName: string;
-  counterType: string;
-  incrementBy: number;
-}
-
-export interface UsageCounterDeps {
-  domainId: string;
-  counter$: Rx.Subject<CounterMetric>;
-}
-
-/**
- * Details about the counter to be incremented
- */
-export interface IncrementCounterParams {
-  /** The name of the counter **/
-  counterName: string;
-  /** The counter type ("count" by default) **/
-  counterType?: string;
-  /** Increment the counter by this number (1 if not specified) **/
-  incrementBy?: number;
+  counter$: Rx.Subject<UsageCounters.v1.CounterMetric>;
+  retentionPeriodDays?: number;
 }
 
 /**
@@ -39,29 +23,49 @@ export interface IncrementCounterParams {
  */
 export interface IUsageCounter {
   /**
+   * Defines a domainId (aka a namespace) under which multiple counters can be stored
+   */
+  domainId: string;
+  /**
+   * Defines custom retention period for the counters under this domain.
+   * This is the number of days worth of counters that must be kept in the system indices.
+   * See USAGE_COUNTERS_KEEP_DOCS_FOR_DAYS for default value
+   */
+  retentionPeriodDays?: number;
+  /**
    * Notifies the counter about a new event happening so it can increase the count internally.
    * @param params {@link IncrementCounterParams}
    */
-  incrementCounter: (params: IncrementCounterParams) => void;
+  incrementCounter: (params: UsageCounters.v1.IncrementCounterParams) => void;
 }
 
 export class UsageCounter implements IUsageCounter {
-  private domainId: string;
-  private counter$: Rx.Subject<CounterMetric>;
+  public readonly domainId: string;
+  private counter$: Rx.Subject<UsageCounters.v1.CounterMetric>;
+  public readonly retentionPeriodDays?: number | undefined;
 
-  constructor({ domainId, counter$ }: UsageCounterDeps) {
+  constructor({ domainId, counter$, retentionPeriodDays }: UsageCounterParams) {
     this.domainId = domainId;
     this.counter$ = counter$;
+    this.retentionPeriodDays = retentionPeriodDays;
   }
 
-  public incrementCounter = (params: IncrementCounterParams) => {
-    const { counterName, counterType = 'count', incrementBy = 1 } = params;
+  public incrementCounter = (params: UsageCounters.v1.IncrementCounterParams) => {
+    const {
+      counterName,
+      counterType = 'count',
+      source = 'server', // default behavior before introducing the property
+      incrementBy = 1,
+      namespace,
+    } = params;
 
     this.counter$.next({
-      counterName,
       domainId: this.domainId,
+      counterName,
       counterType,
+      source,
       incrementBy,
+      ...(namespace && { namespace }),
     });
   };
 }

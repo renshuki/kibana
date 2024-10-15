@@ -5,7 +5,6 @@
  * 2.0.
  */
 
-import type { SavedObjectsClientContract, SavedObjectsServiceStart } from '@kbn/core/server';
 import type {
   AgentClient,
   AgentPolicyServiceInterface,
@@ -13,19 +12,36 @@ import type {
   PackagePolicyClient,
   PackageClient,
 } from '@kbn/fleet-plugin/server';
-import { createInternalReadonlySoClient } from '../../utils/create_internal_readonly_so_client';
+import { PACKAGE_POLICY_SAVED_OBJECT_TYPE } from '@kbn/fleet-plugin/common';
+import type { SavedObjectsClientFactory } from '../saved_objects';
+
+/**
+ * The set of Fleet services used by Endpoint
+ */
+export interface EndpointFleetServicesInterface {
+  agent: AgentClient;
+  agentPolicy: AgentPolicyServiceInterface;
+  packages: PackageClient;
+  packagePolicy: PackagePolicyClient;
+  /** The `kuery` that can be used to filter for Endpoint integration policies */
+  endpointPolicyKuery: string;
+}
+
+export interface EndpointInternalFleetServicesInterface extends EndpointFleetServicesInterface {
+  savedObjects: SavedObjectsClientFactory;
+}
 
 export interface EndpointFleetServicesFactoryInterface {
   asInternalUser(): EndpointInternalFleetServicesInterface;
 }
 
+/**
+ * Provides centralized way to get all services for Fleet and access internal saved object clients
+ */
 export class EndpointFleetServicesFactory implements EndpointFleetServicesFactoryInterface {
   constructor(
-    private readonly fleetDependencies: Pick<
-      FleetStartContract,
-      'agentService' | 'packageService' | 'packagePolicyService' | 'agentPolicyService'
-    >,
-    private savedObjectsStart: SavedObjectsServiceStart
+    private readonly fleetDependencies: FleetStartContract,
+    private readonly savedObjects: SavedObjectsClientFactory
   ) {}
 
   asInternalUser(): EndpointInternalFleetServicesInterface {
@@ -39,27 +55,13 @@ export class EndpointFleetServicesFactory implements EndpointFleetServicesFactor
     return {
       agent: agentService.asInternalUser,
       agentPolicy,
+
       packages: packageService.asInternalUser,
       packagePolicy,
 
-      internalReadonlySoClient: createInternalReadonlySoClient(this.savedObjectsStart),
+      endpointPolicyKuery: `${PACKAGE_POLICY_SAVED_OBJECT_TYPE}.package.name: "endpoint"`,
+
+      savedObjects: this.savedObjects,
     };
   }
-}
-
-/**
- * The set of Fleet services used by Endpoint
- */
-export interface EndpointFleetServicesInterface {
-  agent: AgentClient;
-  agentPolicy: AgentPolicyServiceInterface;
-  packages: PackageClient;
-  packagePolicy: PackagePolicyClient;
-}
-
-export interface EndpointInternalFleetServicesInterface extends EndpointFleetServicesInterface {
-  /**
-   * An internal SO client (readonly) that can be used with the Fleet services that require it
-   */
-  internalReadonlySoClient: SavedObjectsClientContract;
 }

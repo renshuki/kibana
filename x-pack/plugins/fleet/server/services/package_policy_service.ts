@@ -5,13 +5,18 @@
  * 2.0.
  */
 
-import type { KibanaRequest, Logger } from '@kbn/core/server';
 import type {
-  ElasticsearchClient,
+  AuthenticatedUser,
+  KibanaRequest,
+  Logger,
   RequestHandlerContext,
+  ElasticsearchClient,
   SavedObjectsClientContract,
 } from '@kbn/core/server';
-import type { AuthenticatedUser } from '@kbn/security-plugin/server';
+
+import type { SavedObjectError } from '@kbn/core-saved-objects-common';
+
+import type { HTTPAuthorizationHeader } from '../../common/http_authorization_header';
 
 import type {
   PostDeletePackagePoliciesResponse,
@@ -44,14 +49,22 @@ export interface PackagePolicyClient {
       spaceId?: string;
       id?: string;
       user?: AuthenticatedUser;
+      authorizationHeader?: HTTPAuthorizationHeader | null;
       bumpRevision?: boolean;
       force?: boolean;
       skipEnsureInstalled?: boolean;
       skipUniqueNameVerification?: boolean;
       overwrite?: boolean;
       packageInfo?: PackageInfo;
-    }
+    },
+    context?: RequestHandlerContext,
+    request?: KibanaRequest
   ): Promise<PackagePolicy>;
+
+  inspect(
+    soClient: SavedObjectsClientContract,
+    packagePolicy: NewPackagePolicyWithId
+  ): Promise<NewPackagePolicy>;
 
   bulkCreate(
     soClient: SavedObjectsClientContract,
@@ -61,16 +74,26 @@ export interface PackagePolicyClient {
       user?: AuthenticatedUser;
       bumpRevision?: boolean;
       force?: true;
+      authorizationHeader?: HTTPAuthorizationHeader | null;
     }
-  ): Promise<PackagePolicy[]>;
+  ): Promise<{
+    created: PackagePolicy[];
+    failed: Array<{ packagePolicy: NewPackagePolicy; error?: Error | SavedObjectError }>;
+  }>;
 
   bulkUpdate(
     soClient: SavedObjectsClientContract,
     esClient: ElasticsearchClient,
-    packagePolicyUpdates: Array<NewPackagePolicy & { version?: string; id: string }>,
+    packagePolicyUpdates: UpdatePackagePolicy[],
     options?: { user?: AuthenticatedUser; force?: boolean },
     currentVersion?: string
-  ): Promise<PackagePolicy[] | null>;
+  ): Promise<{
+    updatedPolicies: PackagePolicy[] | null;
+    failedPolicies: Array<{
+      packagePolicy: NewPackagePolicyWithId;
+      error: Error | SavedObjectError;
+    }>;
+  }>;
 
   get(soClient: SavedObjectsClientContract, id: string): Promise<PackagePolicy | null>;
 
@@ -87,7 +110,7 @@ export interface PackagePolicyClient {
 
   list(
     soClient: SavedObjectsClientContract,
-    options: ListWithKuery & { withAgentCount?: boolean }
+    options: ListWithKuery & { spaceId?: string }
   ): Promise<ListResult<PackagePolicy>>;
 
   listIds(
@@ -108,7 +131,13 @@ export interface PackagePolicyClient {
     soClient: SavedObjectsClientContract,
     esClient: ElasticsearchClient,
     ids: string[],
-    options?: { user?: AuthenticatedUser; skipUnassignFromAgentPolicies?: boolean; force?: boolean }
+    options?: {
+      user?: AuthenticatedUser;
+      skipUnassignFromAgentPolicies?: boolean;
+      force?: boolean;
+    },
+    context?: RequestHandlerContext,
+    request?: KibanaRequest
   ): Promise<PostDeletePackagePoliciesResponse>;
 
   upgrade(
@@ -135,7 +164,7 @@ export interface PackagePolicyClient {
   buildPackagePolicyFromPackage(
     soClient: SavedObjectsClientContract,
     pkgName: string,
-    logger?: Logger
+    options?: { logger?: Logger; installMissingPackage?: boolean }
   ): Promise<NewPackagePolicy | undefined>;
 
   runExternalCallbacks<A extends ExternalCallback[0]>(
@@ -146,9 +175,13 @@ export interface PackagePolicyClient {
       ? PostDeletePackagePoliciesResponse
       : A extends 'packagePolicyPostCreate'
       ? PackagePolicy
+      : A extends 'packagePolicyUpdate'
+      ? UpdatePackagePolicy
       : NewPackagePolicy,
-    context: RequestHandlerContext,
-    request: KibanaRequest
+    soClient: SavedObjectsClientContract,
+    esClient: ElasticsearchClient,
+    context?: RequestHandlerContext,
+    request?: KibanaRequest
   ): Promise<
     A extends 'packagePolicyDelete'
       ? void
@@ -156,13 +189,25 @@ export interface PackagePolicyClient {
       ? void
       : A extends 'packagePolicyPostCreate'
       ? PackagePolicy
+      : A extends 'packagePolicyUpdate'
+      ? UpdatePackagePolicy
       : NewPackagePolicy
   >;
 
-  runDeleteExternalCallbacks(deletedPackagePolicies: DeletePackagePoliciesResponse): Promise<void>;
+  runDeleteExternalCallbacks(
+    deletedPackagePolicies: DeletePackagePoliciesResponse,
+    soClient: SavedObjectsClientContract,
+    esClient: ElasticsearchClient,
+    context?: RequestHandlerContext,
+    request?: KibanaRequest
+  ): Promise<void>;
 
   runPostDeleteExternalCallbacks(
-    deletedPackagePolicies: PostDeletePackagePoliciesResponse
+    deletedPackagePolicies: PostDeletePackagePoliciesResponse,
+    soClient: SavedObjectsClientContract,
+    esClient: ElasticsearchClient,
+    context?: RequestHandlerContext,
+    request?: KibanaRequest
   ): Promise<void>;
 
   getUpgradePackagePolicyInfo(
@@ -173,4 +218,43 @@ export interface PackagePolicyClient {
     packageInfo: PackageInfo;
     experimentalDataStreamFeatures: ExperimentalDataStreamFeature[];
   }>;
+
+  /**
+   * Remove an output from all package policies that are using it, and replace the output by the default ones.
+   * @param soClient
+   * @param esClient
+   * @param outputId
+   */
+  removeOutputFromAll(
+    esClient: ElasticsearchClient,
+    outputId: string,
+    options?: { force?: boolean }
+  ): Promise<void>;
+
+  /**
+   * Returns an `AsyncIterable` for retrieving all integration policy IDs
+   * @param soClient
+   * @param options
+   */
+  fetchAllItemIds(
+    soClient: SavedObjectsClientContract,
+    options?: PackagePolicyClientFetchAllItemIdsOptions
+  ): Promise<AsyncIterable<string[]>>;
+
+  /**
+   * Returns an `AsyncIterable` for retrieving all integration policies
+   * @param soClient
+   * @param options
+   */
+  fetchAllItems(
+    soClient: SavedObjectsClientContract,
+    options?: PackagePolicyClientFetchAllItemsOptions
+  ): Promise<AsyncIterable<PackagePolicy[]>>;
 }
+
+export type PackagePolicyClientFetchAllItemIdsOptions = Pick<ListWithKuery, 'perPage' | 'kuery'>;
+
+export type PackagePolicyClientFetchAllItemsOptions = Pick<
+  ListWithKuery,
+  'perPage' | 'kuery' | 'sortField' | 'sortOrder'
+>;

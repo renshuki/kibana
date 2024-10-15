@@ -5,9 +5,13 @@
  * 2.0.
  */
 
-import type { ElasticsearchClient, SavedObjectsClientContract } from '@kbn/core/server';
+import type {
+  AuthenticatedUser,
+  ElasticsearchClient,
+  SavedObjectsClientContract,
+} from '@kbn/core/server';
 
-import type { AuthenticatedUser } from '@kbn/security-plugin/common/model';
+import type { HTTPAuthorizationHeader } from '../../common/http_authorization_header';
 
 import {
   FLEET_ELASTIC_AGENT_PACKAGE,
@@ -21,6 +25,7 @@ import { agentPolicyService, packagePolicyService } from '.';
 import { incrementPackageName } from './package_policies';
 import { bulkInstallPackages } from './epm/packages';
 import { ensureDefaultEnrollmentAPIKeyForAgentPolicy } from './api_keys';
+import { agentlessAgentService } from './agents/agentless_agent';
 
 const FLEET_SERVER_POLICY_ID = 'fleet-server-policy';
 
@@ -48,7 +53,12 @@ async function createPackagePolicy(
   esClient: ElasticsearchClient,
   agentPolicy: AgentPolicy,
   packageToInstall: string,
-  options: { spaceId: string; user: AuthenticatedUser | undefined }
+  options: {
+    spaceId: string;
+    user: AuthenticatedUser | undefined;
+    authorizationHeader?: HTTPAuthorizationHeader | null;
+    force?: boolean;
+  }
 ) {
   const newPackagePolicy = await packagePolicyService
     .buildPackagePolicyFromPackage(soClient, packageToInstall)
@@ -56,13 +66,15 @@ async function createPackagePolicy(
       // rollback agent policy on error
       await agentPolicyService.delete(soClient, esClient, agentPolicy.id, {
         force: true,
+        user: options.user,
       });
+
       throw error;
     });
-
   if (!newPackagePolicy) return;
 
   newPackagePolicy.policy_id = agentPolicy.id;
+  newPackagePolicy.policy_ids = [agentPolicy.id];
   newPackagePolicy.namespace = agentPolicy.namespace;
   newPackagePolicy.name = await incrementPackageName(soClient, packageToInstall);
 
@@ -70,6 +82,8 @@ async function createPackagePolicy(
     spaceId: options.spaceId,
     user: options.user,
     bumpRevision: false,
+    authorizationHeader: options.authorizationHeader,
+    force: options.force,
   });
 }
 
@@ -82,6 +96,8 @@ interface CreateAgentPolicyParams {
   monitoringEnabled?: string[];
   spaceId: string;
   user?: AuthenticatedUser;
+  authorizationHeader?: HTTPAuthorizationHeader | null;
+  force?: boolean;
 }
 
 export async function createAgentPolicyWithPackages({
@@ -93,6 +109,8 @@ export async function createAgentPolicyWithPackages({
   monitoringEnabled,
   spaceId,
   user,
+  authorizationHeader,
+  force,
 }: CreateAgentPolicyParams) {
   let agentPolicyId = newPolicy.id;
   const packagesToInstall = [];
@@ -117,6 +135,8 @@ export async function createAgentPolicyWithPackages({
       esClient,
       packagesToInstall,
       spaceId,
+      authorizationHeader,
+      force,
     });
   }
 
@@ -125,6 +145,8 @@ export async function createAgentPolicyWithPackages({
   const agentPolicy = await agentPolicyService.create(soClient, esClient, policy, {
     user,
     id: agentPolicyId,
+    authorizationHeader,
+    skipDeploy: true, // skip deploying the policy until package policies are added
   });
 
   // Create the fleet server package policy and add it to agent policy.
@@ -132,6 +154,8 @@ export async function createAgentPolicyWithPackages({
     await createPackagePolicy(soClient, esClient, agentPolicy, FLEET_SERVER_PACKAGE, {
       spaceId,
       user,
+      authorizationHeader,
+      force,
     });
   }
 
@@ -140,11 +164,18 @@ export async function createAgentPolicyWithPackages({
     await createPackagePolicy(soClient, esClient, agentPolicy, FLEET_SYSTEM_PACKAGE, {
       spaceId,
       user,
+      authorizationHeader,
+      force,
     });
   }
 
   await ensureDefaultEnrollmentAPIKeyForAgentPolicy(soClient, esClient, agentPolicy.id);
   await agentPolicyService.deployPolicy(soClient, agentPolicy.id);
+
+  // Create the agentless agent
+  if (agentPolicy.supports_agentless) {
+    await agentlessAgentService.createAgentlessAgent(esClient, soClient, agentPolicy);
+  }
 
   return agentPolicy;
 }

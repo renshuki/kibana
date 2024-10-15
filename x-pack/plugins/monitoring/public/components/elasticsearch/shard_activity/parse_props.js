@@ -33,8 +33,10 @@ export const parseProps = (props) => {
     primary: isPrimary,
     start_time_in_millis: startTimeInMillis,
     total_time_in_millis: totalTimeInMillis,
-    source,
-    target,
+    start_time: mbStartTime,
+    total_time: mbTotalTime,
+    source = {}, // This property is potentially undefined due to a legacy search where `source` is optionally existing
+    target = {}, // This property is potentially undefined due to a legacy search where `target` is optionally existing
     translog,
     type,
     timezone,
@@ -47,8 +49,8 @@ export const parseProps = (props) => {
     shard: `${id} / ${isPrimary ? 'Primary' : 'Replica'}`,
     relocationType: type === 'PRIMARY_RELOCATION' ? 'Primary Relocation' : normalizeString(type),
     stage: normalizeString(stage),
-    startTime: formatDateTimeLocal(startTimeInMillis, timezone),
-    totalTime: formatMetric(Math.floor(totalTimeInMillis / 1000), '00:00:00'),
+    startTime: formatDateTimeLocal(startTimeInMillis || mbStartTime?.ms, timezone),
+    totalTime: formatMetric(Math.floor((totalTimeInMillis || mbTotalTime?.ms) / 1000), '00:00:00'),
     isCopiedFromPrimary: !isPrimary || type === 'PRIMARY_RELOCATION',
     sourceName: source.name === undefined ? 'n/a' : source.name,
     targetName: target.name,

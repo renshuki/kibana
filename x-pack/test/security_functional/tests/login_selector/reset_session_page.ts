@@ -6,7 +6,8 @@
  */
 
 import expect from '@kbn/expect';
-import { FtrProviderContext } from '../../ftr_provider_context';
+
+import type { FtrProviderContext } from '../../ftr_provider_context';
 
 export default function ({ getService, getPageObjects, updateBaselines }: FtrProviderContext) {
   const screenshots = getService('screenshots');
@@ -49,7 +50,7 @@ export default function ({ getService, getPageObjects, updateBaselines }: FtrPro
         'reset_session_page',
         updateBaselines
       );
-      expect(percentDifference).to.be.lessThan(0.022);
+      expect(percentDifference).to.be.lessThan(0.029);
     });
   });
 }

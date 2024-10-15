@@ -7,7 +7,7 @@
 
 import { elasticsearchServiceMock, savedObjectsClientMock } from '@kbn/core/server/mocks';
 
-import type { SavedObject } from '@kbn/core-saved-objects-common';
+import type { SavedObject } from '@kbn/core-saved-objects-server';
 
 import type { AgentPolicy } from '../../types';
 
@@ -16,6 +16,7 @@ export function createClientMock() {
     _id: 'agent-in-hosted-policy',
     _index: 'index',
     _source: {
+      active: true,
       policy_id: 'hosted-agent-policy',
       local_metadata: { elastic: { agent: { version: '8.4.0', upgradeable: true } } },
     },
@@ -27,6 +28,7 @@ export function createClientMock() {
     _id: 'agent-in-hosted-policy2',
     _index: 'index',
     _source: {
+      active: true,
       policy_id: 'hosted-agent-policy',
       local_metadata: { elastic: { agent: { version: '8.4.0', upgradeable: true } } },
     },
@@ -38,6 +40,7 @@ export function createClientMock() {
     _id: 'agent-in-regular-policy',
     _index: 'index',
     _source: {
+      active: true,
       policy_id: 'regular-agent-policy',
       local_metadata: { elastic: { agent: { version: '8.4.0', upgradeable: true } } },
     },
@@ -49,8 +52,33 @@ export function createClientMock() {
     _id: 'agent-in-regular-policy2',
     _index: 'index',
     _source: {
+      active: true,
       policy_id: 'regular-agent-policy',
       local_metadata: { elastic: { agent: { version: '8.4.0', upgradeable: true } } },
+    },
+    fields: {
+      status: ['online'],
+    },
+  };
+  const agentInRegularDocNewer = {
+    _id: 'agent-in-regular-policy-newer',
+    _index: 'index',
+    _source: {
+      active: true,
+      policy_id: 'regular-agent-policy',
+      local_metadata: { elastic: { agent: { version: '8.7.0', upgradeable: true } } },
+    },
+    fields: {
+      status: ['online'],
+    },
+  };
+  const agentInRegularDocNewer2 = {
+    _id: 'agent-in-regular-policy-newer2',
+    _index: 'index',
+    _source: {
+      active: true,
+      policy_id: 'regular-agent-policy',
+      local_metadata: { elastic: { agent: { version: '8.7.0', upgradeable: true } } },
     },
     fields: {
       status: ['online'],
@@ -109,6 +137,10 @@ export function createClientMock() {
         return { body: agentInRegularDoc2 };
       case agentInRegularDoc._id:
         return { body: agentInRegularDoc };
+      case agentInRegularDocNewer._id:
+        return { body: agentInRegularDocNewer };
+      case agentInRegularDocNewer2._id:
+        return { body: agentInRegularDocNewer2 };
       default:
         throw new Error('not found');
     }
@@ -135,6 +167,12 @@ export function createClientMock() {
         case agentInRegularDoc._id:
           result = agentInRegularDoc;
           break;
+        case agentInRegularDocNewer._id:
+          result = agentInRegularDocNewer;
+          break;
+        case agentInRegularDocNewer2._id:
+          result = agentInRegularDocNewer2;
+          break;
         default:
           throw new Error('not found');
       }
@@ -157,9 +195,15 @@ export function createClientMock() {
         total: 1,
       },
       hits: {
-        hits: [agentInHostedDoc, agentInRegularDoc, agentInRegularDoc2],
+        hits: [
+          agentInHostedDoc,
+          agentInRegularDoc,
+          agentInRegularDoc2,
+          agentInRegularDocNewer,
+          agentInRegularDocNewer2,
+        ],
         total: {
-          value: 3,
+          value: 5,
           relation: 'eq',
         },
       },
@@ -173,6 +217,8 @@ export function createClientMock() {
     agentInHostedDoc2,
     agentInRegularDoc,
     agentInRegularDoc2,
+    agentInRegularDocNewer,
+    agentInRegularDocNewer2,
     regularAgentPolicySO,
     hostedAgentPolicySO,
     regularAgentPolicySO2,

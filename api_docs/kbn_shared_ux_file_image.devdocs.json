@@ -39,7 +39,7 @@
             "section": "def-common.Props",
             "text": "Props"
           },
-          ") => JSX.Element"
+          ") => React.JSX.Element"
         ],
         "path": "packages/shared-ux/file/image/impl/src/image.tsx",
         "deprecated": false,
@@ -83,7 +83,13 @@
         "description": [],
         "signature": [
           "{ meta?: ",
-          "FileImageMetadata",
+          {
+            "pluginId": "@kbn/shared-ux-file-types",
+            "scope": "common",
+            "docId": "kibKbnSharedUxFileTypesPluginApi",
+            "section": "def-common.FileImageMetadata",
+            "text": "FileImageMetadata"
+          },
           " | undefined; } & ",
           "EuiImageProps"
         ],

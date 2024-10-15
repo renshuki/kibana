@@ -1,14 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { map, reduce, mapValues, has, get, keys, pickBy } from 'lodash';
-import type { Filter, FilterMeta } from './types';
-import type { DataViewBase, DataViewFieldBase } from '../../es_query';
+import type { SerializableRecord } from '@kbn/utility-types';
+import type { Filter, FilterMeta, FilterMetaParams } from './types';
+import { FILTERS } from './types';
+import type { DataViewFieldBase, DataViewBaseNoFields } from '../../es_query';
 
 const OPERANDS_IN_RANGE = 2;
 
@@ -37,7 +41,7 @@ const dateComparators = {
  * It is similar, but not identical to estypes.QueryDslRangeQuery
  * @public
  */
-export interface RangeFilterParams {
+export interface RangeFilterParams extends SerializableRecord {
   from?: number | string;
   to?: number | string;
   gt?: number | string;
@@ -53,16 +57,17 @@ export const hasRangeKeys = (params: RangeFilterParams) =>
   );
 
 export type RangeFilterMeta = FilterMeta & {
-  params: RangeFilterParams;
+  params?: RangeFilterParams;
   field?: string;
   formattedValue?: string;
+  type: 'range';
 };
 
 export type ScriptedRangeFilter = Filter & {
   meta: RangeFilterMeta;
   query: {
     script: {
-      script: estypes.InlineScript;
+      script: estypes.Script;
     };
   };
 };
@@ -90,7 +95,16 @@ export type RangeFilter = Filter & {
  *
  * @public
  */
-export const isRangeFilter = (filter?: Filter): filter is RangeFilter => has(filter, 'query.range');
+export function isRangeFilter(filter?: Filter): filter is RangeFilter {
+  if (filter?.meta?.type) return filter.meta.type === FILTERS.RANGE;
+  return has(filter, 'query.range');
+}
+
+export function isRangeFilterParams(
+  params: FilterMetaParams | undefined
+): params is RangeFilterParams {
+  return typeof params === 'object' && get(params, 'type', '') === 'range';
+}
 
 /**
  *
@@ -121,7 +135,7 @@ const formatValue = (params: any[]) =>
  *
  * @param field
  * @param params
- * @param indexPattern
+ * @param dataView
  * @param formattedValue
  * @returns
  *
@@ -130,7 +144,7 @@ const formatValue = (params: any[]) =>
 export const buildRangeFilter = (
   field: DataViewFieldBase,
   params: RangeFilterParams,
-  indexPattern?: DataViewBase,
+  indexPattern?: DataViewBaseNoFields,
   formattedValue?: string
 ): RangeFilter | ScriptedRangeFilter | MatchAllRangeFilter => {
   params = mapValues(params, (value: any) => (field.type === 'number' ? parseFloat(value) : value));
@@ -140,7 +154,9 @@ export const buildRangeFilter = (
 
   const totalInfinite = ['gt', 'lt'].reduce((acc, op) => {
     const key = op in params ? op : `${op}e`;
-    const isInfinite = Math.abs(get(params, key)) === Infinity;
+    const value = get(params, key);
+    const numericValue = typeof value === 'number' ? value : 0;
+    const isInfinite = Math.abs(numericValue) === Infinity;
 
     if (isInfinite) {
       acc++;
@@ -152,7 +168,7 @@ export const buildRangeFilter = (
     return acc;
   }, 0);
 
-  const meta: RangeFilterMeta = {
+  const meta = {
     index: indexPattern?.id,
     params: {},
     field: field.name,
@@ -175,7 +191,7 @@ export const buildRangeFilter = (
  * @internal
  */
 export const getRangeScript = (field: DataViewFieldBase, params: RangeFilterParams) => {
-  const knownParams: estypes.InlineScript['params'] = mapValues(
+  const knownParams: estypes.Script['params'] = mapValues(
     pickBy(params, (val, key) => key in operators),
     (value) => (field.type === 'number' && typeof value === 'string' ? parseFloat(value) : value)
   );

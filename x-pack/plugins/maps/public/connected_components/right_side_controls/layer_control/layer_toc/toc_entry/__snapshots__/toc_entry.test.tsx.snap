@@ -4,7 +4,6 @@ exports[`TOCEntry is rendered 1`] = `
 <div
   className="mapTocEntry"
   data-layerid="1"
-  id="1"
   style={Object {}}
 >
   <div
@@ -17,6 +16,7 @@ exports[`TOCEntry is rendered 1`] = `
       layer={
         Object {
           "getDisplayName": [Function],
+          "getErrors": [Function],
           "getId": [Function],
           "hasErrors": [Function],
           "hasLegendDetails": [Function],
@@ -87,7 +87,6 @@ exports[`TOCEntry props Should indent child layer 1`] = `
 <div
   className="mapTocEntry"
   data-layerid="1"
-  id="1"
   style={
     Object {
       "paddingLeft": "56px",
@@ -104,6 +103,7 @@ exports[`TOCEntry props Should indent child layer 1`] = `
       layer={
         Object {
           "getDisplayName": [Function],
+          "getErrors": [Function],
           "getId": [Function],
           "hasErrors": [Function],
           "hasLegendDetails": [Function],
@@ -174,7 +174,6 @@ exports[`TOCEntry props Should shade background when not selected layer 1`] = `
 <div
   className="mapTocEntry"
   data-layerid="1"
-  id="1"
   style={Object {}}
 >
   <div
@@ -187,6 +186,7 @@ exports[`TOCEntry props Should shade background when not selected layer 1`] = `
       layer={
         Object {
           "getDisplayName": [Function],
+          "getErrors": [Function],
           "getId": [Function],
           "hasErrors": [Function],
           "hasLegendDetails": [Function],
@@ -257,7 +257,6 @@ exports[`TOCEntry props Should shade background when selected layer 1`] = `
 <div
   className="mapTocEntry mapTocEntry-isSelected"
   data-layerid="1"
-  id="1"
   style={Object {}}
 >
   <div
@@ -270,6 +269,7 @@ exports[`TOCEntry props Should shade background when selected layer 1`] = `
       layer={
         Object {
           "getDisplayName": [Function],
+          "getErrors": [Function],
           "getId": [Function],
           "hasErrors": [Function],
           "hasLegendDetails": [Function],
@@ -340,7 +340,6 @@ exports[`TOCEntry props isReadOnly 1`] = `
 <div
   className="mapTocEntry"
   data-layerid="1"
-  id="1"
   style={Object {}}
 >
   <div
@@ -353,6 +352,7 @@ exports[`TOCEntry props isReadOnly 1`] = `
       layer={
         Object {
           "getDisplayName": [Function],
+          "getErrors": [Function],
           "getId": [Function],
           "hasErrors": [Function],
           "hasLegendDetails": [Function],
@@ -408,7 +408,6 @@ exports[`TOCEntry props should display layer details when isLegendDetailsOpen is
 <div
   className="mapTocEntry"
   data-layerid="1"
-  id="1"
   style={Object {}}
 >
   <div
@@ -421,6 +420,7 @@ exports[`TOCEntry props should display layer details when isLegendDetailsOpen is
       layer={
         Object {
           "getDisplayName": [Function],
+          "getErrors": [Function],
           "getId": [Function],
           "hasErrors": [Function],
           "hasLegendDetails": [Function],
@@ -472,9 +472,23 @@ exports[`TOCEntry props should display layer details when isLegendDetailsOpen is
     className="mapTocEntry__layerDetails"
     data-test-subj="mapLayerTOCDetailslayer_1"
   >
-    <div>
-      TOC details mock
-    </div>
+    <LegendDetails
+      inspectorAdapters={Object {}}
+      layer={
+        Object {
+          "getDisplayName": [Function],
+          "getErrors": [Function],
+          "getId": [Function],
+          "hasErrors": [Function],
+          "hasLegendDetails": [Function],
+          "isPreviewLayer": [Function],
+          "isVisible": [Function],
+          "renderLegendDetails": [Function],
+          "showAtZoomLevel": [Function],
+          "supportsFitToBounds": [Function],
+        }
+      }
+    />
   </div>
   <span
     className="mapTocEntry__detailsToggle"

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { AnnotationDomainType, LineAnnotation, Position, RectAnnotation } from '@elastic/charts';
@@ -75,7 +76,7 @@ export const ReferenceLineAnnotations: FC<Props> = ({
   paddingMap,
   isHorizontal,
 }) => {
-  const { id, axisGroup, iconPosition, name, textVisibility, value, fill, color } = config;
+  const { id, axisGroup, iconPosition, name, value, fill, color } = config;
 
   const defaultColor = euiLightVars.euiColorDarkShade;
   // get the position for vertical chart
@@ -85,18 +86,9 @@ export const ReferenceLineAnnotations: FC<Props> = ({
     getOriginalAxisPosition(axisGroup?.position ?? Position.Bottom, isHorizontal)
   );
   // the padding map is built for vertical chart
-  const hasReducedPadding = paddingMap[markerPositionVertical] === LINES_MARKER_SIZE;
+  const isTextOnlyMarker = paddingMap[markerPositionVertical] === LINES_MARKER_SIZE;
 
-  const props = getLineAnnotationProps(
-    config,
-    {
-      markerLabel: name,
-      markerBodyLabel: textVisibility && !hasReducedPadding ? name : undefined,
-    },
-    axesMap,
-    paddingMap,
-    isHorizontal
-  );
+  const props = getLineAnnotationProps(config, name, axesMap, isHorizontal, isTextOnlyMarker);
 
   const sharedStyle = getSharedStyle(config);
 

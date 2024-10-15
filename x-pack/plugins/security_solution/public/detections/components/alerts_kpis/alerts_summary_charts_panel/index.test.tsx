@@ -4,11 +4,11 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-import { act, render, fireEvent } from '@testing-library/react';
+import { act, render, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { useQueryToggle } from '../../../../common/containers/query_toggle';
 import { TestProviders } from '../../../../common/mock';
 import { AlertsSummaryChartsPanel } from '.';
+import type { GroupBySelection } from '../alerts_progress_bar_panel/types';
 
 jest.mock('../../../../common/lib/kibana');
 jest.mock('../../../../common/containers/query_toggle');
@@ -18,21 +18,15 @@ jest.mock('react-router-dom', () => {
   return { ...actual, useLocation: jest.fn().mockReturnValue({ pathname: '' }) };
 });
 
-describe('AlertsChartsPanel', () => {
+describe('AlertsSummaryChartsPanel', () => {
+  const mockSetIsExpanded = jest.fn();
   const defaultProps = {
     signalIndexName: 'signalIndexName',
+    isExpanded: true,
+    setIsExpanded: mockSetIsExpanded,
+    groupBySelection: 'host.name' as GroupBySelection,
+    setGroupBySelection: jest.fn(),
   };
-
-  const mockSetToggle = jest.fn();
-  const mockUseQueryToggle = useQueryToggle as jest.Mock;
-  beforeEach(() => {
-    mockUseQueryToggle.mockReturnValue({ toggleStatus: true, setToggleStatus: mockSetToggle });
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
-  });
 
   test('renders correctly', async () => {
     await act(async () => {
@@ -60,19 +54,21 @@ describe('AlertsChartsPanel', () => {
 
   describe('Query', () => {
     test('it render with a illegal KQL', async () => {
-      await act(async () => {
-        jest.mock('@kbn/es-query', () => ({
-          buildEsQuery: jest.fn().mockImplementation(() => {
-            throw new Error('Something went wrong');
-          }),
-        }));
-        const props = { ...defaultProps, query: { query: 'host.name: "', language: 'kql' } };
-        const { container } = render(
-          <TestProviders>
-            <AlertsSummaryChartsPanel {...props} />
-          </TestProviders>
-        );
-        expect(container.querySelector('[data-test-subj="severty-chart"]')).toBeInTheDocument();
+      jest.mock('@kbn/es-query', () => ({
+        buildEsQuery: jest.fn().mockImplementation(() => {
+          throw new Error('Something went wrong');
+        }),
+      }));
+      const props = { ...defaultProps, query: { query: 'host.name: "', language: 'kql' } };
+      const { container } = render(
+        <TestProviders>
+          <AlertsSummaryChartsPanel {...props} />
+        </TestProviders>
+      );
+      await waitFor(() => {
+        expect(
+          container.querySelector('[data-test-subj="alerts-charts-panel"]')
+        ).toBeInTheDocument();
       });
     });
   });
@@ -89,11 +85,11 @@ describe('AlertsChartsPanel', () => {
         if (element) {
           fireEvent.click(element);
         }
-        expect(mockSetToggle).toBeCalledWith(false);
+        expect(mockSetIsExpanded).toBeCalledWith(false);
       });
     });
 
-    test('toggleStatus=true, render', async () => {
+    it('when isExpanded is true, render summary chart', async () => {
       await act(async () => {
         const { container } = render(
           <TestProviders>
@@ -106,12 +102,11 @@ describe('AlertsChartsPanel', () => {
       });
     });
 
-    test('toggleStatus=false, hide', async () => {
+    it('when isExpanded is false, hide summary chart', async () => {
       await act(async () => {
-        mockUseQueryToggle.mockReturnValue({ toggleStatus: false, setToggleStatus: mockSetToggle });
         const { container } = render(
           <TestProviders>
-            <AlertsSummaryChartsPanel {...defaultProps} />
+            <AlertsSummaryChartsPanel {...defaultProps} isExpanded={false} />
           </TestProviders>
         );
         expect(

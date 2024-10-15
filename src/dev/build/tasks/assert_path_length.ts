@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { relative } from 'path';
 
-import { tap, filter, map, toArray } from 'rxjs/operators';
+import * as Rx from 'rxjs';
 
 import { scan$, Task } from '../lib';
 
@@ -28,24 +29,21 @@ export const AssertPathLength: Task = {
       return;
     }
 
-    await scan$(buildRoot)
-      .pipe(
-        map((path) => relative(buildRoot, path)),
-        filter((relativePath) => relativePath.length > 200),
-        toArray(),
-        tap((tooLongPaths) => {
-          if (!tooLongPaths.length) {
-            return;
-          }
-
-          throw new Error(
-            'Windows has a path limit of 260 characters so we limit the length of paths in Kibana to 200 characters ' +
-              ' and the following files exceed this limit:' +
-              '\n - ' +
-              tooLongPaths.join('\n - ')
-          );
-        })
+    const tooLong = await Rx.lastValueFrom(
+      scan$(buildRoot).pipe(
+        Rx.map((path) => relative(buildRoot, path)),
+        Rx.filter((relativePath) => relativePath.length > 200),
+        Rx.toArray()
       )
-      .toPromise();
+    );
+
+    if (tooLong.length) {
+      throw new Error(
+        'Windows has a path limit of 260 characters so we limit the length of paths in Kibana to 200 characters ' +
+          ' and the following files exceed this limit:' +
+          '\n - ' +
+          tooLong.join('\n - ')
+      );
+    }
   },
 };

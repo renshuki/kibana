@@ -19,7 +19,7 @@ Array [
     </div>
   </span>,
   <hr
-    class="euiHorizontalRule euiHorizontalRule--half euiHorizontalRule--marginLarge emotion-euiHorizontalRule-half-l"
+    class="euiHorizontalRule emotion-euiHorizontalRule-half-l"
   />,
   <div
     class="euiText eui-textLeft emotion-euiText-m"
@@ -82,67 +82,64 @@ Array [
         <a
           class="euiLink emotion-euiLink-primary"
           href="https://cloud.elastic.co/deployments"
-          rel="noopener"
+          rel="noopener noreferrer"
           target="_blank"
         >
           Elasticsearch Service Console
           <span
-            class="emotion-euiLink__externalIcon"
+            class="emotion-EuiExternalLinkIcon"
             data-euiicon-type="popout"
-          >
-            External link
-          </span>
+            role="presentation"
+          />
           <span
-            class="emotion-euiScreenReaderOnly-euiLink__screenReaderText"
+            class="emotion-euiScreenReaderOnly"
           >
-            (opens in a new tab or window)
+            (external, opens in a new tab or window)
           </span>
         </a>
          Go to 
         <a
           class="euiLink emotion-euiLink-primary"
           href="https://cloud.elastic.co/deployments"
-          rel="noopener"
+          rel="noopener noreferrer"
           target="_blank"
         >
           Logs and metrics
           <span
-            class="emotion-euiLink__externalIcon"
+            class="emotion-EuiExternalLinkIcon"
             data-euiicon-type="popout"
-          >
-            External link
-          </span>
+            role="presentation"
+          />
           <span
-            class="emotion-euiScreenReaderOnly-euiLink__screenReaderText"
+            class="emotion-euiScreenReaderOnly"
           >
-            (opens in a new tab or window)
+            (external, opens in a new tab or window)
           </span>
         </a>
          section for a deployment to configure monitoring. For more information visit 
         <a
           class="euiLink emotion-euiLink-primary"
           href="https://www.elastic.co/guide/en/cloud/current/ec-enable-logging-and-monitoring.html"
-          rel="noopener"
+          rel="noopener noreferrer"
           target="_blank"
         >
           the documentation page.
           <span
-            class="emotion-euiLink__externalIcon"
+            class="emotion-EuiExternalLinkIcon"
             data-euiicon-type="popout"
-          >
-            External link
-          </span>
+            role="presentation"
+          />
           <span
-            class="emotion-euiScreenReaderOnly-euiLink__screenReaderText"
+            class="emotion-euiScreenReaderOnly"
           >
-            (opens in a new tab or window)
+            (external, opens in a new tab or window)
           </span>
         </a>
       </p>
     </div>
   </span>,
   <hr
-    class="euiHorizontalRule euiHorizontalRule--half euiHorizontalRule--marginLarge emotion-euiHorizontalRule-half-l"
+    class="euiHorizontalRule emotion-euiHorizontalRule-half-l"
   />,
   <div
     class="euiText eui-textLeft emotion-euiText-m"

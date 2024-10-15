@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { join } from 'path';
@@ -11,6 +12,11 @@ import expect from '@kbn/expect';
 import type { Response } from 'supertest';
 import { SavedObject } from '@kbn/core/types';
 import type { PluginFunctionalProviderContext } from '../../services';
+
+interface MinimalSO {
+  id: string;
+  type: string;
+}
 
 function parseNdJson(input: string): Array<SavedObject<any>> {
   return input.split('\n').map((str) => JSON.parse(str));
@@ -107,17 +113,17 @@ export default function ({ getService }: PluginFunctionalProviderContext) {
       describe('find', () => {
         it('returns saved objects registered as hidden from the http Apis', async () => {
           await supertest
-            .get(
-              `/api/kibana/management/saved_objects/_find?type=${hiddenFromHttpApisType.type}&fields=title`
-            )
+            .get(`/api/kibana/management/saved_objects/_find?type=${hiddenFromHttpApisType.type}`)
             .set('kbn-xsrf', 'true')
             .expect(200)
             .then((resp) => {
               expect(
-                resp.body.saved_objects.map((so: { id: string; type: string }) => ({
-                  id: so.id,
-                  type: so.type,
-                }))
+                resp.body.saved_objects
+                  .map((so: MinimalSO) => ({
+                    id: so.id,
+                    type: so.type,
+                  }))
+                  .sort((a: MinimalSO, b: MinimalSO) => (a.id > b.id ? 1 : -1))
               ).to.eql([
                 {
                   id: 'hidden-from-http-apis-1',
@@ -190,6 +196,7 @@ export default function ({ getService }: PluginFunctionalProviderContext) {
                       title: 'I am hidden from http apis but the client can still see me',
                     },
                     type: 'test-hidden-from-http-apis-importable-exportable',
+                    managed: false,
                   },
                   {
                     id: 'not-hidden-from-http-apis-import1',
@@ -197,6 +204,7 @@ export default function ({ getService }: PluginFunctionalProviderContext) {
                       title: 'I am not hidden from http apis',
                     },
                     type: 'test-not-hidden-from-http-apis-importable-exportable',
+                    managed: false,
                   },
                 ],
                 warnings: [],

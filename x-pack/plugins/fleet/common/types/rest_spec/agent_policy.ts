@@ -11,11 +11,12 @@ import type { ListResult, ListWithKuery, BulkGetResult } from './common';
 
 export interface GetAgentPoliciesRequest {
   query: ListWithKuery & {
+    noAgentCount?: boolean;
     full?: boolean;
   };
 }
 
-export type GetAgentPoliciesResponseItem = AgentPolicy & { agents?: number };
+export type GetAgentPoliciesResponseItem = AgentPolicy;
 
 export type BulkGetAgentPoliciesResponse = BulkGetResult<GetAgentPoliciesResponseItem>;
 export type GetAgentPoliciesResponse = ListResult<GetAgentPoliciesResponseItem>;
@@ -82,3 +83,12 @@ export interface GetFullAgentConfigMapResponse {
 export interface GetFullAgentManifestResponse {
   item: string;
 }
+
+export type FetchAllAgentPoliciesOptions = Pick<
+  ListWithKuery,
+  'perPage' | 'kuery' | 'sortField' | 'sortOrder'
+> & { fields?: string[] };
+
+export type FetchAllAgentPolicyIdsOptions = Pick<ListWithKuery, 'perPage' | 'kuery'> & {
+  spaceId?: string;
+};

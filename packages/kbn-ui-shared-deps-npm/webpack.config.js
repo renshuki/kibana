@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 const Path = require('path');
@@ -49,66 +50,56 @@ module.exports = (_, argv) => {
          *  node scripts/find_babel_runtime_helpers_in_use.js
          */
         '@babel/runtime/helpers/assertThisInitialized',
-        '@babel/runtime/helpers/asyncToGenerator',
-        '@babel/runtime/helpers/classCallCheck',
         '@babel/runtime/helpers/classPrivateFieldGet',
         '@babel/runtime/helpers/classPrivateFieldSet',
-        '@babel/runtime/helpers/createClass',
-        '@babel/runtime/helpers/createForOfIteratorHelper',
-        '@babel/runtime/helpers/createSuper',
         '@babel/runtime/helpers/defineProperty',
         '@babel/runtime/helpers/extends',
-        '@babel/runtime/helpers/inherits',
         '@babel/runtime/helpers/inheritsLoose',
-        '@babel/runtime/helpers/interopRequireDefault',
-        '@babel/runtime/helpers/interopRequireWildcard',
-        '@babel/runtime/helpers/objectSpread2',
-        '@babel/runtime/helpers/objectWithoutProperties',
-        '@babel/runtime/helpers/objectWithoutPropertiesLoose',
-        '@babel/runtime/helpers/slicedToArray',
         '@babel/runtime/helpers/taggedTemplateLiteralLoose',
-        '@babel/runtime/helpers/toConsumableArray',
-        '@babel/runtime/helpers/typeof',
         '@babel/runtime/helpers/wrapNativeSuper',
-        '@babel/runtime/regenerator',
 
         // modules from npm
+        '@elastic/apm-rum-core',
         '@elastic/charts',
         '@elastic/eui',
+        '@elastic/eui/optimize/es/components/provider/nested',
         '@elastic/eui/optimize/es/services',
         '@elastic/eui/optimize/es/services/format',
-        '@elastic/eui/dist/eui_charts_theme',
         '@elastic/eui/dist/eui_theme_light.json',
         '@elastic/eui/dist/eui_theme_dark.json',
         '@elastic/numeral',
         '@emotion/cache',
         '@emotion/react',
+        '@hello-pangea/dnd/dist/dnd.js',
+        '@reduxjs/toolkit',
+        'redux',
+        'react-redux',
+        'immer',
         '@tanstack/react-query',
         '@tanstack/react-query-devtools',
         'classnames',
         'fflate',
+        'fastest-levenshtein',
         'history',
+        'io-ts',
         'jquery',
         'lodash',
         'lodash/fp',
         'moment-timezone/moment-timezone',
         'moment-timezone/data/packed/latest.json',
         'moment',
-        'react-ace',
-        'react-beautiful-dnd',
         'react-dom',
         'react-dom/server',
         'react-router-dom',
+        'react-router-dom-v5-compat',
         'react-router',
         'react',
+        'reselect',
         'rxjs',
-        'rxjs/operators',
         'styled-components',
         'tslib',
         'uuid',
       ],
-      'kbn-ui-shared-deps-npm.v8.dark': ['@elastic/eui/dist/eui_theme_dark.css'],
-      'kbn-ui-shared-deps-npm.v8.light': ['@elastic/eui/dist/eui_theme_light.css'],
     },
     context: __dirname,
     devtool: 'cheap-source-map',
@@ -153,7 +144,6 @@ module.exports = (_, argv) => {
         'scheduler/tracing': 'scheduler/tracing-profiling',
       },
       extensions: ['.js', '.ts'],
-      symlinks: false,
     },
 
     optimization: {

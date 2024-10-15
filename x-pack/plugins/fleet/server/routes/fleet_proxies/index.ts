@@ -4,14 +4,23 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
+import { schema } from '@kbn/config-schema';
+
 import type { FleetAuthzRouter } from '../../services/security';
+import { API_VERSIONS } from '../../../common/constants';
 
 import { FLEET_PROXY_API_ROUTES } from '../../../common/constants';
 import {
+  FleetProxyResponseSchema,
+  FleetProxySchema,
   GetOneFleetProxyRequestSchema,
   PostFleetProxyRequestSchema,
   PutFleetProxyRequestSchema,
 } from '../../types';
+
+import { genericErrorResponse } from '../schema/errors';
+
+import { ListResponseSchema } from '../schema/utils';
 
 import {
   getAllFleetProxyHandler,
@@ -22,58 +31,151 @@ import {
 } from './handler';
 
 export const registerRoutes = (router: FleetAuthzRouter) => {
-  router.get(
-    {
+  router.versioned
+    .get({
       path: FLEET_PROXY_API_ROUTES.LIST_PATTERN,
-      validate: false,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readSettings: true },
       },
-    },
-    getAllFleetProxyHandler
-  );
+      description: `List proxies`,
+      options: {
+        tags: ['oas-tag:Fleet proxies'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: {},
+          response: {
+            200: {
+              body: () => ListResponseSchema(FleetProxySchema),
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getAllFleetProxyHandler
+    );
 
-  router.post(
-    {
+  router.versioned
+    .post({
       path: FLEET_PROXY_API_ROUTES.CREATE_PATTERN,
-      validate: PostFleetProxyRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allSettings: true },
       },
-    },
-    postFleetProxyHandler
-  );
+      description: `Create proxy`,
+      options: {
+        tags: ['oas-tag:Fleet proxies'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostFleetProxyRequestSchema,
+          response: {
+            200: {
+              body: () => FleetProxyResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postFleetProxyHandler
+    );
 
-  router.put(
-    {
+  router.versioned
+    .put({
       path: FLEET_PROXY_API_ROUTES.UPDATE_PATTERN,
-      validate: PutFleetProxyRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allSettings: true },
       },
-    },
-    putFleetProxyHandler
-  );
+      description: `Update proxy by ID`,
+      options: {
+        tags: ['oas-tag:Fleet proxies'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PutFleetProxyRequestSchema,
+          response: {
+            200: {
+              body: () => FleetProxyResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      putFleetProxyHandler
+    );
 
-  router.get(
-    {
-      path: FLEET_PROXY_API_ROUTES.DELETE_PATTERN,
-      validate: GetOneFleetProxyRequestSchema,
+  router.versioned
+    .get({
+      path: FLEET_PROXY_API_ROUTES.INFO_PATTERN,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { readSettings: true },
       },
-    },
-    getFleetProxyHandler
-  );
+      description: `Get proxy by ID`,
+      options: {
+        tags: ['oas-tag:Fleet proxies'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetOneFleetProxyRequestSchema,
+          response: {
+            200: {
+              body: () => FleetProxyResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getFleetProxyHandler
+    );
 
-  router.delete(
-    {
+  router.versioned
+    .delete({
       path: FLEET_PROXY_API_ROUTES.DELETE_PATTERN,
-      validate: GetOneFleetProxyRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allSettings: true },
       },
-    },
-    deleteFleetProxyHandler
-  );
+      description: `Delete proxy by ID`,
+      options: {
+        tags: ['oas-tag:Fleet proxies'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetOneFleetProxyRequestSchema,
+          response: {
+            200: {
+              body: () =>
+                schema.object({
+                  id: schema.string(),
+                }),
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      deleteFleetProxyHandler
+    );
 };

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { DataView, DataViewField } from '@kbn/data-views-plugin/common';
@@ -19,8 +20,14 @@ const PATH_SEPARATOR = '.';
 
 export const getPathInArray = (path: Path) => path.split(PATH_SEPARATOR).map(Number);
 
-const getGroupedFilters = (filter: Filter): Filter[] =>
-  Array.isArray(filter) ? filter : filter?.meta?.params ?? [];
+export const getGroupedFilters = (filter: Filter): Filter[] => {
+  const isCombined = isCombinedFilter(filter);
+  if (isCombined) {
+    return filter?.meta?.params ?? [];
+  } else {
+    return [];
+  }
+};
 
 const doForFilterByPath = <T>(filters: Filter[], path: Path, action: (filter: Filter) => T) => {
   const [first, ...restPath] = getPathInArray(path);

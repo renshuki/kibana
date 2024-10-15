@@ -6,11 +6,12 @@
  */
 
 import React, { useEffect } from 'react';
-import { Route, Switch, Redirect, useParams } from 'react-router-dom';
+import { Redirect, useParams } from 'react-router-dom';
 
 import { useValues, useActions } from 'kea';
 
 import { i18n } from '@kbn/i18n';
+import { Routes, Route } from '@kbn/shared-ux-router';
 
 import { setQueuedErrorMessage } from '../../../shared/flash_messages';
 import { AppLogic } from '../../app_logic';
@@ -84,7 +85,7 @@ export const EngineRouter: React.FC = () => {
   if (engineNotFound) {
     setQueuedErrorMessage(
       i18n.translate('xpack.enterpriseSearch.appSearch.engine.notFound', {
-        defaultMessage: "No engine with name '{engineName}' could be found.",
+        defaultMessage: "No engine with name ''{engineName}'' could be found.",
         values: { engineName },
       })
     );
@@ -95,7 +96,7 @@ export const EngineRouter: React.FC = () => {
   if (isLoadingNewEngine || dataLoading) return <AppSearchPageTemplate isLoading />;
 
   return (
-    <Switch>
+    <Routes>
       <Route exact path={ENGINE_PATH}>
         <EngineOverview />
       </Route>
@@ -162,6 +163,6 @@ export const EngineRouter: React.FC = () => {
       <Route>
         <NotFound pageChrome={getEngineBreadcrumbs()} />
       </Route>
-    </Switch>
+    </Routes>
   );
 };

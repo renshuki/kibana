@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import Path from 'path';
@@ -92,9 +93,11 @@ export async function validateDependencies(log: SomeDevLog, yarnLock: YarnLock) 
 
   // look for packages that have the the `kibana.devOnly` flag in their package.json
   // and make sure they aren't included in the production dependencies of Kibana
-  const bazelPackages = getPackages(REPO_ROOT);
-  const devOnlyPackagesInProduction = bazelPackages.flatMap((p) =>
-    p.isDevOnly && Object.hasOwn(kibanaPackageJson.dependencies, p.manifest.id) ? p.manifest.id : []
+  const pkgs = getPackages(REPO_ROOT);
+  const devOnlyPackagesInProduction = pkgs.flatMap((p) =>
+    p.isDevOnly() && Object.hasOwn(kibanaPackageJson.dependencies, p.manifest.id)
+      ? p.manifest.id
+      : []
   );
   if (devOnlyPackagesInProduction.length) {
     log.error(dedent`

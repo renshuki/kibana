@@ -6,7 +6,9 @@
  */
 
 import { resolve } from 'path';
-import { FtrConfigProviderContext } from '@kbn/test';
+
+import type { FtrConfigProviderContext } from '@kbn/test';
+
 import { services } from './services';
 
 // the default export of config files must be a config provider
@@ -15,7 +17,9 @@ export default async function ({ readConfigFile }: FtrConfigProviderContext) {
   const xPackAPITestsConfig = await readConfigFile(require.resolve('../api_integration/config.ts'));
 
   const kibanaPort = xPackAPITestsConfig.get('servers.kibana.port');
-  const idpPath = resolve(__dirname, './fixtures/saml/idp_metadata.xml');
+  const idpPath = require.resolve('@kbn/security-api-integration-helpers/saml/idp_metadata.xml');
+
+  const testEndpointsPlugin = resolve(__dirname, '../security_functional/plugins/test_endpoints');
 
   return {
     testFiles: [resolve(__dirname, './tests/session_idle')],
@@ -41,6 +45,7 @@ export default async function ({ readConfigFile }: FtrConfigProviderContext) {
       ...xPackAPITestsConfig.get('kbnTestServer'),
       serverArgs: [
         ...xPackAPITestsConfig.get('kbnTestServer.serverArgs'),
+        `--plugin-path=${testEndpointsPlugin}`,
         '--xpack.security.session.idleTimeout=10s',
         '--xpack.security.session.cleanupInterval=20s',
         `--xpack.security.authc.providers=${JSON.stringify({

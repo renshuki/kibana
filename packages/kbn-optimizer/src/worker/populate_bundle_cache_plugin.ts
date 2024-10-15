@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import Path from 'path';
@@ -27,7 +28,7 @@ import {
   Hashes,
   ParsedDllManifest,
 } from '../common';
-import { BundleRefModule } from './bundle_ref_module';
+import { BundleRemoteModule } from './bundle_remote_module';
 
 /**
  * sass-loader creates about a 40% overhead on the overall optimizer runtime, and
@@ -88,6 +89,7 @@ export class PopulateBundleCachePlugin {
             const path = getModulePath(module);
             const parsedPath = parseFilePath(path);
 
+            // TODO: Does this need to be updated to support @kbn/ packages?
             if (!parsedPath.dirs.includes('node_modules')) {
               addReferenced(path);
 
@@ -113,8 +115,8 @@ export class PopulateBundleCachePlugin {
             continue;
           }
 
-          if (module instanceof BundleRefModule) {
-            bundleRefExportIds.push(module.ref.exportId);
+          if (module instanceof BundleRemoteModule) {
+            bundleRefExportIds.push(module.req.full);
             continue;
           }
 
@@ -140,7 +142,7 @@ export class PopulateBundleCachePlugin {
         const sortedDllRefKeys = Array.from(dllRefKeys).sort(ascending((p) => p));
 
         bundle.cache.set({
-          bundleRefExportIds: bundleRefExportIds.sort(ascending((p) => p)),
+          remoteBundleImportReqs: bundleRefExportIds.sort(ascending((p) => p)),
           optimizerCacheKey: workerConfig.optimizerCacheKey,
           cacheKey: bundle.createCacheKey(
             referencedPaths,

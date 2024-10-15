@@ -7,20 +7,22 @@
 
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { find, get } from 'lodash';
-import { catchError, map } from 'rxjs/operators';
-import { Observable, of } from 'rxjs';
-import { AggregationsTermsAggregation } from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+import { catchError, map } from 'rxjs';
+import type { Observable } from 'rxjs';
+import { of } from 'rxjs';
+import type { AggregationsTermsAggregation } from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import type {
-  IKibanaSearchRequest,
   IKibanaSearchResponse,
+  IKibanaSearchRequest,
   ISearchOptions,
-} from '@kbn/data-plugin/common';
+} from '@kbn/search-types';
 import type { ISearchStart } from '@kbn/data-plugin/public';
 import { isPopulatedObject } from '@kbn/ml-is-populated-object';
 import { isDefined } from '@kbn/ml-is-defined';
+import { extractErrorProperties } from '@kbn/ml-error-utils';
 import { processTopValues } from './utils';
 import { buildAggregationWithSamplingOption } from './build_random_sampler_agg';
-import { MAX_PERCENT, PERCENTILE_SPACING, SAMPLER_TOP_TERMS_THRESHOLD } from './constants';
+import { MAX_PERCENT, PERCENTILE_SPACING } from './constants';
 import type {
   Aggs,
   Bucket,
@@ -32,7 +34,6 @@ import type {
   FieldStatsError,
 } from '../../../../../common/types/field_stats';
 import { processDistributionData } from '../../utils/process_distribution_data';
-import { extractErrorProperties } from '../../utils/error_utils';
 import {
   isIKibanaSearchResponse,
   isNormalSamplingOption,
@@ -58,35 +59,58 @@ export const getNumericFieldsStatsRequest = (
   const aggs: Aggs = {};
 
   fields.forEach((field, i) => {
-    const { safeFieldName } = field;
+    const { safeFieldName, supportedAggs } = field;
 
-    aggs[`${safeFieldName}_field_stats`] = {
-      filter: { exists: { field: field.fieldName } },
-      aggs: {
-        actual_stats: {
-          stats: { field: field.fieldName },
+    const include = !isDefined(supportedAggs);
+
+    if (include || supportedAggs.has('stats')) {
+      aggs[`${safeFieldName}_field_stats`] = {
+        filter: { exists: { field: field.fieldName } },
+        aggs: {
+          actual_stats: {
+            stats: { field: field.fieldName },
+          },
         },
-      },
-    };
-    aggs[`${safeFieldName}_percentiles`] = {
-      percentiles: {
-        field: field.fieldName,
-        percents,
-        keyed: false,
-      },
-    };
+      };
+    }
 
-    const top = {
-      terms: {
-        field: field.fieldName,
-        size: 10,
-        order: {
-          _count: 'desc',
+    if (include || (supportedAggs.has('min') && supportedAggs.has('max'))) {
+      aggs[`${safeFieldName}_min_max`] = {
+        filter: { exists: { field: field.fieldName } },
+        aggs: {
+          min: {
+            min: { field: field.fieldName },
+          },
+          max: {
+            max: { field: field.fieldName },
+          },
         },
-      } as AggregationsTermsAggregation,
-    };
+      };
+    }
 
-    aggs[`${safeFieldName}_top`] = top;
+    if (include || supportedAggs.has('percentiles')) {
+      aggs[`${safeFieldName}_percentiles`] = {
+        percentiles: {
+          field: field.fieldName,
+          percents,
+          keyed: false,
+        },
+      };
+    }
+
+    if (include || supportedAggs.has('terms')) {
+      const top = {
+        terms: {
+          field: field.fieldName,
+          size: 10,
+          order: {
+            _count: 'desc',
+          },
+        } as AggregationsTermsAggregation,
+      };
+
+      aggs[`${safeFieldName}_top`] = top;
+    }
   });
 
   const searchBody = {
@@ -102,13 +126,35 @@ export const getNumericFieldsStatsRequest = (
   };
 };
 
+const processStats = (safeFieldName: string, aggregations: object, aggsPath: string[]) => {
+  const fieldStatsResp = get(
+    aggregations,
+    [...aggsPath, `${safeFieldName}_field_stats`, 'actual_stats'],
+    undefined
+  );
+  if (fieldStatsResp) {
+    return {
+      min: get(fieldStatsResp, 'min'),
+      max: get(fieldStatsResp, 'max'),
+      avg: get(fieldStatsResp, 'avg'),
+    };
+  }
+  const minMaxResp = get(aggregations, [...aggsPath, `${safeFieldName}_min_max`], {});
+  if (minMaxResp) {
+    return {
+      min: get(minMaxResp, ['min', 'value']),
+      max: get(minMaxResp, ['max', 'value']),
+    };
+  }
+  return {};
+};
+
 export const fetchNumericFieldsStats = (
   dataSearch: ISearchStart,
   params: FieldStatsCommonRequestParams,
   fields: Field[],
   options: ISearchOptions
 ): Observable<NumericFieldStats[] | FieldStatsError> => {
-  const { samplerShardSize } = params;
   const request: estypes.SearchRequest = getNumericFieldsStatsRequest(params, fields);
 
   return dataSearch
@@ -135,25 +181,15 @@ export const fetchNumericFieldsStats = (
             [...aggsPath, `${safeFieldName}_field_stats`, 'doc_count'],
             0
           );
-          const fieldStatsResp = get(
-            aggregations,
-            [...aggsPath, `${safeFieldName}_field_stats`, 'actual_stats'],
-            {}
-          );
 
           const topAggsPath = [...aggsPath, `${safeFieldName}_top`];
-          if (samplerShardSize < 1 && field.cardinality >= SAMPLER_TOP_TERMS_THRESHOLD) {
-            topAggsPath.push('top');
-          }
 
           const fieldAgg = get(aggregations, [...topAggsPath], {}) as { buckets: Bucket[] };
           const { topValuesSampleSize, topValues } = processTopValues(fieldAgg);
 
           const stats: NumericFieldStats = {
             fieldName: field.fieldName,
-            min: get(fieldStatsResp, 'min', 0),
-            max: get(fieldStatsResp, 'max', 0),
-            avg: get(fieldStatsResp, 'avg', 0),
+            ...processStats(safeFieldName, aggregations, aggsPath),
             isTopValuesSampled:
               isNormalSamplingOption(params.samplingOption) ||
               (isDefined(params.samplingProbability) && params.samplingProbability < 1),
@@ -168,15 +204,21 @@ export const fetchNumericFieldsStats = (
               [...aggsPath, `${safeFieldName}_percentiles`, 'values'],
               []
             );
-            const medianPercentile: { value: number; key: number } | undefined = find(percentiles, {
-              key: 50,
-            });
-            stats.median = medianPercentile !== undefined ? medianPercentile!.value : 0;
-            stats.distribution = processDistributionData(
-              percentiles,
-              PERCENTILE_SPACING,
-              stats.min
-            );
+
+            if (percentiles && isDefined(stats.min)) {
+              const medianPercentile: { value: number; key: number } | undefined = find(
+                percentiles,
+                {
+                  key: 50,
+                }
+              );
+              stats.median = medianPercentile !== undefined ? medianPercentile!.value : 0;
+              stats.distribution = processDistributionData(
+                percentiles,
+                PERCENTILE_SPACING,
+                stats.min
+              );
+            }
           }
 
           batchStats.push(stats);

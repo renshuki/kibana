@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 export type {
@@ -41,8 +42,10 @@ export type {
   SavedObjectsMappingProperties,
 } from './src/mapping_definition';
 export type {
+  SavedObjectMigration,
   SavedObjectMigrationMap,
   SavedObjectMigrationContext,
+  SavedObjectMigrationParams,
   SavedObjectsMigrationLogger,
   SavedObjectMigrationFn,
 } from './src/migration';
@@ -52,6 +55,16 @@ export type {
   SavedObjectsExportablePredicate,
 } from './src/saved_objects_management';
 export type { SavedObjectStatusMeta } from './src/saved_objects_status';
+export {
+  MAIN_SAVED_OBJECT_INDEX,
+  TASK_MANAGER_SAVED_OBJECT_INDEX,
+  INGEST_SAVED_OBJECT_INDEX,
+  ALERTING_CASES_SAVED_OBJECT_INDEX,
+  SECURITY_SOLUTION_SAVED_OBJECT_INDEX,
+  ANALYTICS_SAVED_OBJECT_INDEX,
+  USAGE_COUNTERS_SAVED_OBJECT_INDEX,
+  ALL_SAVED_OBJECT_INDICES,
+} from './src/saved_objects_index_pattern';
 export type {
   SavedObjectsType,
   SavedObjectTypeExcludeFromUpgradeFilterHook,
@@ -62,6 +75,7 @@ export type {
   SavedObjectsRawDoc,
   SavedObjectSanitizedDoc,
   SavedObjectsRawDocParseOptions,
+  SavedObjectDoc,
   SavedObjectUnsanitizedDoc,
 } from './src/serialization';
 export type { ISavedObjectTypeRegistry } from './src/type_registry';
@@ -71,17 +85,31 @@ export type {
   EncryptedObjectDescriptor,
 } from './src/extensions/encryption';
 export type {
-  CheckAuthorizationParams,
-  PerformAuthorizationParams,
   AuthorizationTypeEntry,
   AuthorizationTypeMap,
   CheckAuthorizationResult,
-  EnforceAuthorizationParams,
-  AddAuditEventParams,
   RedactNamespacesParams,
   ISavedObjectsSecurityExtension,
+  AuthorizeCreateObject,
+  AuthorizeUpdateObject,
+  AuthorizeBulkGetObject,
+  AuthorizeCreateParams,
+  AuthorizeUpdateParams,
+  AuthorizeAndRedactMultiNamespaceReferencesParams,
+  AuthorizeAndRedactInternalBulkResolveParams,
+  AuthorizeGetParams,
+  AuthorizeBulkGetParams,
+  AuthorizeObjectWithExistingSpaces,
+  AuthorizeBulkCreateParams,
+  AuthorizeBulkDeleteParams,
+  AuthorizeBulkUpdateParams,
+  AuthorizeCheckConflictsParams,
+  AuthorizeDeleteParams,
+  GetFindRedactTypeMapParams,
+  AuthorizeOpenPointInTimeParams,
+  AuthorizeUpdateSpacesParams,
+  AuthorizeFindParams,
 } from './src/extensions/security';
-export { AuditAction } from './src/extensions/security';
 export type { ISavedObjectsSpacesExtension } from './src/extensions/spaces';
 export type { SavedObjectsExtensions } from './src/extensions/extensions';
 export {
@@ -89,11 +117,40 @@ export {
   SECURITY_EXTENSION_ID,
   SPACES_EXTENSION_ID,
 } from './src/extensions/extensions';
+export {
+  SavedObjectsErrorHelpers,
+  type DecoratedError,
+  type BulkResolveError,
+} from './src/saved_objects_error_helpers';
 
+export type {
+  SavedObjectsModelVersion,
+  SavedObjectsModelVersionMap,
+  SavedObjectsModelVersionMapProvider,
+  SavedObjectsModelChange,
+  SavedObjectsModelMappingsAdditionChange,
+  SavedObjectsModelMappingsDeprecationChange,
+  SavedObjectsModelDataBackfillChange,
+  SavedObjectsModelDataRemovalChange,
+  SavedObjectsModelUnsafeTransformChange,
+  SavedObjectModelTransformationDoc,
+  SavedObjectModelTransformationContext,
+  SavedObjectModelTransformationFn,
+  SavedObjectModelTransformationResult,
+  SavedObjectModelDataBackfillFn,
+  SavedObjectModelDataBackfillResult,
+  SavedObjectModelUnsafeTransformFn,
+  SavedObjectsModelVersionSchemaDefinitions,
+  SavedObjectModelVersionForwardCompatibilityFn,
+  SavedObjectModelVersionForwardCompatibilityObjectSchema,
+  SavedObjectModelVersionForwardCompatibilitySchema,
+} from './src/model_version';
+
+// We re-export the SavedObject types here for convenience.
 export type {
   SavedObject,
   SavedObjectAttribute,
   SavedObjectAttributes,
   SavedObjectAttributeSingle,
   SavedObjectReference,
-} from '@kbn/core-saved-objects-common/src/server_types';
+} from '@kbn/core-saved-objects-api-server';

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { Component } from 'react';
@@ -28,17 +29,17 @@ import { FormattedMessage } from '@kbn/i18n-react';
 import { IBasePath } from '@kbn/core/public';
 import type { SavedObjectManagementTypeInfo } from '../../../../common/types';
 import { getDefaultTitle, getSavedObjectLabel } from '../../../lib';
+import type { v1 } from '../../../../common';
 import {
   SavedObjectWithMetadata,
   SavedObjectRelationKind,
   SavedObjectRelation,
   SavedObjectInvalidRelation,
-  SavedObjectGetRelationshipsResponse,
 } from '../../../types';
 
 export interface RelationshipsProps {
   basePath: IBasePath;
-  getRelationships: (type: string, id: string) => Promise<SavedObjectGetRelationshipsResponse>;
+  getRelationships: (type: string, id: string) => Promise<v1.RelationshipsResponseHTTP>;
   savedObject: SavedObjectWithMetadata;
   close: () => void;
   goInspectObject: (obj: SavedObjectWithMetadata) => void;
@@ -194,7 +195,7 @@ export class Relationships extends Component<RelationshipsProps, RelationshipsSt
       <>
         <EuiCallOut
           color="warning"
-          iconType="alert"
+          iconType="warning"
           title={i18n.translate(
             'savedObjectsManagement.objectsTable.relationships.invalidRelationShip',
             {

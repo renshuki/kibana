@@ -8,12 +8,14 @@
 import { useLocation, useRouteMatch } from 'react-router-dom';
 import { keyBy } from 'lodash';
 import React, { useEffect, useMemo, useRef } from 'react';
-import { toMountPoint, useExecutionContext } from '@kbn/kibana-react-plugin/public';
+import { useExecutionContext } from '@kbn/kibana-react-plugin/public';
 import { EuiCallOut } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n-react';
+import { toMountPoint } from '@kbn/react-kibana-mount';
 import { PLUGIN_ID } from '../../../common/constants/app';
 import { useMlKibana } from '../contexts/kibana';
 import type { MlRoute } from './router';
+import { ML_PAGES } from '../../locator';
 
 /**
  * Provides an active route of the ML app.
@@ -23,14 +25,15 @@ export const useActiveRoute = (routesList: MlRoute[]): MlRoute => {
   const { pathname } = useLocation();
 
   const {
-    services: { executionContext, overlays, theme },
+    services: { executionContext, overlays, ...startServices },
   } = useMlKibana();
 
   /**
    * Temp fix for routes with params.
    */
-  const editCalendarMatch = useRouteMatch('/settings/calendars_list/edit_calendar/:calendarId');
-  const editFilterMatch = useRouteMatch('/settings/filter_lists/edit_filter_list/:filterId');
+  const editCalendarMatch = useRouteMatch(`/${ML_PAGES.CALENDARS_EDIT}/:calendarId`);
+  const editCalendarDstMatch = useRouteMatch(`/${ML_PAGES.CALENDARS_DST_EDIT}/:calendarId`);
+  const editFilterMatch = useRouteMatch(`/${ML_PAGES.FILTER_LISTS_EDIT}/:filterId`);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const routesMap = useMemo(() => keyBy(routesList, 'path'), []);
@@ -38,6 +41,9 @@ export const useActiveRoute = (routesList: MlRoute[]): MlRoute => {
   const activeRoute = useMemo(() => {
     if (editCalendarMatch) {
       return routesMap[editCalendarMatch.path];
+    }
+    if (editCalendarDstMatch) {
+      return routesMap[editCalendarDstMatch.path];
     }
     if (editFilterMatch) {
       return routesMap[editFilterMatch.path];
@@ -77,7 +83,7 @@ export const useActiveRoute = (routesList: MlRoute[]): MlRoute => {
                 />
               </p>
             </EuiCallOut>,
-            { theme$: theme.theme$ }
+            startServices
           )
         );
 
@@ -89,7 +95,7 @@ export const useActiveRoute = (routesList: MlRoute[]): MlRoute => {
         }, 15000);
       }
     },
-    [activeRoute, overlays, theme, pathname]
+    [activeRoute, overlays, pathname, startServices]
   );
 
   useExecutionContext(executionContext, {

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 /**
@@ -11,8 +12,11 @@
  */
 export interface DocLinksMeta {
   version: string;
+  ecs_version: string;
   elasticWebsiteUrl: string;
+  elasticGithubUrl: string;
   docsWebsiteUrl: string;
+  searchLabsUrl: string;
 }
 
 /**
@@ -21,6 +25,7 @@ export interface DocLinksMeta {
 export interface DocLinks {
   readonly settings: string;
   readonly elasticStackGetStarted: string;
+  readonly apiReference: string;
   readonly upgrade: {
     readonly upgradingStackOnPrem: string;
     readonly upgradingStackOnCloud: string;
@@ -44,10 +49,12 @@ export interface DocLinks {
     readonly guide: string;
   };
   readonly cloud: {
+    readonly beatsAndLogstashConfiguration: string;
     readonly indexManagement: string;
   };
   readonly console: {
     readonly guide: string;
+    readonly serverlessGuide: string;
   };
   readonly dashboard: {
     readonly guide: string;
@@ -108,26 +115,83 @@ export interface DocLinks {
     readonly webCrawlerReference: string;
   };
   readonly enterpriseSearch: {
+    readonly aiSearchDoc: string;
+    readonly aiSearchHelp: string;
     readonly apiKeys: string;
+    readonly behavioralAnalytics: string;
+    readonly behavioralAnalyticsCORS: string;
     readonly behavioralAnalyticsEvents: string;
+    readonly buildConnector: string;
     readonly bulkApi: string;
     readonly configuration: string;
     readonly connectors: string;
+    readonly connectorsClientDeploy: string;
+    readonly connectorsMappings: string;
+    readonly connectorsAzureBlobStorage: string;
+    readonly connectorsBox: string;
+    readonly connectorsClients: string;
+    readonly connectorsConfluence: string;
+    readonly connectorsContentExtraction: string;
+    readonly connectorsDropbox: string;
+    readonly connectorsGithub: string;
+    readonly connectorsGoogleCloudStorage: string;
+    readonly connectorsGoogleDrive: string;
+    readonly connectorsGmail: string;
+    readonly connectorsJira: string;
+    readonly connectorsMicrosoftSQL: string;
     readonly connectorsMongoDB: string;
     readonly connectorsMySQL: string;
-    readonly connectorsWorkplaceSearch: string;
+    readonly connectorsNative: string;
+    readonly connectorsNetworkDrive: string;
+    readonly connectorsNotion: string;
+    readonly connectorsOneDrive: string;
+    readonly connectorsOracle: string;
+    readonly connectorsOutlook: string;
+    readonly connectorsPostgreSQL: string;
+    readonly connectorsRedis: string;
+    readonly connectorsS3: string;
+    readonly connectorsSalesforce: string;
+    readonly connectorsServiceNow: string;
+    readonly connectorsSharepoint: string;
+    readonly connectorsSharepointOnline: string;
+    readonly connectorsTeams: string;
+    readonly connectorsSlack: string;
+    readonly connectorsZoom: string;
+    readonly crawlerExtractionRules: string;
     readonly crawlerManaging: string;
     readonly crawlerOverview: string;
     readonly deployTrainedModels: string;
     readonly documentLevelSecurity: string;
+    readonly e5Model: string;
+    readonly elser: string;
+    readonly engines: string;
+    readonly indexApi: string;
+    readonly inferenceApiCreate: string;
+    readonly ingestionApis: string;
     readonly ingestPipelines: string;
+    readonly knnSearch: string;
+    readonly knnSearchCombine: string;
     readonly languageAnalyzers: string;
     readonly languageClients: string;
     readonly licenseManagement: string;
     readonly machineLearningStart: string;
     readonly mailService: string;
+    readonly mlDocumentEnrichment: string;
+    readonly searchApplicationsTemplates: string;
+    readonly searchApplicationsSearchApi: string;
+    readonly searchApplications: string;
+    readonly searchApplicationsSearch: string;
+    readonly searchLabs: string;
+    readonly searchLabsRepo: string;
+    readonly semanticSearch: string;
+    readonly searchTemplates: string;
+    readonly semanticTextField: string;
     readonly start: string;
+    readonly supportedNlpModels: string;
     readonly syncRules: string;
+    readonly syncRulesAdvanced: string;
+    readonly trainedModels: string;
+    readonly textEmbedding: string;
     readonly troubleshootSetup: string;
     readonly usersAccess: string;
   };
@@ -145,6 +209,7 @@ export interface DocLinks {
     readonly dropbox: string;
     readonly externalSharePointOnline: string;
     readonly externalIdentities: string;
+    readonly gatedFormBlog: string;
     readonly gitHub: string;
     readonly gettingStarted: string;
     readonly gmail: string;
@@ -217,6 +282,7 @@ export interface DocLinks {
     readonly std_dev: string;
     readonly sum: string;
     readonly top_hits: string;
+    readonly change_point: string;
   };
   readonly runtimeFields: {
     readonly overview: string;
@@ -244,6 +310,9 @@ export interface DocLinks {
   };
   readonly addData: string;
   readonly kibana: {
+    readonly askElastic: string;
+    readonly createGithubIssue: string;
+    readonly feedback: string;
     readonly guide: string;
     readonly autocompleteSuggestions: string;
     readonly secureSavedObject: string;
@@ -253,6 +322,7 @@ export interface DocLinks {
     readonly overview: string;
     readonly batchReindex: string;
     readonly remoteReindex: string;
+    readonly reindexWithPipeline: string;
   };
   readonly rollupJobs: string;
   readonly elasticsearch: Record<string, string>;
@@ -266,10 +336,15 @@ export interface DocLinks {
     readonly networkMap: string;
     readonly troubleshootGaps: string;
     readonly ruleApiOverview: string;
+    readonly configureAlertSuppression: string;
   };
   readonly securitySolution: {
+    readonly aiAssistant: string;
+    readonly artifactControl: string;
+    readonly avcResults: string;
     readonly trustedApps: string;
     readonly eventFilters: string;
+    readonly eventMerging: string;
     readonly blocklist: string;
     readonly endpointArtifacts: string;
     readonly policyResponseTroubleshooting: {
@@ -287,6 +362,16 @@ export interface DocLinks {
       value_lists: string;
     };
     readonly privileges: string;
+    readonly manageDetectionRules: string;
+    readonly createDetectionRules: string;
+    readonly createEsqlRuleType: string;
+    readonly ruleUiAdvancedParams: string;
+    readonly entityAnalytics: {
+      readonly riskScorePrerequisites: string;
+      readonly entityRiskScoring: string;
+      readonly assetCriticality: string;
+    };
+    readonly detectionEngineOverview: string;
   };
   readonly query: {
     readonly eql: string;
@@ -295,6 +380,8 @@ export interface DocLinks {
     readonly luceneQuerySyntax: string;
     readonly percolate: string;
     readonly queryDsl: string;
+    readonly queryESQL: string;
+    readonly queryESQLExamples: string;
   };
   readonly date: {
     readonly dateMath: string;
@@ -306,6 +393,7 @@ export interface DocLinks {
   readonly visualize: Record<string, string>;
   readonly apis: Readonly<{
     bulkIndexAlias: string;
+    indexStats: string;
     byteSizeUnits: string;
     createAutoFollowPattern: string;
     createFollower: string;
@@ -320,6 +408,7 @@ export interface DocLinks {
     cronExpressions: string;
     executeWatchActionModes: string;
     indexExists: string;
+    inferTrainedModel: string;
     multiSearch: string;
     openIndex: string;
     putComponentTemplate: string;
@@ -329,8 +418,11 @@ export interface DocLinks {
     putSnapshotLifecyclePolicy: string;
     putIndexTemplateV1: string;
     putWatch: string;
+    restApis: string;
     searchPreference: string;
+    securityApis: string;
     simulatePipeline: string;
+    tasks: string;
     timeUnits: string;
     unfreezeIndex: string;
     updateTransform: string;
@@ -340,6 +432,7 @@ export interface DocLinks {
     infrastructureThreshold: string;
     logsThreshold: string;
     metricsThreshold: string;
+    customThreshold: string;
     monitorStatus: string;
     monitorUptime: string;
     tlsCertificate: string;
@@ -349,13 +442,20 @@ export interface DocLinks {
     monitorUptimeSynthetics: string;
     userExperience: string;
     createAlerts: string;
+    syntheticsAlerting: string;
     syntheticsCommandReference: string;
     syntheticsProjectMonitors: string;
+    syntheticsMigrateFromIntegration: string;
+    sloBurnRateRule: string;
+    aiAssistant: string;
   }>;
   readonly alerting: Readonly<{
     guide: string;
     actionTypes: string;
-    apmRules: string;
+    apmRulesErrorCount: string;
+    apmRulesTransactionDuration: string;
+    apmRulesTransactionError: string;
+    apmRulesAnomaly: string;
     emailAction: string;
     emailActionConfig: string;
     emailExchangeClientSecretConfig: string;
@@ -364,6 +464,7 @@ export interface DocLinks {
     indexAction: string;
     esQuery: string;
     indexThreshold: string;
+    maintenanceWindows: string;
     pagerDutyAction: string;
     preconfiguredConnectors: string;
     preconfiguredAlertHistoryConnector: string;
@@ -371,6 +472,7 @@ export interface DocLinks {
     serviceNowSIRAction: string;
     setupPrerequisites: string;
     slackAction: string;
+    slackApiAction: string;
     teamsAction: string;
     connectors: string;
   }>;
@@ -378,6 +480,7 @@ export interface DocLinks {
     healthMonitoring: string;
   }>;
   readonly maps: Readonly<{
+    connectToEms: string;
     guide: string;
     importGeospatialPrivileges: string;
     gdalTutorial: string;
@@ -393,6 +496,7 @@ export interface DocLinks {
   readonly security: Readonly<{
     apiKeyServiceSettings: string;
     clusterPrivileges: string;
+    definingRoles: string;
     elasticsearchSettings: string;
     elasticsearchEnableSecurity: string;
     elasticsearchEnableApiKeys: string;
@@ -425,7 +529,10 @@ export interface DocLinks {
     guide: string;
     fleetServer: string;
     fleetServerAddFleetServer: string;
+    esSettings: string;
     settings: string;
+    logstashSettings: string;
+    kafkaSettings: string;
     settingsFleetServerHostSettings: string;
     settingsFleetServerProxySettings: string;
     troubleshooting: string;
@@ -433,8 +540,13 @@ export interface DocLinks {
     datastreams: string;
     datastreamsILM: string;
     datastreamsNamingScheme: string;
+    datastreamsManualRollover: string;
+    datastreamsTSDS: string;
+    datastreamsTSDSMetrics: string;
+    datastreamsDownsampling: string;
     installElasticAgent: string;
     installElasticAgentStandalone: string;
+    grantESAccessToStandaloneAgents: string;
     packageSignatures: string;
     upgradeElasticAgent: string;
     learnMoreBlog: string;
@@ -442,12 +554,30 @@ export interface DocLinks {
     onPremRegistry: string;
     secureLogstash: string;
     agentPolicy: string;
+    api: string;
+    uninstallAgent: string;
+    installAndUninstallIntegrationAssets: string;
+    elasticAgentInputConfiguration: string;
+    policySecrets: string;
+    remoteESOoutput: string;
+    performancePresets: string;
+    scalingKubernetesResourcesAndLimits: string;
+    roleAndPrivileges: string;
+    proxiesSettings: string;
+    unprivilegedMode: string;
+    httpMonitoring: string;
   }>;
+  readonly integrationDeveloper: {
+    upload: string;
+  };
   readonly ecs: {
     readonly guide: string;
+    readonly dataStreams: string;
   };
   readonly clients: {
     readonly guide: string;
+    readonly goConnecting: string;
+    readonly goGettingStarted: string;
     readonly goIndex: string;
     readonly goOverview: string;
     readonly javaBasicAuthentication: string;
@@ -455,29 +585,42 @@ export interface DocLinks {
     readonly javaInstallation: string;
     readonly javaIntroduction: string;
     readonly javaRestLow: string;
+    readonly jsAdvancedConfig: string;
+    readonly jsApiReference: string;
+    readonly jsBasicConfig: string;
     readonly jsClientConnecting: string;
     readonly jsIntro: string;
     readonly netGuide: string;
     readonly netIntroduction: string;
     readonly netNest: string;
     readonly netSingleNode: string;
-    readonly phpGuide: string;
+    readonly phpConfiguration: string;
     readonly phpConnecting: string;
+    readonly phpGuide: string;
     readonly phpInstallation: string;
     readonly phpOverview: string;
     readonly pythonAuthentication: string;
+    readonly pythonConfig: string;
+    readonly pythonConnecting: string;
     readonly pythonGuide: string;
     readonly pythonOverview: string;
     readonly rubyAuthentication: string;
+    readonly rubyAdvancedConfig: string;
+    readonly rubyBasicConfig: string;
+    readonly rubyExamples: string;
     readonly rubyOverview: string;
     readonly rustGuide: string;
     readonly rustOverview: string;
+    readonly eland: string;
   };
   readonly endpoints: {
     readonly troubleshooting: string;
   };
   readonly legal: {
     readonly privacyStatement: string;
+    readonly generalPrivacyStatement: string;
+    readonly termsOfService: string;
+    readonly dataUse: string;
   };
   readonly kibanaUpgradeSavedObjects: {
     readonly resolveMigrationFailures: string;
@@ -489,4 +632,50 @@ export interface DocLinks {
     readonly appSearch: string;
     readonly elasticsearch: string;
   };
+  readonly serverlessClients: {
+    readonly clientLib: string;
+    readonly goApiReference: string;
+    readonly goGettingStarted: string;
+    readonly httpApis: string;
+    readonly httpApiReferences: string;
+    readonly jsApiReference: string;
+    readonly jsGettingStarted: string;
+    readonly phpApiReference: string;
+    readonly phpGettingStarted: string;
+    readonly pythonApiReference: string;
+    readonly pythonGettingStarted: string;
+    readonly pythonReferences: string;
+    readonly rubyApiReference: string;
+    readonly rubyGettingStarted: string;
+  };
+  readonly serverlessSearch: {
+    readonly gettingStartedExplore: string;
+    readonly gettingStartedIngest: string;
+    readonly gettingStartedSearch: string;
+    readonly integrations: string;
+    readonly integrationsBeats: string;
+    readonly integrationsConnectorClient: string;
+    readonly integrationsConnectorClientAvailableConnectors: string;
+    readonly integrationsConnectorClientRunFromSource: string;
+    readonly integrationsConnectorClientRunWithDocker: string;
+    readonly integrationsLogstash: string;
+  };
+  readonly serverlessSecurity: {
+    readonly apiKeyPrivileges: string;
+  };
+  readonly synthetics: {
+    readonly featureRoles: string;
+  };
+  readonly telemetry: {
+    readonly settings: string;
+  };
+  readonly playground: {
+    readonly chatPlayground: string;
+    readonly retrievalOptimize: string;
+    readonly retrieval: string;
+    readonly context: string;
+    readonly hiddenFields: string;
+  };
 }
+
+export type BuildFlavor = 'serverless' | 'traditional';

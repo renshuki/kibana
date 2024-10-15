@@ -5,7 +5,11 @@
  * 2.0.
  */
 
-export { deserializeDataStream, deserializeDataStreamList } from './data_stream_serialization';
+export {
+  splitSizeAndUnits,
+  serializeAsESLifecycle,
+  deserializeESLifecycle,
+} from './data_stream_utils';
 
 export {
   deserializeTemplate,
@@ -23,3 +27,5 @@ export {
   deserializeComponentTemplateList,
   serializeComponentTemplate,
 } from './component_template_serialization';
+
+export { getPolicyType, serializeAsESPolicy, getESPolicyCreationApiCall } from './enrich_policies';

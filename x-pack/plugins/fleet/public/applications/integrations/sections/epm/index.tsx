@@ -6,22 +6,25 @@
  */
 
 import React from 'react';
-import { Switch, Route } from 'react-router-dom';
-import { EuiLoadingContent } from '@elastic/eui';
+import { Routes, Route } from '@kbn/shared-ux-router';
+
+import { EuiSkeletonText } from '@elastic/eui';
 
 import { INTEGRATIONS_ROUTING_PATHS } from '../../constants';
-import { IntegrationsStateContextProvider, useBreadcrumbs } from '../../hooks';
+import { IntegrationsStateContextProvider, useBreadcrumbs, useStartServices } from '../../hooks';
 
 import { EPMHomePage } from './screens/home';
 import { Detail } from './screens/detail';
 import { Policy } from './screens/policy';
+import { CreateIntegration } from './screens/create';
 import { CustomLanguagesOverview } from './screens/detail/custom_languages_overview';
 
 export const EPMApp: React.FunctionComponent = () => {
+  const { integrationAssistant } = useStartServices();
   useBreadcrumbs('integrations');
 
   return (
-    <Switch>
+    <Routes>
       <Route path={INTEGRATIONS_ROUTING_PATHS.integration_policy_edit}>
         <Policy />
       </Route>
@@ -32,14 +35,19 @@ export const EPMApp: React.FunctionComponent = () => {
       </Route>
       <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_language_clients}>
         <IntegrationsStateContextProvider>
-          <React.Suspense fallback={<EuiLoadingContent />}>
+          <React.Suspense fallback={<EuiSkeletonText />}>
             <CustomLanguagesOverview />
           </React.Suspense>
         </IntegrationsStateContextProvider>
       </Route>
+      {integrationAssistant && (
+        <Route path={INTEGRATIONS_ROUTING_PATHS.integrations_create}>
+          <CreateIntegration />
+        </Route>
+      )}
       <Route path={INTEGRATIONS_ROUTING_PATHS.integrations}>
         <EPMHomePage />
       </Route>
-    </Switch>
+    </Routes>
   );
 };

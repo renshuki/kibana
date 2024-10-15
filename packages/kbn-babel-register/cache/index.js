@@ -1,16 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 const Fs = require('fs');
 const Path = require('path');
 const Crypto = require('crypto');
 
-const { readHashOfPackageMap } = require('@kbn/repo-packages');
 const babel = require('@babel/core');
 const peggy = require('@kbn/peggy');
 const { REPO_ROOT, UPSTREAM_BRANCH } = require('@kbn/repo-info');
@@ -25,7 +25,6 @@ const { getBabelOptions } = require('@kbn/babel-transform');
  */
 function determineCachePrefix() {
   const json = JSON.stringify({
-    synthPkgMapHash: readHashOfPackageMap(),
     babelVersion: babel.version,
     peggyVersion: peggy.version,
     // get a config for a fake js, ts, and tsx file to make sure we
@@ -63,8 +62,7 @@ function getCache() {
   if (lmdbAvailable()) {
     log?.write('lmdb is available, using lmdb cache\n');
     return new (require('./lmdb_cache').LmdbCache)({
-      pathRoot: REPO_ROOT,
-      dir: Path.resolve(REPO_ROOT, 'data/babel_register_cache_v1', UPSTREAM_BRANCH),
+      dir: Path.resolve(REPO_ROOT, 'data/babel_register_cache', UPSTREAM_BRANCH),
       prefix: determineCachePrefix(),
       log,
     });

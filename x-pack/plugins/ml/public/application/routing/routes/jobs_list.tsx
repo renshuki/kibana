@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { useEffect, FC, useMemo } from 'react';
+import type { FC } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import useObservable from 'react-use/lib/useObservable';
 import { i18n } from '@kbn/i18n';
 import {
@@ -13,23 +14,29 @@ import {
   useRefreshIntervalUpdates,
   useTimefilter,
 } from '@kbn/ml-date-picker';
-import { NavigateToPath } from '../../contexts/kibana';
+import { dynamic } from '@kbn/shared-ux-utility';
+import { ML_PAGES } from '../../../locator';
+import type { NavigateToPath } from '../../contexts/kibana';
 import { DEFAULT_REFRESH_INTERVAL_MS } from '../../../../common/constants/jobs_list';
-import { MlRoute, PageLoader, PageProps } from '../router';
-import { useResolver } from '../use_resolver';
-import { basicResolvers } from '../resolvers';
-import { JobsPage } from '../../jobs/jobs_list';
+import type { MlRoute } from '../router';
+import { createPath, PageLoader } from '../router';
+import { useRouteResolver } from '../use_resolver';
 import { getBreadcrumbWithUrlForApp } from '../breadcrumbs';
 import { AnnotationUpdatesService } from '../../services/annotations_service';
 import { MlAnnotationUpdatesContext } from '../../contexts/ml/ml_annotation_updates_context';
+import { basicResolvers } from '../resolvers';
+
+const JobsPage = dynamic(async () => ({
+  default: (await import('../../jobs/jobs_list')).JobsPage,
+}));
 
 export const jobListRouteFactory = (navigateToPath: NavigateToPath, basePath: string): MlRoute => ({
   id: 'anomaly_detection',
   title: i18n.translate('xpack.ml.anomalyDetection.jobs.docTitle', {
     defaultMessage: 'Anomaly Detection Jobs',
   }),
-  path: '/jobs',
-  render: (props, deps) => <PageWrapper {...props} deps={deps} />,
+  path: createPath(ML_PAGES.ANOMALY_DETECTION_JOBS_MANAGE),
+  render: () => <PageWrapper />,
   breadcrumbs: [
     getBreadcrumbWithUrlForApp('ML_BREADCRUMB', navigateToPath, basePath),
     getBreadcrumbWithUrlForApp('ANOMALY_DETECTION_BREADCRUMB', navigateToPath, basePath),
@@ -43,14 +50,9 @@ export const jobListRouteFactory = (navigateToPath: NavigateToPath, basePath: st
   enableDatePicker: true,
 });
 
-const PageWrapper: FC<PageProps> = ({ deps }) => {
-  const { context } = useResolver(
-    undefined,
-    undefined,
-    deps.config,
-    deps.dataViewsContract,
-    basicResolvers(deps)
-  );
+const PageWrapper: FC = () => {
+  const { context } = useRouteResolver('full', ['canGetJobs'], basicResolvers());
+
   const timefilter = useTimefilter({ timeRangeSelector: false, autoRefreshSelector: true });
 
   const refresh = useRefreshIntervalUpdates();

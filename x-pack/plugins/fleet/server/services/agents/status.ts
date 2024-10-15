@@ -6,21 +6,22 @@
  */
 
 import type { ElasticsearchClient, SavedObjectsClientContract } from '@kbn/core/server';
-
 import { toElasticsearchQuery } from '@kbn/es-query';
 import { fromKueryExpression } from '@kbn/es-query';
-
+import { DEFAULT_SPACE_ID } from '@kbn/spaces-plugin/common';
 import type {
   AggregationsTermsAggregateBase,
   AggregationsTermsBucketBase,
   QueryDslQueryContainer,
 } from '@elastic/elasticsearch/lib/api/types';
 
+import { agentStatusesToSummary } from '../../../common/services';
 import { AGENTS_INDEX } from '../../constants';
 import type { AgentStatus } from '../../types';
-import { FleetUnauthorizedError } from '../../errors';
-
+import { FleetError, FleetUnauthorizedError } from '../../errors';
 import { appContextService } from '../app_context';
+import { isSpaceAwarenessEnabled } from '../spaces/helpers';
+import { retryTransientEsErrors } from '../epm/elasticsearch/retry';
 
 import { getAgentById, removeSOAttributes } from './crud';
 import { buildAgentStatusRuntimeField } from './build_status_runtime_field';
@@ -39,16 +40,41 @@ export async function getAgentStatusById(
   return (await getAgentById(esClient, soClient, agentId)).status!;
 }
 
+/**
+ * getAgentStatusForAgentPolicy
+ * @param esClient
+ * @param soClient
+ * @param agentPolicyId @deprecated use agentPolicyIds instead since the move to multi-policy
+ * @param filterKuery
+ * @param spaceId
+ * @param agentPolicyIds
+ */
+
 export async function getAgentStatusForAgentPolicy(
   esClient: ElasticsearchClient,
   soClient: SavedObjectsClientContract,
   agentPolicyId?: string,
-  filterKuery?: string
+  filterKuery?: string,
+  spaceId?: string,
+  agentPolicyIds?: string[]
 ) {
   const logger = appContextService.getLogger();
   const runtimeFields = await buildAgentStatusRuntimeField(soClient);
 
   const clauses: QueryDslQueryContainer[] = [];
+
+  const useSpaceAwareness = await isSpaceAwarenessEnabled();
+  if (useSpaceAwareness && spaceId) {
+    if (spaceId === DEFAULT_SPACE_ID) {
+      clauses.push(
+        toElasticsearchQuery(
+          fromKueryExpression(`namespaces:"${DEFAULT_SPACE_ID}" or not namespaces:*`)
+        )
+      );
+    } else {
+      clauses.push(toElasticsearchQuery(fromKueryExpression(`namespaces:"${spaceId}"`)));
+    }
+  }
 
   if (filterKuery) {
     const kueryAsElasticsearchQuery = toElasticsearchQuery(
@@ -56,8 +82,14 @@ export async function getAgentStatusForAgentPolicy(
     );
     clauses.push(kueryAsElasticsearchQuery);
   }
-
-  if (agentPolicyId) {
+  // If agentPolicyIds is provided, we filter by those, otherwise we filter by depreciated agentPolicyId
+  if (agentPolicyIds) {
+    clauses.push({
+      terms: {
+        policy_id: agentPolicyIds,
+      },
+    });
+  } else if (agentPolicyId) {
     clauses.push({
       term: {
         policy_id: agentPolicyId,
@@ -89,27 +121,34 @@ export async function getAgentStatusForAgentPolicy(
   let response;
 
   try {
-    response = await esClient.search<
-      null,
-      { status: AggregationsTermsAggregateBase<AggregationsStatusTermsBucketKeys> }
-    >({
-      index: AGENTS_INDEX,
-      size: 0,
-      query,
-      fields: Object.keys(runtimeFields),
-      runtime_mappings: runtimeFields,
-      aggregations: {
-        status: {
-          terms: {
-            field: 'status',
-            size: Object.keys(statuses).length,
+    response = await retryTransientEsErrors(
+      () =>
+        esClient.search<
+          null,
+          { status: AggregationsTermsAggregateBase<AggregationsStatusTermsBucketKeys> }
+        >({
+          index: AGENTS_INDEX,
+          size: 0,
+          query,
+          fields: Object.keys(runtimeFields),
+          runtime_mappings: runtimeFields,
+          aggregations: {
+            status: {
+              terms: {
+                field: 'status',
+                size: Object.keys(statuses).length,
+              },
+            },
           },
-        },
-      },
-    });
+          ignore_unavailable: true,
+        }),
+      { logger }
+    );
   } catch (error) {
     logger.debug(`Error getting agent statuses: ${error}`);
-    throw error;
+    throw new FleetError(
+      `Unable to retrive agent statuses for policy ${agentPolicyId} due to error: ${error.message}`
+    );
   }
 
   const buckets = (response?.aggregations?.status?.buckets ||
@@ -121,32 +160,30 @@ export async function getAgentStatusForAgentPolicy(
     }
   });
 
-  const combinedStatuses = {
-    online: statuses.online,
-    error: statuses.error + statuses.degraded,
-    inactive: statuses.inactive,
-    offline: statuses.offline,
-    updating: statuses.updating + statuses.enrolling + statuses.unenrolling,
-    unenrolled: statuses.unenrolled,
-  };
-
+  const { healthy: online, unhealthy: error, ...otherStatuses } = agentStatusesToSummary(statuses);
+  const combinedStatuses = { online, error, ...otherStatuses };
+  const allStatuses = Object.values(statuses).reduce((acc, val) => acc + val, 0);
+  const allActive = allStatuses - combinedStatuses.unenrolled - combinedStatuses.inactive;
   return {
     ...combinedStatuses,
+    all: allStatuses,
+    active: allActive,
     /* @deprecated no agents will have other status */
     other: 0,
     /* @deprecated Agent events do not exists anymore */
     events: 0,
-    total:
-      Object.values(statuses).reduce((acc, val) => acc + val, 0) -
-      combinedStatuses.unenrolled -
-      combinedStatuses.inactive,
+    /* @deprecated use active instead */
+    total: allActive,
   };
 }
+
 export async function getIncomingDataByAgentsId(
   esClient: ElasticsearchClient,
   agentsIds: string[],
   returnDataPreview: boolean = false
 ) {
+  const logger = appContextService.getLogger();
+
   try {
     const { has_all_requested: hasAllPrivileges } = await esClient.security.hasPrivileges({
       body: {
@@ -158,46 +195,51 @@ export async function getIncomingDataByAgentsId(
         ],
       },
     });
+
     if (!hasAllPrivileges) {
       throw new FleetUnauthorizedError('Missing permissions to read data streams indices');
     }
 
-    const searchResult = await esClient.search({
-      index: DATA_STREAM_INDEX_PATTERN,
-      allow_partial_search_results: true,
-      _source: returnDataPreview,
-      timeout: '5s',
-      size: returnDataPreview ? MAX_AGENT_DATA_PREVIEW_SIZE : 0,
-      body: {
-        query: {
-          bool: {
-            filter: [
-              {
-                terms: {
-                  'agent.id': agentsIds,
-                },
-              },
-              {
-                range: {
-                  '@timestamp': {
-                    gte: 'now-5m',
-                    lte: 'now',
+    const searchResult = await retryTransientEsErrors(
+      () =>
+        esClient.search({
+          index: DATA_STREAM_INDEX_PATTERN,
+          allow_partial_search_results: true,
+          _source: returnDataPreview,
+          timeout: '5s',
+          size: returnDataPreview ? MAX_AGENT_DATA_PREVIEW_SIZE : 0,
+          body: {
+            query: {
+              bool: {
+                filter: [
+                  {
+                    terms: {
+                      'agent.id': agentsIds,
+                    },
                   },
+                  {
+                    range: {
+                      '@timestamp': {
+                        gte: 'now-5m',
+                        lte: 'now',
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+            aggs: {
+              agent_ids: {
+                terms: {
+                  field: 'agent.id',
+                  size: agentsIds.length,
                 },
               },
-            ],
-          },
-        },
-        aggs: {
-          agent_ids: {
-            terms: {
-              field: 'agent.id',
-              size: agentsIds.length,
             },
           },
-        },
-      },
-    });
+        }),
+      { logger }
+    );
 
     if (!searchResult.aggregations?.agent_ids) {
       return {
@@ -220,7 +262,10 @@ export async function getIncomingDataByAgentsId(
     );
 
     return { items, dataPreview };
-  } catch (e) {
-    throw new Error(e);
+  } catch (error) {
+    logger.debug(`Error getting incoming data for agents: ${error}`);
+    throw new FleetError(
+      `Unable to retrive incoming data for agents due to error: ${error.message}`
+    );
   }
 }

@@ -7,7 +7,9 @@
 
 import { schema, TypeOf } from '@kbn/config-schema';
 import { validateDurationSchema, parseDuration } from './lib';
+import { DEFAULT_CACHE_INTERVAL_MS } from './rules_settings';
 
+export const DEFAULT_MAX_ALERTS = 1000;
 const ONE_DAY_IN_MS = 24 * 60 * 60 * 1000;
 const ruleTypeSchema = schema.object({
   id: schema.string(),
@@ -37,6 +39,14 @@ const rulesSchema = schema.object({
     }),
     enforce: schema.boolean({ defaultValue: false }), // if enforce is false, only warnings will be shown
   }),
+  maxScheduledPerMinute: schema.number({ defaultValue: 32000, min: 0 }),
+  overwriteProducer: schema.maybe(
+    schema.oneOf([
+      schema.literal('observability'),
+      schema.literal('siem'),
+      schema.literal('stackAlerts'),
+    ])
+  ),
   run: schema.object({
     timeout: schema.maybe(schema.string({ validate: validateDurationSchema })),
     actions: schema.object({
@@ -44,7 +54,7 @@ const rulesSchema = schema.object({
       connectorTypeOverrides: schema.maybe(schema.arrayOf(connectorTypeSchema)),
     }),
     alerts: schema.object({
-      max: schema.number({ defaultValue: 1000 }),
+      max: schema.number({ defaultValue: DEFAULT_MAX_ALERTS }),
     }),
     ruleTypeOverrides: schema.maybe(schema.arrayOf(ruleTypeSchema)),
   }),
@@ -62,14 +72,20 @@ export const configSchema = schema.object({
   maxEphemeralActionsPerAlert: schema.number({
     defaultValue: DEFAULT_MAX_EPHEMERAL_ACTIONS_PER_ALERT,
   }),
-  enableFrameworkAlerts: schema.boolean({ defaultValue: false }),
+  enableFrameworkAlerts: schema.boolean({ defaultValue: true }),
   cancelAlertsOnRuleTimeout: schema.boolean({ defaultValue: true }),
   rules: rulesSchema,
+  rulesSettings: schema.object({
+    cacheInterval: schema.number({ defaultValue: DEFAULT_CACHE_INTERVAL_MS }),
+  }),
 });
 
 export type AlertingConfig = TypeOf<typeof configSchema>;
 export type RulesConfig = TypeOf<typeof rulesSchema>;
-export type AlertingRulesConfig = Pick<AlertingConfig['rules'], 'minimumScheduleInterval'> & {
+export type AlertingRulesConfig = Pick<
+  AlertingConfig['rules'],
+  'minimumScheduleInterval' | 'maxScheduledPerMinute' | 'run'
+> & {
   isUsingSecurity: boolean;
 };
 export type ActionsConfig = RulesConfig['run']['actions'];

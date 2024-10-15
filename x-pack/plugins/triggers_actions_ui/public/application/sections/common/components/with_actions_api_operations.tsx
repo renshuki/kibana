@@ -9,13 +9,15 @@ import React from 'react';
 
 import { IExecutionLogResult, IExecutionKPIResult } from '@kbn/actions-plugin/common';
 import { ActionType } from '../../../../types';
+import { loadActionTypes } from '../../../lib/action_connector_api';
 import {
-  loadActionTypes,
-  LoadGlobalConnectorExecutionLogAggregationsProps,
-  loadGlobalConnectorExecutionLogAggregations,
-  LoadGlobalConnectorExecutionKPIAggregationsProps,
   loadGlobalConnectorExecutionKPIAggregations,
-} from '../../../lib/action_connector_api';
+  LoadGlobalConnectorExecutionKPIAggregationsProps,
+} from '../../../lib/action_connector_api/load_execution_kpi_aggregations';
+import {
+  loadGlobalConnectorExecutionLogAggregations,
+  LoadGlobalConnectorExecutionLogAggregationsProps,
+} from '../../../lib/action_connector_api/load_execution_log_aggregations';
 import { useKibana } from '../../../../common/lib/kibana';
 
 export interface ComponentOpts {
@@ -38,7 +40,7 @@ export function withActionOperations<T>(
     return (
       <WrappedComponent
         {...(props as T)}
-        loadActionTypes={async () => loadActionTypes({ http })}
+        loadActionTypes={async () => loadActionTypes({ http, includeSystemActions: true })}
         loadGlobalConnectorExecutionLogAggregations={async (
           loadProps: LoadGlobalConnectorExecutionLogAggregationsProps
         ) =>

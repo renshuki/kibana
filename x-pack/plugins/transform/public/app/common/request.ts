@@ -5,10 +5,22 @@
  * 2.0.
  */
 
-import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import type { DataView } from '@kbn/data-views-plugin/public';
 import { isPopulatedObject } from '@kbn/ml-is-populated-object';
+import {
+  buildBaseFilterCriteria,
+  isDefaultQuery,
+  type SearchQueryVariant,
+  type SavedSearchQuery,
+} from '@kbn/ml-query-utils';
 
+import type {
+  PivotTransformPreviewRequestSchema,
+  PostTransformsPreviewRequestSchema,
+  PutTransformsLatestRequestSchema,
+  PutTransformsPivotRequestSchema,
+  PutTransformsRequestSchema,
+} from '../../../server/routes/api_schemas/transforms';
 import {
   DEFAULT_CONTINUOUS_MODE_DELAY,
   DEFAULT_TRANSFORM_FREQUENCY,
@@ -16,40 +28,26 @@ import {
   DEFAULT_TRANSFORM_SETTINGS_MAX_PAGE_SEARCH_SIZE,
 } from '../../../common/constants';
 import type {
-  PivotTransformPreviewRequestSchema,
-  PostTransformsPreviewRequestSchema,
-  PutTransformsLatestRequestSchema,
-  PutTransformsPivotRequestSchema,
-  PutTransformsRequestSchema,
-} from '../../../common/api_schemas/transforms';
-import { DateHistogramAgg, HistogramAgg, TermsAgg } from '../../../common/types/pivot_group_by';
-import { isDataView } from '../../../common/types/data_view';
+  DateHistogramAgg,
+  HistogramAgg,
+  TermsAgg,
+} from '../../../common/types/pivot_group_by';
 
-import type { SavedSearchQuery } from '../hooks/use_search_items';
 import type { StepDefineExposedState } from '../sections/create_transform/components/step_define';
 import type { StepDetailsExposedState } from '../sections/create_transform/components/step_details';
 
+import type { GroupByConfigWithUiSupport, PivotAggsConfig, PivotGroupByConfig } from '.';
 import {
   getEsAggFromAggConfig,
   getEsAggFromGroupByConfig,
   isGroupByDateHistogram,
   isGroupByHistogram,
   isGroupByTerms,
-  GroupByConfigWithUiSupport,
-  PivotAggsConfig,
-  PivotGroupByConfig,
 } from '.';
 
-export interface SimpleQuery {
-  query_string: {
-    query: string;
-    default_operator?: estypes.QueryDslOperator;
-  };
-}
+export type TransformConfigQuery = SearchQueryVariant;
 
-export type PivotQuery = SimpleQuery | SavedSearchQuery;
-
-export function getPivotQuery(search: string | SavedSearchQuery): PivotQuery {
+export function getTransformConfigQuery(search: string | SavedSearchQuery): TransformConfigQuery {
   if (typeof search === 'string') {
     return {
       query_string: {
@@ -60,54 +58,6 @@ export function getPivotQuery(search: string | SavedSearchQuery): PivotQuery {
   }
 
   return search;
-}
-
-export function isSimpleQuery(arg: unknown): arg is SimpleQuery {
-  return isPopulatedObject(arg, ['query_string']);
-}
-
-export const matchAllQuery = { match_all: {} };
-export function isMatchAllQuery(query: unknown): boolean {
-  return (
-    isPopulatedObject(query, ['match_all']) &&
-    typeof query.match_all === 'object' &&
-    query.match_all !== null &&
-    Object.keys(query.match_all).length === 0
-  );
-}
-
-export const defaultQuery: PivotQuery = { query_string: { query: '*' } };
-export function isDefaultQuery(query: PivotQuery): boolean {
-  return isSimpleQuery(query) && query.query_string.query === '*';
-}
-
-export function getCombinedRuntimeMappings(
-  dataView: DataView | undefined,
-  runtimeMappings?: StepDefineExposedState['runtimeMappings']
-): StepDefineExposedState['runtimeMappings'] | undefined {
-  let combinedRuntimeMappings = {};
-
-  // And runtime field mappings defined by index pattern
-  if (isDataView(dataView)) {
-    const computedFields = dataView.getComputedFields();
-    if (computedFields?.runtimeFields !== undefined) {
-      const ipRuntimeMappings = computedFields.runtimeFields;
-      if (isPopulatedObject(ipRuntimeMappings)) {
-        combinedRuntimeMappings = { ...combinedRuntimeMappings, ...ipRuntimeMappings };
-      }
-    }
-  }
-
-  // Use runtime field mappings defined inline from API
-  // and override fields with same name from index pattern
-  if (isPopulatedObject(runtimeMappings)) {
-    combinedRuntimeMappings = { ...combinedRuntimeMappings, ...runtimeMappings };
-  }
-
-  if (isPopulatedObject<keyof StepDefineExposedState['runtimeMappings']>(combinedRuntimeMappings)) {
-    return combinedRuntimeMappings;
-  }
-  return undefined;
 }
 
 export const getMissingBucketConfig = (
@@ -150,6 +100,7 @@ export const getRequestPayload = (
         date_histogram: {
           field: g.field,
           calendar_interval: g.calendar_interval,
+          time_zone: g.time_zone,
           ...getMissingBucketConfig(g),
         },
       };
@@ -171,17 +122,39 @@ export const getRequestPayload = (
 };
 
 export function getPreviewTransformRequestBody(
-  dataViewTitle: DataView['title'],
-  query: PivotQuery,
-  partialRequest?: StepDefineExposedState['previewRequest'] | undefined,
-  runtimeMappings?: StepDefineExposedState['runtimeMappings']
+  dataView: DataView,
+  transformConfigQuery: TransformConfigQuery,
+  partialRequest?: StepDefineExposedState['previewRequest'],
+  runtimeMappings?: StepDefineExposedState['runtimeMappings'],
+  timeRangeMs?: StepDefineExposedState['timeRangeMs']
 ): PostTransformsPreviewRequestSchema {
+  const dataViewTitle = dataView.getIndexPattern();
   const index = dataViewTitle.split(',').map((name: string) => name.trim());
+
+  const hasValidTimeField = dataView.timeFieldName !== undefined && dataView.timeFieldName !== '';
+
+  const baseFilterCriteria = buildBaseFilterCriteria(
+    dataView.timeFieldName,
+    timeRangeMs?.from,
+    timeRangeMs?.to,
+    transformConfigQuery
+  );
+
+  const queryWithBaseFilterCriteria = {
+    bool: {
+      filter: baseFilterCriteria,
+    },
+  };
+
+  const query =
+    hasValidTimeField && baseFilterCriteria.length > 0
+      ? queryWithBaseFilterCriteria
+      : transformConfigQuery;
 
   return {
     source: {
       index,
-      ...(!isDefaultQuery(query) && !isMatchAllQuery(query) ? { query } : {}),
+      ...(isDefaultQuery(query) ? {} : { query }),
       ...(isPopulatedObject(runtimeMappings) ? { runtime_mappings: runtimeMappings } : {}),
     },
     ...(partialRequest ?? {}),
@@ -212,15 +185,18 @@ export const getCreateTransformSettingsRequestBody = (
 };
 
 export const getCreateTransformRequestBody = (
-  dataViewTitle: DataView['title'],
-  pivotState: StepDefineExposedState,
+  dataView: DataView,
+  transformConfigState: StepDefineExposedState,
   transformDetailsState: StepDetailsExposedState
 ): PutTransformsPivotRequestSchema | PutTransformsLatestRequestSchema => ({
   ...getPreviewTransformRequestBody(
-    dataViewTitle,
-    getPivotQuery(pivotState.searchQuery),
-    pivotState.previewRequest,
-    pivotState.runtimeMappings
+    dataView,
+    getTransformConfigQuery(transformConfigState.searchQuery),
+    transformConfigState.previewRequest,
+    transformConfigState.runtimeMappings,
+    transformConfigState.isDatePickerApplyEnabled && transformConfigState.timeRangeMs
+      ? transformConfigState.timeRangeMs
+      : undefined
   ),
   // conditionally add optional description
   ...(transformDetailsState.transformDescription !== ''
@@ -253,7 +229,9 @@ export const getCreateTransformRequestBody = (
       }
     : {}),
   // conditionally add retention policy settings
-  ...(transformDetailsState.isRetentionPolicyEnabled
+  ...(transformDetailsState.isRetentionPolicyEnabled &&
+  transformDetailsState.retentionPolicyDateField !== '' &&
+  transformDetailsState.retentionPolicyMaxAge !== ''
     ? {
         retention_policy: {
           time: {

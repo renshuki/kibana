@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Position } from '@elastic/charts';
@@ -105,6 +106,10 @@ export const referenceLineFunction: ReferenceLineFn = {
       default: FillStyles.NONE,
       strict: true,
     },
+    forAccessor: {
+      types: ['string'],
+      help: '',
+    },
   },
   fn(table, args) {
     const textVisibility =
@@ -114,11 +119,18 @@ export const referenceLineFunction: ReferenceLineFn = {
         ? false
         : args.textVisibility;
 
+    const valueMeta =
+      args.forAccessor && table
+        ? table.columns.find(({ id }) => id === args.forAccessor)?.meta
+        : undefined;
+
     return {
       type: REFERENCE_LINE,
       layerType: LayerTypes.REFERENCELINE,
       lineLength: table?.rows.length ?? 0,
-      decorations: [{ ...args, textVisibility, type: EXTENDED_REFERENCE_LINE_DECORATION_CONFIG }],
+      decorations: [
+        { ...args, textVisibility, type: EXTENDED_REFERENCE_LINE_DECORATION_CONFIG, valueMeta },
+      ],
     };
   },
 };

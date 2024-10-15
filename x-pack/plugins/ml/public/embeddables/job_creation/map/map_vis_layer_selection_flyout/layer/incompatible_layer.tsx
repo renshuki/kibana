@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
+import type { FC } from 'react';
+import React from 'react';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { EuiFlexGroup, EuiFlexItem, EuiIcon, EuiText } from '@elastic/eui';
 
@@ -18,7 +19,7 @@ export const IncompatibleLayer: FC<Props> = ({ noDataView }) => {
     <EuiFlexGroup gutterSize="s" color="subdued" data-test-subj="mlMapLayerIncompatible">
       <EuiFlexItem grow={false}>
         <EuiText size="s">
-          <EuiIcon type="crossInACircleFilled" color="subdued" />
+          <EuiIcon type="error" color="subdued" />
         </EuiText>
       </EuiFlexItem>
       <EuiFlexItem>

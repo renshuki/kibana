@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -14,9 +15,14 @@ import { LegendAction, SeriesIdentifier, useLegendAction } from '@elastic/charts
 import { DataPublicPluginStart } from '@kbn/data-plugin/public';
 import { Datatable } from '@kbn/expressions-plugin/public';
 import { FieldFormatsStart } from '@kbn/field-formats-plugin/public';
+import { FILTER_CELL_ACTION_TYPE } from '@kbn/cell-actions/constants';
 import { PartitionVisParams } from '../../common/types';
-import { ColumnCellValueActions, FilterEvent } from '../types';
+import { CellValueAction, ColumnCellValueActions, FilterEvent } from '../types';
 import { getSeriesValueColumnIndex, getFilterPopoverTitle } from './filter_helpers';
+
+const hasFilterCellAction = (actions: CellValueAction[]) => {
+  return actions.some(({ type }) => type === FILTER_CELL_ACTION_TYPE);
+};
 
 export const getLegendActions = (
   canFilter: (
@@ -54,16 +60,18 @@ export const getLegendActions = (
       visData,
       columnIndex,
       formatter.deserialize,
+      // FIXME key could be a RangeKey see https://github.com/elastic/kibana/issues/153437
       pieSeries.key
     );
 
-    const panelItems: EuiContextMenuPanelDescriptor['items'] = [];
+    const compatibleCellActions = columnCellValueActions[columnIndex] ?? [];
 
-    if (isFilterable && filterData) {
+    const panelItems: EuiContextMenuPanelDescriptor['items'] = [];
+    if (!hasFilterCellAction(compatibleCellActions) && isFilterable && filterData) {
       panelItems.push(
         {
           name: i18n.translate('expressionPartitionVis.legend.filterForValueButtonAriaLabel', {
-            defaultMessage: 'Filter for value',
+            defaultMessage: 'Filter for',
           }),
           'data-test-subj': `legend-${title}-filterIn`,
           icon: <EuiIcon type="plusInCircle" size="m" />,
@@ -74,7 +82,7 @@ export const getLegendActions = (
         },
         {
           name: i18n.translate('expressionPartitionVis.legend.filterOutValueButtonAriaLabel', {
-            defaultMessage: 'Filter out value',
+            defaultMessage: 'Filter out',
           }),
           'data-test-subj': `legend-${title}-filterOut`,
           icon: <EuiIcon type="minusInCircle" size="m" />,
@@ -86,20 +94,18 @@ export const getLegendActions = (
       );
     }
 
-    if (columnCellValueActions[columnIndex]) {
-      const columnMeta = visData.columns[columnIndex].meta;
-      columnCellValueActions[columnIndex].forEach((action) => {
-        panelItems.push({
-          name: action.displayName,
-          'data-test-subj': `legend-${title}-${action.id}`,
-          icon: <EuiIcon type={action.iconType} size="m" />,
-          onClick: () => {
-            action.execute([{ columnMeta, value: pieSeries.key }]);
-            setPopoverOpen(false);
-          },
-        });
+    const columnMeta = visData.columns[columnIndex].meta;
+    compatibleCellActions.forEach((action) => {
+      panelItems.push({
+        name: action.displayName,
+        'data-test-subj': `legend-${title}-${action.id}`,
+        icon: <EuiIcon type={action.iconType} size="m" />,
+        onClick: () => {
+          action.execute([{ columnMeta, value: pieSeries.key }]);
+          setPopoverOpen(false);
+        },
       });
-    }
+    });
 
     if (panelItems.length === 0) {
       return null;
@@ -130,6 +136,9 @@ export const getLegendActions = (
         data-test-subj={`legend-${title}`}
         onKeyPress={() => setPopoverOpen(!popoverOpen)}
         onClick={() => setPopoverOpen(!popoverOpen)}
+        aria-label={i18n.translate('expressionPartitionVis.legend.legendActionsAria', {
+          defaultMessage: 'Legend actions',
+        })}
       >
         <EuiIcon size="s" type="boxesVertical" />
       </div>

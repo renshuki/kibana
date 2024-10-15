@@ -15,20 +15,21 @@ import {
   EuiFlexItem,
   EuiPanel,
   EuiIcon,
+  EuiSkeletonText,
   EuiToolTip,
-  EuiLoadingContent,
 } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage, FormattedRelative } from '@kbn/i18n-react';
 
 import type { Agent, AgentPolicy } from '../../../../../types';
-import { useKibanaVersion } from '../../../../../hooks';
+import { useAgentVersion } from '../../../../../hooks';
 import { ExperimentalFeaturesService, isAgentUpgradeable } from '../../../../../services';
 import { AgentPolicySummaryLine } from '../../../../../components';
 import { AgentHealth } from '../../../components';
 import { Tags } from '../../../components/tags';
 import { formatAgentCPU, formatAgentMemory } from '../../../services/agent_metrics';
 import { AgentDashboardLink } from '../agent_dashboard_link';
+import { AgentUpgradeStatus } from '../../../agent_list_page/components/agent_upgrade_status';
 
 // Allows child text to be truncated
 const FlexItemWithMinWidth = styled(EuiFlexItem)`
@@ -39,7 +40,7 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
   agent: Agent;
   agentPolicy?: AgentPolicy;
 }> = memo(({ agent, agentPolicy }) => {
-  const kibanaVersion = useKibanaVersion();
+  const latestAgentVersion = useAgentVersion();
   const { displayAgentMetrics } = ExperimentalFeaturesService.get();
 
   return (
@@ -52,15 +53,47 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
                 <EuiFlexGroup direction="column" gutterSize="m">
                   {[
                     {
-                      title: i18n.translate('xpack.fleet.agentDetails.cpuLabel', {
-                        defaultMessage: 'CPU',
-                      }),
+                      title: (
+                        <EuiToolTip
+                          content={
+                            <FormattedMessage
+                              id="xpack.fleet.agentDetails.cpuTooltip"
+                              defaultMessage="Average CPU usage in the last 5 minutes"
+                            />
+                          }
+                        >
+                          <span>
+                            <FormattedMessage
+                              id="xpack.fleet.agentDetails.cpuTitle"
+                              defaultMessage="CPU"
+                            />
+                            &nbsp;
+                            <EuiIcon type="iInCircle" />
+                          </span>
+                        </EuiToolTip>
+                      ),
                       description: formatAgentCPU(agent.metrics, agentPolicy),
                     },
                     {
-                      title: i18n.translate('xpack.fleet.agentDetails.memoryLabel', {
-                        defaultMessage: 'Memory',
-                      }),
+                      title: (
+                        <EuiToolTip
+                          content={
+                            <FormattedMessage
+                              id="xpack.fleet.agentDetails.memoryTooltip"
+                              defaultMessage="Average memory usage in the last 5 minutes"
+                            />
+                          }
+                        >
+                          <span>
+                            <FormattedMessage
+                              id="xpack.fleet.agentDetails.memoryTitle"
+                              defaultMessage="Memory"
+                            />
+                            &nbsp;
+                            <EuiIcon type="iInCircle" />
+                          </span>
+                        </EuiToolTip>
+                      ),
                       description: formatAgentMemory(agent.metrics, agentPolicy),
                     },
                   ].map(({ title, description }) => {
@@ -97,7 +130,7 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
               title: i18n.translate('xpack.fleet.agentDetails.statusLabel', {
                 defaultMessage: 'Status',
               }),
-              description: <AgentHealth agent={agent} showOfflinePreviousStatus={true} />,
+              description: <AgentHealth agent={agent} fromDetails={true} />,
             },
             {
               title: i18n.translate('xpack.fleet.agentDetails.lastActivityLabel', {
@@ -116,7 +149,7 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
               description: agent.last_checkin_message ? agent.last_checkin_message : '-',
             },
             {
-              title: i18n.translate('xpack.fleet.agentDetails.hostIdLabel', {
+              title: i18n.translate('xpack.fleet.agentDetails.agentIdLabel', {
                 defaultMessage: 'Agent ID',
               }),
               description: agent.id,
@@ -128,7 +161,7 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
               description: agentPolicy ? (
                 <AgentPolicySummaryLine policy={agentPolicy} agent={agent} />
               ) : (
-                <EuiLoadingContent lines={1} />
+                <EuiSkeletonText lines={1} />
               ),
             },
             {
@@ -141,18 +174,15 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
                     <EuiFlexItem grow={false} className="eui-textNoWrap">
                       {agent.local_metadata.elastic.agent.version}
                     </EuiFlexItem>
-                    {isAgentUpgradeable(agent, kibanaVersion) ? (
-                      <EuiFlexItem grow={false}>
-                        <EuiToolTip
-                          position="right"
-                          content={i18n.translate('xpack.fleet.agentList.agentUpgradeLabel', {
-                            defaultMessage: 'Upgrade available',
-                          })}
-                        >
-                          <EuiIcon type="alert" color="warning" />
-                        </EuiToolTip>
-                      </EuiFlexItem>
-                    ) : null}
+                    <EuiFlexItem grow={false}>
+                      <AgentUpgradeStatus
+                        isAgentUpgradable={
+                          !!(agentPolicy?.is_managed !== true && isAgentUpgradeable(agent))
+                        }
+                        agent={agent}
+                        latestAgentVersion={latestAgentVersion}
+                      />
+                    </EuiFlexItem>
                   </EuiFlexGroup>
                 ) : (
                   '-'
@@ -168,6 +198,15 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
                   : '-',
             },
             {
+              title: i18n.translate('xpack.fleet.agentDetails.hostIdLabel', {
+                defaultMessage: 'Host ID',
+              }),
+              description:
+                typeof agent.local_metadata?.host?.id === 'string'
+                  ? agent.local_metadata.host.id
+                  : '-',
+            },
+            {
               title: i18n.translate('xpack.fleet.agentDetails.logLevel', {
                 defaultMessage: 'Logging level',
               }),
@@ -175,6 +214,23 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
                 typeof agent.local_metadata?.elastic?.agent?.log_level === 'string'
                   ? agent.local_metadata.elastic.agent.log_level
                   : '-',
+            },
+            {
+              title: i18n.translate('xpack.fleet.agentDetails.privilegeModeLabel', {
+                defaultMessage: 'Privilege mode',
+              }),
+              description:
+                agent.local_metadata.elastic.agent.unprivileged === true ? (
+                  <FormattedMessage
+                    id="xpack.fleet.agentDetails.privilegeModeUnprivilegedText"
+                    defaultMessage="Running as non-root"
+                  />
+                ) : (
+                  <FormattedMessage
+                    id="xpack.fleet.agentDetails.privilegeModePrivilegedText"
+                    defaultMessage="Running as root"
+                  />
+                ),
             },
             {
               title: i18n.translate('xpack.fleet.agentDetails.releaseLabel', {
@@ -213,7 +269,7 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
                   />
                 )
               ) : (
-                <EuiLoadingContent lines={1} />
+                <EuiSkeletonText lines={1} />
               ),
             },
             {
@@ -233,7 +289,7 @@ export const AgentDetailsOverviewSection: React.FunctionComponent<{
                   />
                 )
               ) : (
-                <EuiLoadingContent lines={1} />
+                <EuiSkeletonText lines={1} />
               ),
             },
             {

@@ -6,23 +6,22 @@
  */
 
 import { IScopedClusterClient } from '@kbn/core/server';
+import type {
+  BulkRequest,
+  IndicesCreateRequest,
+  IndicesIndexSettings,
+  MappingTypeMapping,
+} from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { INDEX_META_DATA_CREATED_BY } from '../common/constants';
-import {
-  ImportResponse,
-  ImportFailure,
-  InputData,
-  Settings,
-  Mappings,
-  IngestPipelineWrapper,
-} from '../common/types';
+import { ImportResponse, ImportFailure, InputData, IngestPipelineWrapper } from '../common/types';
 
 export function importDataProvider({ asCurrentUser }: IScopedClusterClient) {
   async function importData(
     id: string | undefined,
     index: string,
-    settings: Settings,
-    mappings: Mappings,
-    ingestPipeline: IngestPipelineWrapper,
+    settings: IndicesIndexSettings,
+    mappings: MappingTypeMapping,
+    ingestPipeline: IngestPipelineWrapper | undefined,
     data: InputData
   ): Promise<ImportResponse> {
     let createdIndex;
@@ -30,7 +29,8 @@ export function importDataProvider({ asCurrentUser }: IScopedClusterClient) {
     const docCount = data.length;
 
     try {
-      const { id: pipelineId, pipeline } = ingestPipeline;
+      const pipelineId = ingestPipeline?.id;
+      const pipeline = ingestPipeline?.pipeline;
 
       if (id === undefined) {
         // first chunk of data, create the index and id to return
@@ -89,8 +89,12 @@ export function importDataProvider({ asCurrentUser }: IScopedClusterClient) {
     }
   }
 
-  async function createIndex(index: string, settings: Settings, mappings: Mappings) {
-    const body: { mappings: Mappings; settings?: Settings } = {
+  async function createIndex(
+    index: string,
+    settings: IndicesIndexSettings,
+    mappings: MappingTypeMapping
+  ) {
+    const body: IndicesCreateRequest['body'] = {
       mappings: {
         _meta: {
           created_by: INDEX_META_DATA_CREATED_BY,
@@ -103,11 +107,10 @@ export function importDataProvider({ asCurrentUser }: IScopedClusterClient) {
       body.settings = settings;
     }
 
-    // @ts-expect-error settings.index is not compatible
     await asCurrentUser.indices.create({ index, body }, { maxRetries: 0 });
   }
 
-  async function indexData(index: string, pipelineId: string, data: InputData) {
+  async function indexData(index: string, pipelineId: string | undefined, data: InputData) {
     try {
       const body = [];
       for (let i = 0; i < data.length; i++) {
@@ -115,12 +118,15 @@ export function importDataProvider({ asCurrentUser }: IScopedClusterClient) {
         body.push(data[i]);
       }
 
-      const settings: Settings = { index, body };
+      const bulkRequest: BulkRequest = { index, body };
       if (pipelineId !== undefined) {
-        settings.pipeline = pipelineId;
+        bulkRequest.pipeline = pipelineId;
       }
 
-      const resp = await asCurrentUser.bulk(settings, { maxRetries: 0 });
+      const resp = await asCurrentUser.bulk(bulkRequest, {
+        maxRetries: 0,
+        requestTimeout: 3600000,
+      });
       if (resp.errors) {
         throw resp;
       } else {

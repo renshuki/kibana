@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { schema } from '@kbn/config-schema';
@@ -156,6 +157,254 @@ describe('extractMigrationInfo', () => {
         'properties.hits.index': false,
         'properties.hits.type': 'integer',
       });
+    });
+  });
+
+  describe('modelVersions', () => {
+    it('returns the correct switchToModelVersionAt', () => {
+      const type = createType({
+        switchToModelVersionAt: '8.8.0',
+      });
+      const output = extractMigrationInfo(type);
+
+      expect(output.switchToModelVersionAt).toEqual('8.8.0');
+    });
+
+    it('returns a proper summary of the model versions', () => {
+      const type = createType({
+        modelVersions: {
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: {
+                    type: 'boolean',
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+      const output = extractMigrationInfo(type);
+
+      expect(output.modelVersions).toEqual([
+        {
+          version: '1',
+          changeTypes: ['data_backfill'],
+          hasTransformation: true,
+          newMappings: [],
+          schemas: {
+            forwardCompatibility: false,
+          },
+        },
+        {
+          version: '2',
+          changeTypes: ['mappings_addition'],
+          hasTransformation: false,
+          newMappings: ['foo.type'],
+          schemas: {
+            forwardCompatibility: false,
+          },
+        },
+      ]);
+    });
+
+    it('supports provider functions', () => {
+      const type = createType({
+        modelVersions: () => ({
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: {
+                    type: 'boolean',
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      });
+      const output = extractMigrationInfo(type);
+
+      expect(output.modelVersions).toEqual([
+        {
+          version: '1',
+          changeTypes: ['data_backfill'],
+          hasTransformation: true,
+          newMappings: [],
+          schemas: {
+            forwardCompatibility: false,
+          },
+        },
+        {
+          version: '2',
+          changeTypes: ['mappings_addition'],
+          hasTransformation: false,
+          newMappings: ['foo.type'],
+          schemas: {
+            forwardCompatibility: false,
+          },
+        },
+      ]);
+    });
+
+    it('returns the unique list of changes', () => {
+      const type = createType({
+        modelVersions: {
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+              {
+                type: 'unsafe_transform',
+                transformFn: jest.fn(),
+              },
+              {
+                type: 'data_removal',
+                removedAttributePaths: [],
+              },
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+        },
+      });
+      const output = extractMigrationInfo(type);
+
+      expect(output.modelVersions).toEqual([
+        {
+          version: '1',
+          changeTypes: ['data_backfill', 'data_removal', 'unsafe_transform'],
+          hasTransformation: true,
+          newMappings: [],
+          schemas: {
+            forwardCompatibility: false,
+          },
+        },
+      ]);
+    });
+
+    it('returns an empty list when model versions are not defined', () => {
+      const type = createType({
+        modelVersions: undefined,
+      });
+      const output = extractMigrationInfo(type);
+
+      expect(output.modelVersions).toEqual([]);
+    });
+
+    it('returns the correct values for schemas', () => {
+      const type = createType({
+        switchToModelVersionAt: '8.8.0',
+        modelVersions: {
+          1: {
+            changes: [],
+            schemas: {
+              forwardCompatibility: jest.fn(),
+            },
+          },
+          2: {
+            changes: [],
+            schemas: {},
+          },
+        },
+      });
+      const output = extractMigrationInfo(type);
+
+      expect(output.modelVersions[0].schemas).toEqual({
+        forwardCompatibility: true,
+      });
+      expect(output.modelVersions[1].schemas).toEqual({
+        forwardCompatibility: false,
+      });
+    });
+  });
+
+  describe('migrations and modelVersions', () => {
+    it('generate properties for both', () => {
+      const type = createType({
+        migrations: {
+          '8.3.3': dummyMigration,
+          '7.17.7': dummyMigration,
+          '8.0.2': dummyMigration,
+        },
+        modelVersions: {
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: {
+                    type: 'boolean',
+                  },
+                },
+              },
+            ],
+          },
+        },
+        switchToModelVersionAt: '8.8.0',
+      });
+
+      const output = extractMigrationInfo(type);
+
+      expect(output).toEqual(
+        expect.objectContaining({
+          migrationVersions: ['7.17.7', '8.0.2', '8.3.3'],
+          switchToModelVersionAt: '8.8.0',
+          modelVersions: [
+            {
+              version: '1',
+              changeTypes: ['data_backfill'],
+              hasTransformation: true,
+              newMappings: [],
+              schemas: {
+                forwardCompatibility: false,
+              },
+            },
+            {
+              version: '2',
+              changeTypes: ['mappings_addition'],
+              hasTransformation: false,
+              newMappings: ['foo.type'],
+              schemas: {
+                forwardCompatibility: false,
+              },
+            },
+          ],
+        })
+      );
     });
   });
 });

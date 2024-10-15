@@ -1,70 +1,69 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
 import { BehaviorSubject, of } from 'rxjs';
 import { mountWithIntl } from '@kbn/test-jest-helpers';
-import { esHits } from '../../../../__mocks__/es_hits';
-import { dataViewMock } from '../../../../__mocks__/data_view';
-import { savedSearchMock } from '../../../../__mocks__/saved_search';
+import type { DataView } from '@kbn/data-views-plugin/common';
+import { esHitsMock } from '@kbn/discover-utils/src/__mocks__';
+import { savedSearchMockWithTimeField } from '../../../../__mocks__/saved_search';
 import {
-  AvailableFields$,
   DataDocuments$,
   DataMain$,
   DataTotalHits$,
-  RecordRawType,
-} from '../../services/discover_data_state_container';
+} from '../../state_management/discover_data_state_container';
 import { discoverServiceMock } from '../../../../__mocks__/services';
-import { FetchStatus } from '../../../types';
-import { KibanaContextProvider, KibanaThemeProvider } from '@kbn/kibana-react-plugin/public';
-import { buildDataTableRecord } from '../../../../utils/build_data_record';
+import { FetchStatus, SidebarToggleState } from '../../../types';
+import { KibanaRenderContextProvider } from '@kbn/react-kibana-context-render';
+import { KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
+import { buildDataTableRecord } from '@kbn/discover-utils';
 import { DiscoverHistogramLayout, DiscoverHistogramLayoutProps } from './discover_histogram_layout';
 import { SavedSearch, VIEW_MODE } from '@kbn/saved-search-plugin/public';
-import { CoreTheme } from '@kbn/core/public';
-import { act } from 'react-dom/test-utils';
 import { Storage } from '@kbn/kibana-utils-plugin/public';
-import { LocalStorageMock } from '../../../../__mocks__/local_storage_mock';
-import { HISTOGRAM_HEIGHT_KEY } from './use_discover_histogram';
 import { createSearchSessionMock } from '../../../../__mocks__/search_session';
-import { RequestAdapter } from '@kbn/inspector-plugin/public';
 import { searchSourceInstanceMock } from '@kbn/data-plugin/common/search/search_source/mocks';
-import { UnifiedHistogramLayout } from '@kbn/unified-histogram-plugin/public';
 import { getSessionServiceMock } from '@kbn/data-plugin/public/search/session/mocks';
-import { ResetSearchButton } from './reset_search_button';
 import { getDiscoverStateMock } from '../../../../__mocks__/discover_state.mock';
-import { DiscoverMainProvider } from '../../services/discover_state_provider';
+import { DiscoverMainProvider } from '../../state_management/discover_state_provider';
+import { act } from 'react-dom/test-utils';
+import { PanelsToggle } from '../../../../components/panels_toggle';
+import { createDataViewDataSource } from '../../../../../common/data_sources';
 
-function getStateContainer() {
-  const stateContainer = getDiscoverStateMock({ isTimeBased: true });
+function getStateContainer(savedSearch?: SavedSearch) {
+  const stateContainer = getDiscoverStateMock({ isTimeBased: true, savedSearch });
+  const dataView = savedSearch?.searchSource?.getField('index') as DataView;
 
-  stateContainer.setAppState({
+  stateContainer.appState.update({
+    dataSource: createDataViewDataSource({ dataViewId: dataView?.id! }),
     interval: 'auto',
     hideChart: false,
   });
 
-  stateContainer.setAppState = jest.fn();
+  stateContainer.internalState.transitions.setDataView(dataView);
 
   return stateContainer;
 }
 
-const mountComponent = ({
-  isPlainRecord = false,
-  isTimeBased = true,
+const mountComponent = async ({
+  isEsqlMode = false,
   storage,
-  savedSearch = savedSearchMock,
-  resetSavedSearch = jest.fn(),
+  savedSearch = savedSearchMockWithTimeField,
+  searchSessionId = '123',
 }: {
-  isPlainRecord?: boolean;
+  isEsqlMode?: boolean;
   isTimeBased?: boolean;
   storage?: Storage;
   savedSearch?: SavedSearch;
-  resetSavedSearch?(): void;
+  searchSessionId?: string | null;
 } = {}) => {
+  const dataView = savedSearch?.searchSource?.getField('index') as DataView;
+
   let services = discoverServiceMock;
   services.data.query.timefilter.timefilter.getAbsoluteTime = () => {
     return { from: '2020-05-14T11:05:13.590', to: '2020-05-14T11:20:13.590' };
@@ -86,138 +85,99 @@ const mountComponent = ({
 
   const main$ = new BehaviorSubject({
     fetchStatus: FetchStatus.COMPLETE,
-    recordRawType: isPlainRecord ? RecordRawType.PLAIN : RecordRawType.DOCUMENT,
     foundDocuments: true,
   }) as DataMain$;
 
   const documents$ = new BehaviorSubject({
     fetchStatus: FetchStatus.COMPLETE,
-    result: esHits.map((esHit) => buildDataTableRecord(esHit, dataViewMock)),
+    result: esHitsMock.map((esHit) => buildDataTableRecord(esHit, dataView)),
   }) as DataDocuments$;
-
-  const availableFields$ = new BehaviorSubject({
-    fetchStatus: FetchStatus.COMPLETE,
-    fields: [] as string[],
-  }) as AvailableFields$;
 
   const totalHits$ = new BehaviorSubject({
     fetchStatus: FetchStatus.COMPLETE,
-    result: Number(esHits.length),
+    result: Number(esHitsMock.length),
   }) as DataTotalHits$;
 
   const savedSearchData$ = {
     main$,
     documents$,
     totalHits$,
-    availableFields$,
   };
 
   const session = getSessionServiceMock();
 
-  session.getSession$.mockReturnValue(new BehaviorSubject('123'));
+  session.getSession$.mockReturnValue(new BehaviorSubject(searchSessionId ?? undefined));
 
-  const stateContainer = getStateContainer();
+  const stateContainer = getStateContainer(savedSearch);
   stateContainer.dataState.data$ = savedSearchData$;
+  stateContainer.actions.undoSavedSearchChanges = jest.fn();
 
   const props: DiscoverHistogramLayoutProps = {
-    isPlainRecord,
-    dataView: dataViewMock,
-    navigateTo: jest.fn(),
-    setExpandedDoc: jest.fn(),
-    savedSearch,
+    dataView,
     stateContainer,
     onFieldEdited: jest.fn(),
     columns: [],
     viewMode: VIEW_MODE.DOCUMENT_LEVEL,
     onAddFilter: jest.fn(),
-    resetSavedSearch,
-    isTimeBased,
-    resizeRef: { current: null },
-    searchSessionManager: createSearchSessionMock(session).searchSessionManager,
-    inspectorAdapters: { requests: new RequestAdapter() },
+    container: null,
+    panelsToggle: (
+      <PanelsToggle
+        stateContainer={stateContainer}
+        sidebarToggleState$={
+          new BehaviorSubject<SidebarToggleState>({
+            isCollapsed: true,
+            toggle: () => {},
+          })
+        }
+        isChartAvailable={undefined}
+        renderedFor="root"
+      />
+    ),
   };
-
-  const coreTheme$ = new BehaviorSubject<CoreTheme>({ darkMode: false });
+  stateContainer.searchSessionManager = createSearchSessionMock(session).searchSessionManager;
 
   const component = mountWithIntl(
-    <KibanaContextProvider services={services}>
-      <KibanaThemeProvider theme$={coreTheme$}>
+    <KibanaRenderContextProvider {...services.core}>
+      <KibanaContextProvider services={services}>
         <DiscoverMainProvider value={stateContainer}>
           <DiscoverHistogramLayout {...props} />
         </DiscoverMainProvider>
-      </KibanaThemeProvider>
-    </KibanaContextProvider>
+      </KibanaContextProvider>
+    </KibanaRenderContextProvider>
   );
 
-  return component;
+  // wait for lazy modules
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await act(async () => {
+    component.update();
+  });
+
+  return { component, stateContainer };
 };
 
 describe('Discover histogram layout component', () => {
-  describe('topPanelHeight persistence', () => {
-    it('should try to get the initial topPanelHeight for UnifiedHistogramLayout from storage', async () => {
-      const storage = new LocalStorageMock({}) as unknown as Storage;
-      const originalGet = storage.get;
-      storage.get = jest.fn().mockImplementation(originalGet);
-      mountComponent({ storage });
-      expect(storage.get).toHaveBeenCalledWith(HISTOGRAM_HEIGHT_KEY);
+  describe('render', () => {
+    it('should render null if there is no search session', async () => {
+      const { component } = await mountComponent({ searchSessionId: null });
+      expect(component.isEmptyRender()).toBe(true);
     });
 
-    it('should pass undefined to UnifiedHistogramLayout if no value is found in storage', async () => {
-      const storage = new LocalStorageMock({}) as unknown as Storage;
-      const originalGet = storage.get;
-      storage.get = jest.fn().mockImplementation(originalGet);
-      const component = mountComponent({ storage });
-      expect(storage.get).toHaveBeenCalledWith(HISTOGRAM_HEIGHT_KEY);
-      expect(storage.get).toHaveReturnedWith(null);
-      expect(component.find(UnifiedHistogramLayout).prop('topPanelHeight')).toBe(undefined);
+    it('should not render null if there is a search session', async () => {
+      const { component } = await mountComponent();
+      expect(component.isEmptyRender()).toBe(false);
+    }, 10000);
+
+    it('should not render null if there is no search session, but isEsqlMode is true', async () => {
+      const { component } = await mountComponent({ isEsqlMode: true });
+      expect(component.isEmptyRender()).toBe(false);
     });
 
-    it('should pass the stored topPanelHeight to UnifiedHistogramLayout if a value is found in storage', async () => {
-      const storage = new LocalStorageMock({}) as unknown as Storage;
-      const topPanelHeight = 123;
-      storage.get = jest.fn().mockImplementation(() => topPanelHeight);
-      const component = mountComponent({ storage });
-      expect(storage.get).toHaveBeenCalledWith(HISTOGRAM_HEIGHT_KEY);
-      expect(storage.get).toHaveReturnedWith(topPanelHeight);
-      expect(component.find(UnifiedHistogramLayout).prop('topPanelHeight')).toBe(topPanelHeight);
-    });
-
-    it('should update the topPanelHeight in storage and pass the new value to UnifiedHistogramLayout when the topPanelHeight changes', async () => {
-      const storage = new LocalStorageMock({}) as unknown as Storage;
-      const originalSet = storage.set;
-      storage.set = jest.fn().mockImplementation(originalSet);
-      const component = mountComponent({ storage });
-      const newTopPanelHeight = 123;
-      expect(component.find(UnifiedHistogramLayout).prop('topPanelHeight')).not.toBe(
-        newTopPanelHeight
-      );
-      act(() => {
-        component.find(UnifiedHistogramLayout).prop('onTopPanelHeightChange')!(newTopPanelHeight);
-      });
-      component.update();
-      expect(storage.set).toHaveBeenCalledWith(HISTOGRAM_HEIGHT_KEY, newTopPanelHeight);
-      expect(component.find(UnifiedHistogramLayout).prop('topPanelHeight')).toBe(newTopPanelHeight);
-    });
-  });
-
-  describe('reset search button', () => {
-    it('renders the button when there is a saved search', async () => {
-      const component = mountComponent();
-      expect(component.find(ResetSearchButton).exists()).toBe(true);
-    });
-
-    it('does not render the button when there is no saved search', async () => {
-      const component = mountComponent({
-        savedSearch: { ...savedSearchMock, id: undefined },
-      });
-      expect(component.find(ResetSearchButton).exists()).toBe(false);
-    });
-
-    it('should call resetSavedSearch when clicked', async () => {
-      const resetSavedSearch = jest.fn();
-      const component = mountComponent({ resetSavedSearch });
-      component.find(ResetSearchButton).find('button').simulate('click');
-      expect(resetSavedSearch).toHaveBeenCalled();
+    it('should render PanelsToggle', async () => {
+      const { component } = await mountComponent();
+      expect(component.find(PanelsToggle).first().prop('isChartAvailable')).toBe(undefined);
+      expect(component.find(PanelsToggle).first().prop('renderedFor')).toBe('histogram');
+      expect(component.find(PanelsToggle).last().prop('isChartAvailable')).toBe(true);
+      expect(component.find(PanelsToggle).last().prop('renderedFor')).toBe('tabs');
     });
   });
 });

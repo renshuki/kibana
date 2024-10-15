@@ -5,31 +5,51 @@
  * 2.0.
  */
 
-import type { ArtifactElasticsearchProperties } from '@kbn/fleet-plugin/server/services';
-import type { TranslatedExceptionListItem } from '../../../../server/endpoint/schemas';
+import { ENDPOINT_ARTIFACT_LISTS } from '@kbn/securitysolution-list-constants';
+import type { FormAction } from '../tasks/perform_user_actions';
 
-export interface ArtifactResponseType {
-  _index: string;
-  _id: string;
-  _score: number;
-  _source: ArtifactElasticsearchProperties;
+interface FormEditingDescription {
+  formActions: FormAction[];
+
+  checkResults: Array<{
+    selector: string;
+    value: string;
+  }>;
 }
 
-export interface ArtifactBodyType {
-  entries: TranslatedExceptionListItem[];
+export interface ArtifactsFixtureType {
+  title: string;
+  pagePrefix: string;
+  tabId: string;
+  nextTabId: string;
+  artifactName: string;
+  privilegePrefix: string;
+  urlPath: string;
+  emptyState: string;
+
+  create: FormEditingDescription;
+  update: FormEditingDescription;
+
+  delete: {
+    confirmSelector: string;
+    card: string;
+  };
+
+  createRequestBody: {
+    list_id: string;
+    entries: object[];
+    os_types: string[];
+  };
 }
 
-export interface FormAction {
-  type: string;
-  selector?: string;
-  customSelector?: string;
-  value?: string;
-}
-
-export const getArtifactsListTestsData = () => [
+export const getArtifactsListTestsData = (): ArtifactsFixtureType[] => [
   {
     title: 'Trusted applications',
     pagePrefix: 'trustedAppsListPage',
+    tabId: 'trustedApps',
+    nextTabId: 'eventFilters',
+    artifactName: 'Trusted application name',
+    privilegePrefix: 'trusted_applications_',
     create: {
       formActions: [
         {
@@ -106,7 +126,7 @@ export const getArtifactsListTestsData = () => [
         {
           selector: 'trustedAppsListPage-card-criteriaConditions',
           value:
-            'OSIS WindowsAND file.pathis one of\nc:\\randomFolder\\randomFile.exe\nc:\\randomFolder\\randomFile2.exe',
+            ' OSIS WindowsAND process.executable.caselessIS c:\\randomFolder\\randomFile.exe, c:\\randomFolder\\randomFile2.exe',
         },
         {
           selector: 'trustedAppsListPage-card-header-title',
@@ -122,13 +142,40 @@ export const getArtifactsListTestsData = () => [
       confirmSelector: 'trustedAppsListPage-deleteModal-submitButton',
       card: 'trustedAppsListPage-card',
     },
-    pageObject: 'trustedApplications',
     urlPath: 'trusted_apps',
     emptyState: 'trustedAppsListPage-emptyState',
+    createRequestBody: {
+      list_id: ENDPOINT_ARTIFACT_LISTS.trustedApps.id,
+      entries: [
+        {
+          entries: [
+            {
+              field: 'trusted',
+              operator: 'included',
+              type: 'match',
+              value: 'true',
+            },
+            {
+              field: 'subject_name',
+              operator: 'included',
+              type: 'match',
+              value: 'abcd',
+            },
+          ],
+          field: 'process.Ext.code_signature',
+          type: 'nested',
+        },
+      ],
+      os_types: ['windows'],
+    },
   },
   {
     title: 'Event Filters',
     pagePrefix: 'EventFiltersListPage',
+    tabId: 'eventFilters',
+    nextTabId: 'blocklists',
+    artifactName: 'Event filter name',
+    privilegePrefix: 'event_filters_',
     create: {
       formActions: [
         {
@@ -141,27 +188,30 @@ export const getArtifactsListTestsData = () => [
           selector: 'eventFilters-form-description-input',
           value: 'This is the event filter description',
         },
+
         {
-          type: 'click',
+          type: 'input',
           selector: 'fieldAutocompleteComboBox',
-        },
-        {
-          type: 'click',
-          customSelector: 'button[title="agent.type"]',
+          value: '@timestamp',
         },
         {
           type: 'click',
           selector: 'valuesAutocompleteMatch',
         },
         {
+          type: 'input',
+          selector: 'valuesAutocompleteMatch',
+          value: '1234',
+        },
+        {
           type: 'click',
-          customSelector: 'button[title="endpoint"]',
+          selector: 'eventFilters-form-description-input',
         },
       ],
       checkResults: [
         {
           selector: 'EventFiltersListPage-card-criteriaConditions-condition',
-          value: 'AND agent.typeIS endpoint',
+          value: 'AND @timestampIS 1234',
         },
       ],
     },
@@ -186,12 +236,9 @@ export const getArtifactsListTestsData = () => [
           value: 'This is the event filter description edited',
         },
         {
-          type: 'click',
+          type: 'input',
           selector: 'fieldAutocompleteComboBox',
-        },
-        {
-          type: 'click',
-          customSelector: 'button[title="agent.name"]',
+          value: '{selectAll}agent.name',
         },
         {
           type: 'input',
@@ -222,13 +269,28 @@ export const getArtifactsListTestsData = () => [
       confirmSelector: 'EventFiltersListPage-deleteModal-submitButton',
       card: 'EventFiltersListPage-card',
     },
-    pageObject: 'eventFilters',
     urlPath: 'event_filters',
     emptyState: 'EventFiltersListPage-emptyState',
+    createRequestBody: {
+      list_id: ENDPOINT_ARTIFACT_LISTS.eventFilters.id,
+      entries: [
+        {
+          field: 'process.name',
+          operator: 'included',
+          type: 'match',
+          value: 'notepad.exe',
+        },
+      ],
+      os_types: ['windows'],
+    },
   },
   {
     title: 'Blocklist',
     pagePrefix: 'blocklistPage',
+    tabId: 'blocklists',
+    nextTabId: 'hostIsolationExceptions',
+    artifactName: 'Blocklist name',
+    privilegePrefix: 'blocklist_',
     create: {
       formActions: [
         {
@@ -263,7 +325,7 @@ export const getArtifactsListTestsData = () => [
         {
           selector: 'blocklistPage-card-criteriaConditions',
           value:
-            ' OSIS WindowsAND file.hash.*is one of A4370C0CF81686C0B696FA6261c9d3e0d810ae704ab8301839dffd5d5112f476',
+            ' OSIS WindowsAND file.hash.*is one of a4370c0cf81686c0b696fa6261c9d3e0d810ae704ab8301839dffd5d5112f476',
         },
       ],
     },
@@ -293,12 +355,12 @@ export const getArtifactsListTestsData = () => [
         },
         {
           type: 'click',
-          selector: 'blocklist-form-file.path',
+          selector: 'blocklist-form-file.path.caseless',
         },
         {
           type: 'click',
           customSelector:
-            '[data-test-subj="blocklist-form-values-input-A4370C0CF81686C0B696FA6261c9d3e0d810ae704ab8301839dffd5d5112f476"] > span > button',
+            '[data-test-subj="blocklist-form-values-input-a4370c0cf81686c0b696fa6261c9d3e0d810ae704ab8301839dffd5d5112f476"] > span > button',
         },
         {
           type: 'input',
@@ -314,7 +376,7 @@ export const getArtifactsListTestsData = () => [
         {
           selector: 'blocklistPage-card-criteriaConditions',
           value:
-            'OSIS WindowsAND file.pathis one of\nc:\\randomFolder\\randomFile.exe\nc:\\randomFolder\\randomFile2.exe',
+            ' OSIS WindowsAND file.path.caselessis one of c:\\randomFolder\\randomFile.exe c:\\randomFolder\\randomFile2.exe',
         },
         {
           selector: 'blocklistPage-card-header-title',
@@ -330,13 +392,28 @@ export const getArtifactsListTestsData = () => [
       confirmSelector: 'blocklistDeletionConfirm',
       card: 'blocklistCard',
     },
-    pageObject: 'blocklist',
     urlPath: 'blocklist',
     emptyState: 'blocklistPage-emptyState',
+    createRequestBody: {
+      list_id: ENDPOINT_ARTIFACT_LISTS.blocklists.id,
+      entries: [
+        {
+          field: 'file.hash.sha256',
+          value: ['a4370c0cf81686c0b696fa6261c9d3e0d810ae704ab8301839dffd5d5112f476'],
+          type: 'match_any',
+          operator: 'included',
+        },
+      ],
+      os_types: ['windows'],
+    },
   },
   {
     title: 'Host isolation exceptions',
     pagePrefix: 'hostIsolationExceptionsListPage',
+    tabId: 'hostIsolationExceptions',
+    nextTabId: 'trustedApps',
+    artifactName: 'Host Isolation exception name',
+    privilegePrefix: 'host_isolation_exceptions_',
     create: {
       formActions: [
         {
@@ -395,7 +472,7 @@ export const getArtifactsListTestsData = () => [
       checkResults: [
         {
           selector: 'hostIsolationExceptionsListPage-card-criteriaConditions',
-          value: 'OSIS Windows, Linux, Mac\nAND destination.ipIS 2.2.2.2/24',
+          value: ' OSIS Windows, Linux, MacAND destination.ipIS 2.2.2.2/24',
         },
         {
           selector: 'hostIsolationExceptionsListPage-card-header-title',
@@ -411,8 +488,19 @@ export const getArtifactsListTestsData = () => [
       confirmSelector: 'hostIsolationExceptionsDeletionConfirm',
       card: 'hostIsolationExceptionsCard',
     },
-    pageObject: 'hostIsolationExceptions',
     urlPath: 'host_isolation_exceptions',
     emptyState: 'hostIsolationExceptionsListPage-emptyState',
+    createRequestBody: {
+      list_id: ENDPOINT_ARTIFACT_LISTS.hostIsolationExceptions.id,
+      entries: [
+        {
+          field: 'destination.ip',
+          operator: 'included',
+          type: 'match',
+          value: '1.2.3.4',
+        },
+      ],
+      os_types: ['windows', 'linux', 'macos'],
+    },
   },
 ];

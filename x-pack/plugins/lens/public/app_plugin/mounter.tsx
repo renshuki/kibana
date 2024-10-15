@@ -5,11 +5,11 @@
  * 2.0.
  */
 
-import React, { FC, useCallback, useEffect, useState, useMemo } from 'react';
-import { PreloadedState } from '@reduxjs/toolkit';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { AppMountParameters, CoreSetup, CoreStart } from '@kbn/core/public';
-import { FormattedMessage, I18nProvider } from '@kbn/i18n-react';
-import { HashRouter, Route, RouteComponentProps, Switch } from 'react-router-dom';
+import { FormattedMessage } from '@kbn/i18n-react';
+import { RouteComponentProps } from 'react-router-dom';
+import { HashRouter, Routes, Route } from '@kbn/shared-ux-router';
 import { History } from 'history';
 import { render, unmountComponentAtNode } from 'react-dom';
 import { i18n } from '@kbn/i18n';
@@ -19,22 +19,20 @@ import {
   Storage,
   withNotifyOnErrors,
 } from '@kbn/kibana-utils-plugin/public';
-import {
-  AnalyticsNoDataPageKibanaProvider,
-  AnalyticsNoDataPage,
-} from '@kbn/shared-ux-page-analytics-no-data';
 
 import { ACTION_VISUALIZE_LENS_FIELD, VisualizeFieldContext } from '@kbn/ui-actions-plugin/public';
 import { ACTION_CONVERT_TO_LENS } from '@kbn/visualizations-plugin/public';
-import { KibanaContextProvider, KibanaThemeProvider } from '@kbn/kibana-react-plugin/public';
+import { KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
+import { KibanaRenderContextProvider } from '@kbn/react-kibana-context-render';
 import { EuiLoadingSpinner } from '@elastic/eui';
 import { syncGlobalQueryStateWithUrl } from '@kbn/data-plugin/public';
+import { withSuspense } from '@kbn/shared-ux-utility';
 
 import { App } from './app';
 import { EditorFrameStart, LensTopNavMenuEntryGenerator, VisualizeEditorContext } from '../types';
 import { addHelpMenuToAppChrome } from '../help_menu_util';
 import { LensPluginStartDependencies } from '../plugin';
-import { LENS_EMBEDDABLE_TYPE, LENS_EDIT_BY_VALUE, APP_ID } from '../../common';
+import { LENS_EMBEDDABLE_TYPE, LENS_EDIT_BY_VALUE, APP_ID } from '../../common/constants';
 import {
   LensEmbeddableInput,
   LensByReferenceInput,
@@ -47,16 +45,16 @@ import {
   navigateAway,
   LensRootStore,
   loadInitial,
-  LensAppState,
-  LensState,
+  setState,
 } from '../state_management';
-import { getPreloadedState, setState } from '../state_management/lens_slice';
+import { getPreloadedState } from '../state_management/lens_slice';
 import { getLensInspectorService } from '../lens_inspector_service';
 import {
   LensAppLocator,
   LENS_SHARE_STATE_ACTION,
   MainHistoryLocationState,
 } from '../../common/locator/locator';
+import { SavedObjectIndexStore } from '../persistence';
 
 function getInitialContext(history: AppMountParameters['history']) {
   const historyLocationState = history.location.state as
@@ -94,41 +92,39 @@ export async function getLensServices(
     inspector,
     navigation,
     embeddable,
+    eventAnnotation,
     savedObjectsTagging,
     usageCollection,
     fieldFormats,
     spaces,
     share,
     unifiedSearch,
+    serverless,
+    contentManagement,
   } = startDependencies;
 
   const storage = new Storage(localStorage);
   const stateTransfer = embeddable?.getStateTransfer();
   const embeddableEditorIncomingState = stateTransfer?.getIncomingEditorState(APP_ID);
+  const eventAnnotationService = await eventAnnotation.getService();
 
   return {
     data,
     storage,
     inspector: getLensInspectorService(inspector),
     navigation,
+    contentManagement,
     fieldFormats,
     stateTransfer,
     usageCollection,
     savedObjectsTagging,
     attributeService,
-    executionContext: coreStart.executionContext,
-    http: coreStart.http,
+    eventAnnotationService,
     uiActions: startDependencies.uiActions,
-    chrome: coreStart.chrome,
-    overlays: coreStart.overlays,
-    uiSettings: coreStart.uiSettings,
-    application: coreStart.application,
-    notifications: coreStart.notifications,
-    savedObjectsClient: coreStart.savedObjects.client,
+    savedObjectStore: new SavedObjectIndexStore(startDependencies.contentManagement),
     presentationUtil: startDependencies.presentationUtil,
     dataViewEditor: startDependencies.dataViewEditor,
     dataViewFieldEditor: startDependencies.dataViewFieldEditor,
-    dashboard: startDependencies.dashboard,
     charts: startDependencies.charts,
     getOriginatingAppName: () => {
       const originatingApp =
@@ -136,13 +132,12 @@ export async function getLensServices(
       return originatingApp ? stateTransfer?.getAppNameFromId(originatingApp) : undefined;
     },
     dataViews: startDependencies.dataViews,
-    // Temporarily required until the 'by value' paradigm is default.
-    dashboardFeatureFlag: startDependencies.dashboard.dashboardFeatureFlagConfig,
     spaces,
     share,
     unifiedSearch,
-    docLinks: coreStart.docLinks,
     locator,
+    serverless,
+    ...coreStart,
   };
 }
 
@@ -152,18 +147,11 @@ export async function mountApp(
   mountProps: {
     createEditorFrame: EditorFrameStart['createInstance'];
     attributeService: LensAttributeService;
-    getPresentationUtilContext: () => FC;
     topNavMenuEntryGenerators: LensTopNavMenuEntryGenerator[];
     locator?: LensAppLocator;
   }
 ) {
-  const {
-    createEditorFrame,
-    attributeService,
-    getPresentationUtilContext,
-    topNavMenuEntryGenerators,
-    locator,
-  } = mountProps;
+  const { createEditorFrame, attributeService, topNavMenuEntryGenerators, locator } = mountProps;
   const [[coreStart, startDependencies], instance] = await Promise.all([
     core.getStartServices(),
     createEditorFrame(),
@@ -180,7 +168,7 @@ export async function mountApp(
     locator
   );
 
-  const { stateTransfer, data } = lensServices;
+  const { stateTransfer, data, savedObjectStore, share } = lensServices;
 
   const embeddableEditorIncomingState = stateTransfer?.getIncomingEditorState(APP_ID);
 
@@ -270,9 +258,7 @@ export async function mountApp(
     initialContext,
     initialStateFromLocator,
   };
-  const lensStore: LensRootStore = makeConfigureStore(storeDeps, {
-    lens: getPreloadedState(storeDeps) as LensAppState,
-  } as unknown as PreloadedState<LensState>);
+  const lensStore: LensRootStore = makeConfigureStore(storeDeps);
 
   const EditorRenderer = React.memo(
     (props: { id?: string; history: History<unknown>; editByValue?: boolean }) => {
@@ -310,7 +296,13 @@ export async function mountApp(
         if (!initialContext) {
           data.query.filterManager.setAppFilters([]);
         }
-        lensStore.dispatch(setState(getPreloadedState(storeDeps) as LensAppState));
+        // if user comes from a dashboard to convert a legacy viz to a Lens chart
+        // we clear up the dashboard filters and query
+        if (initialContext && 'isEmbeddable' in initialContext && initialContext.isEmbeddable) {
+          data.query.filterManager.setAppFilters([]);
+          data.query.queryString.clearQuery();
+        }
+        lensStore.dispatch(setState(getPreloadedState(storeDeps)));
         lensStore.dispatch(loadInitial({ redirectCallback, initialInput, history: props.history }));
       }, [initialInput, props.history, redirectCallback]);
       useEffect(() => {
@@ -334,7 +326,24 @@ export async function mountApp(
           coreStart,
           dataViews: data.dataViews,
           dataViewEditor: startDependencies.dataViewEditor,
+          share,
         };
+        const importPromise = import('@kbn/shared-ux-page-analytics-no-data');
+        const AnalyticsNoDataPageKibanaProvider = withSuspense(
+          React.lazy(() =>
+            importPromise.then(({ AnalyticsNoDataPageKibanaProvider: NoDataProvider }) => {
+              return { default: NoDataProvider };
+            })
+          )
+        );
+        const AnalyticsNoDataPage = withSuspense(
+          React.lazy(() =>
+            importPromise.then(({ AnalyticsNoDataPage: NoDataPage }) => {
+              return { default: NoDataPage };
+            })
+          )
+        );
+
         return (
           <AnalyticsNoDataPageKibanaProvider {...analyticsServices}>
             <AnalyticsNoDataPage
@@ -365,6 +374,7 @@ export async function mountApp(
             topNavMenuEntryGenerators={topNavMenuEntryGenerators}
             theme$={core.theme.theme$}
             coreStart={coreStart}
+            savedObjectStore={savedObjectStore}
           />
         </Provider>
       );
@@ -394,29 +404,23 @@ export async function mountApp(
 
   params.element.classList.add('lnsAppWrapper');
 
-  const PresentationUtilContext = getPresentationUtilContext();
-
   render(
-    <KibanaThemeProvider theme$={coreStart.theme.theme$}>
-      <I18nProvider>
-        <KibanaContextProvider services={lensServices}>
-          <PresentationUtilContext>
-            <HashRouter>
-              <Switch>
-                <Route exact path="/edit/:id" component={EditorRoute} />
-                <Route
-                  exact
-                  path={`/${LENS_EDIT_BY_VALUE}`}
-                  render={(routeProps) => <EditorRoute {...routeProps} editByValue />}
-                />
-                <Route exact path="/" component={EditorRoute} />
-                <Route path="/" component={NotFound} />
-              </Switch>
-            </HashRouter>
-          </PresentationUtilContext>
-        </KibanaContextProvider>
-      </I18nProvider>
-    </KibanaThemeProvider>,
+    <KibanaRenderContextProvider {...coreStart}>
+      <KibanaContextProvider services={lensServices}>
+        <HashRouter>
+          <Routes>
+            <Route exact path="/edit/:id" component={EditorRoute} />
+            <Route
+              exact
+              path={`/${LENS_EDIT_BY_VALUE}`}
+              render={(routeProps) => <EditorRoute {...routeProps} editByValue />}
+            />
+            <Route exact path="/" component={EditorRoute} />
+            <Route path="/" component={NotFound} />
+          </Routes>
+        </HashRouter>
+      </KibanaContextProvider>
+    </KibanaRenderContextProvider>,
     params.element
   );
   return () => {

@@ -36,7 +36,7 @@ const CaseCallOutComponent = ({
 }: CaseCallOutProps) => {
   const { navigateToConfigureCases } = useConfigureCasesNavigation();
   const handleCallOut = useCallback(
-    (e) => {
+    (e: React.SyntheticEvent) => {
       e.preventDefault();
       // if theres connectors open dropdown editor
       // if no connectors, redirect to create case page
@@ -67,25 +67,26 @@ const CaseCallOutComponent = ({
     [messages]
   );
 
+  const groupedByTypeErrorMessagesKeys = Object.keys(groupedByTypeErrorMessages) as Array<
+    keyof ErrorMessage['errorType']
+  >;
   return (
     <>
-      {(Object.keys(groupedByTypeErrorMessages) as Array<keyof ErrorMessage['errorType']>).map(
-        (type: NonNullable<ErrorMessage['errorType']>) => {
-          const id = createCalloutId(groupedByTypeErrorMessages[type].messagesId);
-          return (
-            <React.Fragment key={id}>
-              <CallOut
-                handleButtonClick={handleCallOut}
-                id={id}
-                messages={groupedByTypeErrorMessages[type].messages}
-                type={type}
-                hasLicenseError={hasLicenseError}
-              />
-              <EuiSpacer />
-            </React.Fragment>
-          );
-        }
-      )}
+      {groupedByTypeErrorMessagesKeys.map((type: NonNullable<ErrorMessage['errorType']>, index) => {
+        const id = createCalloutId(groupedByTypeErrorMessages[type].messagesId);
+        return (
+          <React.Fragment key={id}>
+            <CallOut
+              handleButtonClick={handleCallOut}
+              id={id}
+              messages={groupedByTypeErrorMessages[type].messages}
+              type={type}
+              hasLicenseError={hasLicenseError}
+            />
+            {index !== groupedByTypeErrorMessagesKeys.length - 1 ? <EuiSpacer /> : null}
+          </React.Fragment>
+        );
+      })}
     </>
   );
 };

@@ -9,6 +9,7 @@ import { isEmpty } from 'lodash';
 import { RulesListFilters } from '../../types';
 
 interface UseUiProps {
+  authorizedToReadAnyRules: boolean;
   authorizedToCreateAnyRules: boolean;
   filters: RulesListFilters;
   hasDefaultRuleTypesFiltersOn: boolean;
@@ -37,6 +38,7 @@ const getFilterApplied = ({ hasEmptyTypesFilter, filters }: GetFilterAppliedProp
 };
 
 export const useRulesListUiState = ({
+  authorizedToReadAnyRules,
   authorizedToCreateAnyRules,
   filters,
   hasDefaultRuleTypesFiltersOn,
@@ -50,28 +52,23 @@ export const useRulesListUiState = ({
   showRulesList: boolean;
   showNoAuthPrompt: boolean;
   showCreateFirstRulePrompt: boolean;
-  showHeaderWithoutCreateButton: boolean;
-  showHeaderWithCreateButton: boolean;
 } => {
   const hasEmptyTypesFilter = hasDefaultRuleTypesFiltersOn ? true : isEmpty(filters.types);
   const isFilterApplied = getFilterApplied({ hasEmptyTypesFilter, filters });
   const isInitialLoading = isInitialLoadingRuleTypes || isInitialLoadingRules;
   const isLoading = isLoadingRuleTypes || isLoadingRules;
 
-  const showNoAuthPrompt = !isInitialLoadingRuleTypes && !authorizedToCreateAnyRules;
-  const showCreateFirstRulePrompt = !isLoading && !hasData && !isFilterApplied;
+  const showNoAuthPrompt = !isInitialLoadingRuleTypes && !authorizedToReadAnyRules;
+  const showCreateFirstRulePrompt =
+    !isLoading && !hasData && !isFilterApplied && authorizedToCreateAnyRules;
   const showSpinner =
     isInitialLoading && (isLoadingRuleTypes || (!showNoAuthPrompt && isLoadingRules));
   const showRulesList = !showSpinner && !showCreateFirstRulePrompt && !showNoAuthPrompt;
-  const showHeaderWithCreateButton = showRulesList && authorizedToCreateAnyRules;
-  const showHeaderWithoutCreateButton = showRulesList && !authorizedToCreateAnyRules;
 
   return {
     showSpinner,
     showRulesList,
     showNoAuthPrompt,
     showCreateFirstRulePrompt,
-    showHeaderWithoutCreateButton,
-    showHeaderWithCreateButton,
   };
 };

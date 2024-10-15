@@ -5,9 +5,8 @@
  * 2.0.
  */
 
-import RE2 from 're2';
 import { memoize } from 'lodash';
-import {
+import type {
   KibanaRequest,
   SavedObjectsClientContract,
   SavedObjectsFindOptions,
@@ -63,6 +62,12 @@ export function mlSavedObjectServiceFactory(
     (options: SavedObjectsFindOptions) => JSON.stringify(options)
   );
 
+  function _clearSavedObjectsClientCache() {
+    if (_savedObjectsClientFindMemo.cache.clear) {
+      _savedObjectsClientFindMemo.cache.clear();
+    }
+  }
+
   async function _getJobObjects(
     jobType?: JobType,
     jobId?: string,
@@ -70,7 +75,7 @@ export function mlSavedObjectServiceFactory(
     currentSpaceOnly: boolean = true
   ) {
     await isMlReady();
-    const filterObject: JobObjectFilter = {};
+    const filterObject: JobObjectFilter = Object.create(null);
 
     if (jobType !== undefined) {
       filterObject.type = jobType;
@@ -118,6 +123,7 @@ export function mlSavedObjectServiceFactory(
         } else {
           // the saved object has no spaces, this is unexpected, attempt a normal delete
           await savedObjectsClient.delete(ML_JOB_SAVED_OBJECT_TYPE, id, { force: true });
+          _clearSavedObjectsClientCache();
         }
       }
     } catch (error) {
@@ -128,11 +134,12 @@ export function mlSavedObjectServiceFactory(
     await savedObjectsClient.create<JobObject>(ML_JOB_SAVED_OBJECT_TYPE, job, {
       id,
     });
+    _clearSavedObjectsClientCache();
   }
 
   async function _bulkCreateJobs(jobs: Array<{ job: JobObject; namespaces: string[] }>) {
     await isMlReady();
-    return await savedObjectsClient.bulkCreate<JobObject>(
+    const results = await savedObjectsClient.bulkCreate<JobObject>(
       jobs.map((j) => ({
         type: ML_JOB_SAVED_OBJECT_TYPE,
         id: _jobSavedObjectId(j.job),
@@ -140,6 +147,8 @@ export function mlSavedObjectServiceFactory(
         initialNamespaces: j.namespaces,
       }))
     );
+    _clearSavedObjectsClientCache();
+    return results;
   }
 
   function _jobSavedObjectId(job: JobObject) {
@@ -154,6 +163,7 @@ export function mlSavedObjectServiceFactory(
     }
 
     await savedObjectsClient.delete(ML_JOB_SAVED_OBJECT_TYPE, job.id, { force: true });
+    _clearSavedObjectsClientCache();
   }
 
   async function _forceDeleteJob(jobType: JobType, jobId: string, namespace: string) {
@@ -169,6 +179,7 @@ export function mlSavedObjectServiceFactory(
       namespace: namespace === '*' ? undefined : namespace,
       force: true,
     });
+    _clearSavedObjectsClientCache();
   }
 
   async function createAnomalyDetectionJob(jobId: string, datafeedId?: string) {
@@ -214,7 +225,7 @@ export function mlSavedObjectServiceFactory(
 
   async function getAllJobObjectsForAllSpaces(jobType?: JobType, jobId?: string) {
     await isMlReady();
-    const filterObject: JobObjectFilter = {};
+    const filterObject: JobObjectFilter = Object.create(null);
 
     if (jobType !== undefined) {
       filterObject.type = jobType;
@@ -236,8 +247,7 @@ export function mlSavedObjectServiceFactory(
       filter,
     };
 
-    const jobs = await _savedObjectsClientFindMemo<JobObject>(options);
-    return jobs.saved_objects;
+    return (await internalSavedObjectsClient.find<JobObject>(options)).saved_objects;
   }
 
   async function addDatafeed(datafeedId: string, jobId: string) {
@@ -250,6 +260,7 @@ export function mlSavedObjectServiceFactory(
     const jobObject = job.attributes;
     jobObject.datafeed_id = datafeedId;
     await savedObjectsClient.update<JobObject>(ML_JOB_SAVED_OBJECT_TYPE, job.id, jobObject);
+    _clearSavedObjectsClientCache();
   }
 
   async function deleteDatafeed(datafeedId: string) {
@@ -262,6 +273,7 @@ export function mlSavedObjectServiceFactory(
     const jobObject = job.attributes;
     jobObject.datafeed_id = null;
     await savedObjectsClient.update<JobObject>(ML_JOB_SAVED_OBJECT_TYPE, job.id, jobObject);
+    _clearSavedObjectsClientCache();
   }
 
   async function _getIds(jobType: JobType, idType: keyof JobObject) {
@@ -316,7 +328,7 @@ export function mlSavedObjectServiceFactory(
       if (id.match('\\*') === null) {
         return jobIds.includes(id);
       }
-      const regex = new RE2(id.replace('*', '.*'));
+      const regex = new RegExp(id.replaceAll('*', '.*'));
       return jobIds.some((jId) => typeof jId === 'string' && regex.exec(jId));
     });
   }
@@ -347,7 +359,7 @@ export function mlSavedObjectServiceFactory(
       return {};
     }
 
-    const results: SavedObjectResult = {};
+    const results: SavedObjectResult = Object.create(null);
     const jobs = await _getJobObjects(jobType);
     const jobObjectIdMap = new Map<string, string>();
     const jobObjectsToUpdate: Array<{ type: string; id: string }> = [];
@@ -372,6 +384,8 @@ export function mlSavedObjectServiceFactory(
         spacesToAdd,
         spacesToRemove
       );
+      _clearSavedObjectsClientCache();
+
       updateResult.objects.forEach(({ id: objectId, error }) => {
         const jobId = jobObjectIdMap.get(objectId)!;
         if (error) {
@@ -449,7 +463,7 @@ export function mlSavedObjectServiceFactory(
 
   async function _getTrainedModelObjects(modelId?: string, currentSpaceOnly: boolean = true) {
     await isMlReady();
-    const filterObject: TrainedModelObjectFilter = {};
+    const filterObject: TrainedModelObjectFilter = Object.create(null);
 
     if (modelId !== undefined) {
       filterObject.model_id = modelId;
@@ -492,6 +506,7 @@ export function mlSavedObjectServiceFactory(
           await savedObjectsClient.delete(ML_TRAINED_MODEL_SAVED_OBJECT_TYPE, modelId, {
             force: true,
           });
+          _clearSavedObjectsClientCache();
         }
       }
     } catch (error) {
@@ -518,6 +533,7 @@ export function mlSavedObjectServiceFactory(
         ...(initialNamespaces ? { initialNamespaces } : {}),
       }
     );
+    _clearSavedObjectsClientCache();
   }
 
   async function _bulkCreateTrainedModel(models: TrainedModelObject[], namespaceFallback?: string) {
@@ -528,7 +544,7 @@ export function mlSavedObjectServiceFactory(
       return acc;
     }, {} as Record<string, string[] | undefined>);
 
-    return await savedObjectsClient.bulkCreate<TrainedModelObject>(
+    const results = await savedObjectsClient.bulkCreate<TrainedModelObject>(
       models.map((m) => {
         let initialNamespaces = m.job && namespacesPerJob[m.job.job_id];
         if (!initialNamespaces?.length && namespaceFallback) {
@@ -546,6 +562,8 @@ export function mlSavedObjectServiceFactory(
         };
       })
     );
+    _clearSavedObjectsClientCache();
+    return results;
   }
 
   async function getAllTrainedModelObjectsForAllSpaces(modelIds?: string[]) {
@@ -577,6 +595,7 @@ export function mlSavedObjectServiceFactory(
     }
 
     await savedObjectsClient.delete(ML_TRAINED_MODEL_SAVED_OBJECT_TYPE, model.id, { force: true });
+    _clearSavedObjectsClientCache();
   }
 
   async function _forceDeleteTrainedModel(modelId: string, namespace: string) {
@@ -586,6 +605,7 @@ export function mlSavedObjectServiceFactory(
       namespace: namespace === '*' ? undefined : namespace,
       force: true,
     });
+    _clearSavedObjectsClientCache();
   }
 
   async function filterTrainedModelsForSpace<T>(list: T[], field: keyof T): Promise<T[]> {
@@ -620,7 +640,7 @@ export function mlSavedObjectServiceFactory(
       if (id.match('\\*') === null) {
         return modelIds.includes(id);
       }
-      const regex = new RE2(id.replace('*', '.*'));
+      const regex = new RegExp(id.replaceAll('*', '.*'));
       return modelIds.some((jId) => typeof jId === 'string' && regex.exec(jId));
     });
   }
@@ -705,7 +725,7 @@ export function mlSavedObjectServiceFactory(
     if (modelIds.length === 0 || (spacesToAdd.length === 0 && spacesToRemove.length === 0)) {
       return {};
     }
-    const results: SavedObjectResult = {};
+    const results: SavedObjectResult = Object.create(null);
     const models = await _getTrainedModelObjects();
     const trainedModelObjectIdMap = new Map<string, string>();
     const objectsToUpdate: Array<{ type: string; id: string }> = [];
@@ -729,6 +749,8 @@ export function mlSavedObjectServiceFactory(
         spacesToAdd,
         spacesToRemove
       );
+      _clearSavedObjectsClientCache();
+
       updateResult.objects.forEach(({ id: objectId, error }) => {
         const model = trainedModelObjectIdMap.get(objectId)!;
         if (error) {

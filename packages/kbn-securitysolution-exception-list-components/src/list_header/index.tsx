@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -29,9 +30,10 @@ interface ExceptionListHeaderComponentProps {
   canUserEditList?: boolean;
   securityLinkAnchorComponent: React.ElementType; // This property needs to be removed to avoid the Prop Drilling, once we move all the common components from x-pack/security-solution/common
   onEditListDetails: (listDetails: ListDetails) => void;
-  onExportList: () => void;
   onDeleteList: () => void;
   onManageRules: () => void;
+  onExportList: () => void;
+  onDuplicateList: () => void;
 }
 
 export interface BackOptions {
@@ -51,9 +53,10 @@ const ExceptionListHeaderComponent: FC<ExceptionListHeaderComponentProps> = ({
   backOptions,
   canUserEditList = true,
   onEditListDetails,
-  onExportList,
   onDeleteList,
   onManageRules,
+  onExportList,
+  onDuplicateList,
 }) => {
   const { isModalVisible, listDetails, onEdit, onSave, onCancel } = useExceptionListHeader({
     name,
@@ -97,9 +100,10 @@ const ExceptionListHeaderComponent: FC<ExceptionListHeaderComponentProps> = ({
             isReadonly={isReadonly}
             canUserEditList={canUserEditList}
             securityLinkAnchorComponent={securityLinkAnchorComponent}
-            onExportList={onExportList}
             onDeleteList={onDeleteList}
             onManageRules={onManageRules}
+            onExportList={onExportList}
+            onDuplicateList={onDuplicateList}
           />,
         ]}
         breadcrumbs={[

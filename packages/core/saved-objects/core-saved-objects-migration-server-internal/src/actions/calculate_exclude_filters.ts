@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types';
@@ -23,7 +24,7 @@ export interface CalculateExcludeFiltersParams {
 
 export interface CalculatedExcludeFilter {
   /** Array with all the clauses that must be bool.must_not'ed */
-  mustNotClauses: QueryDslQueryContainer[];
+  filterClauses: QueryDslQueryContainer[];
   /** Any errors that were encountered during filter calculation, keyed by the type name */
   errorsByType: Record<string, Error>;
 }
@@ -91,17 +92,17 @@ export const calculateExcludeFilters =
       }
 
       const errorsByType: Array<[string, Error]> = [];
-      const mustNotClauses: QueryDslQueryContainer[] = [];
+      const filterClauses: QueryDslQueryContainer[] = [];
 
       // Loop through all results and collect successes and errors
       results.forEach((r) =>
         Either.isRight(r)
-          ? mustNotClauses.push(r.right)
+          ? filterClauses.push(r.right)
           : Either.isLeft(r) && errorsByType.push([r.left.soType, r.left.error as Error])
       );
 
       return Either.right({
-        mustNotClauses,
+        filterClauses,
         errorsByType: Object.fromEntries(errorsByType),
       });
     });

@@ -1,18 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { CustomAnnotationTooltip } from '@elastic/charts';
-import {
-  AvailableAnnotationIcon,
-  ManualPointEventAnnotationArgs,
-} from '@kbn/event-annotation-plugin/common';
+import type { AllowedChartOverrides, AllowedSettingsOverrides } from '@kbn/charts-plugin/common';
+import { ManualPointEventAnnotationArgs } from '@kbn/event-annotation-plugin/common';
+import type { AvailableAnnotationIcon } from '@kbn/event-annotation-common';
 import { XY_VIS_RENDERER } from '../constants';
-import { XYProps } from './expression_functions';
+import type { AllowedXYOverrides, XYProps } from './expression_functions';
 
 export interface XYChartProps {
   args: XYProps;
@@ -20,6 +20,7 @@ export interface XYChartProps {
   syncCursor: boolean;
   syncColors: boolean;
   canNavigateToLens?: boolean;
+  overrides?: AllowedXYOverrides & AllowedSettingsOverrides & AllowedChartOverrides;
 }
 
 export interface XYRender {

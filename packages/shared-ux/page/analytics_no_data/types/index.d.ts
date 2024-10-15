@@ -1,10 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
+import { Observable } from 'rxjs';
+
+import { NoDataPagePluginSetup } from '@kbn/no-data-page-plugin/public';
 import {
   KibanaNoDataPageServices,
   KibanaNoDataPageKibanaDependencies,
@@ -15,12 +20,18 @@ import {
  */
 export interface Services {
   kibanaGuideDocLink: string;
+  customBranding: { hasCustomBranding$: Observable<boolean> };
+  prependBasePath: (path: string) => string;
+  getHttp: <T>(path: string) => Promise<T>;
+  pageFlavor: AnalyticsNoDataPageFlavor;
 }
 
 /**
  * Services that are consumed by this component and any dependencies.
  */
 export type AnalyticsNoDataPageServices = Services & KibanaNoDataPageServices;
+
+export type AnalyticsNoDataPageFlavor = 'kibana' | 'serverless_search' | 'serverless_observability';
 
 export interface KibanaDependencies {
   coreStart: {
@@ -31,7 +42,17 @@ export interface KibanaDependencies {
         };
       };
     };
+    customBranding: {
+      hasCustomBranding$: Observable<boolean>;
+    };
+    http: {
+      basePath: {
+        prepend: (path: string) => string;
+      };
+      get: <T>(path: string, options?: object) => Promise<T>;
+    };
   };
+  noDataPage?: NoDataPagePluginSetup;
 }
 
 /**
@@ -49,4 +70,8 @@ export interface AnalyticsNoDataPageProps {
   onDataViewCreated: (dataView: unknown) => void;
   /** if set to true allows creation of an ad-hoc data view from data view editor */
   allowAdHocDataView?: boolean;
+  /** If the cluster has data, this handler allows the user to try ES|QL */
+  onTryESQL?: () => void;
+  /** Handler for when try ES|QL is clicked and user has been navigated to try ES|QL in discover. */
+  onESQLNavigationComplete?: () => void;
 }

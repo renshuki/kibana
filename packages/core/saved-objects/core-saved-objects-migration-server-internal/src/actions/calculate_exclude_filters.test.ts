@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import * as Either from 'fp-ts/lib/Either';
@@ -28,7 +29,7 @@ describe('calculateExcludeFilters', () => {
     expect(hook2).toHaveBeenCalledWith({ readonlyEsClient: { search: expect.any(Function) } });
     expect(Either.isRight(result)).toBe(true);
     expect((result as Either.Right<any>).right).toEqual({
-      mustNotClauses: [
+      filterClauses: [
         { bool: { must: { term: { fieldA: '123' } } } },
         { bool: { must: { term: { fieldB: 'abc' } } } },
       ],
@@ -49,7 +50,7 @@ describe('calculateExcludeFilters', () => {
 
     expect(Either.isRight(result)).toBe(true);
     expect((result as Either.Right<any>).right).toEqual({
-      mustNotClauses: [{ bool: { must: { term: { fieldB: 'abc' } } } }],
+      filterClauses: [{ bool: { must: { term: { fieldB: 'abc' } } } }],
       errorsByType: { type1: error },
     });
   });
@@ -91,7 +92,7 @@ describe('calculateExcludeFilters', () => {
 
     expect(Either.isRight(result)).toBe(true);
     expect((result as Either.Right<any>).right).toEqual({
-      mustNotClauses: [{ bool: { must: { term: { fieldB: 'abc' } } } }],
+      filterClauses: [{ bool: { must: { term: { fieldB: 'abc' } } } }],
       errorsByType: expect.any(Object),
     });
     expect((result as Either.Right<any>).right.errorsByType.type1.toString()).toMatchInlineSnapshot(

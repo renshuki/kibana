@@ -5,12 +5,11 @@
  * 2.0.
  */
 
-import { FtrProviderContext } from '../../../../common/ftr_provider_context';
-
 import {
   getExternalServiceSimulatorPath,
   ExternalServiceSimulator,
-} from '../../../../common/plugins/actions_simulators/server/plugin';
+} from '@kbn/actions-simulators-plugin/server/plugin';
+import { FtrProviderContext } from '../../../../common/ftr_provider_context';
 
 // eslint-disable-next-line import/no-default-export
 export default function resilientTest({ getService }: FtrProviderContext) {
@@ -52,12 +51,13 @@ export default function resilientTest({ getService }: FtrProviderContext) {
 
     it('should return 403 when creating a resilient action', async () => {
       await supertest
-        .post('/api/actions/action')
+        .post('/api/actions/connector')
         .set('kbn-xsrf', 'foo')
         .send({
           name: 'A resilient action',
-          actionTypeId: '.resilient',
+          connector_type_id: '.resilient',
           config: {
+            ...mockResilient.config,
             apiUrl: resilientSimulatorURL,
           },
           secrets: mockResilient.secrets,

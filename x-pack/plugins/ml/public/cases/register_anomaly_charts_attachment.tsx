@@ -8,25 +8,20 @@
 import React from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
-import type { CasesUiSetup } from '@kbn/cases-plugin/public';
+import type { CasesPublicSetup } from '@kbn/cases-plugin/public';
 import type { CoreStart } from '@kbn/core/public';
-import { ANOMALY_EXPLORER_CHARTS_EMBEDDABLE_TYPE, getEmbeddableComponent } from '../embeddables';
+import { CASE_ATTACHMENT_TYPE_ID_ANOMALY_EXPLORER_CHARTS } from '../../common/constants/cases';
 import type { MlStartDependencies } from '../plugin';
 import { PLUGIN_ICON } from '../../common/constants/app';
+import { getAnomalyChartsServiceDependencies } from '../embeddables/anomaly_charts/get_anomaly_charts_services_dependencies';
 
 export function registerAnomalyChartsCasesAttachment(
-  cases: CasesUiSetup,
+  cases: CasesPublicSetup,
   coreStart: CoreStart,
   pluginStart: MlStartDependencies
 ) {
-  const EmbeddableComponent = getEmbeddableComponent(
-    ANOMALY_EXPLORER_CHARTS_EMBEDDABLE_TYPE,
-    coreStart,
-    pluginStart
-  );
-
   cases.attachmentFramework.registerPersistableState({
-    id: ANOMALY_EXPLORER_CHARTS_EMBEDDABLE_TYPE,
+    id: CASE_ATTACHMENT_TYPE_ID_ANOMALY_EXPLORER_CHARTS,
     icon: PLUGIN_ICON,
     displayName: i18n.translate('xpack.ml.cases.anomalyCharts.displayName', {
       defaultMessage: 'Anomaly charts',
@@ -40,9 +35,11 @@ export function registerAnomalyChartsCasesAttachment(
       ),
       timelineAvatar: PLUGIN_ICON,
       children: React.lazy(async () => {
-        const { initComponent } = await import('./anomaly_charts_attachments');
+        const { initializeAnomalyChartsAttachment } = await import('./anomaly_charts_attachments');
+        const services = await getAnomalyChartsServiceDependencies(coreStart, pluginStart);
+
         return {
-          default: initComponent(pluginStart.fieldFormats, EmbeddableComponent),
+          default: initializeAnomalyChartsAttachment(pluginStart.fieldFormats, services),
         };
       }),
     }),

@@ -7,19 +7,17 @@
 
 import http from 'http';
 import expect from '@kbn/expect';
-import { ActionTypes } from '@kbn/cases-plugin/common/api';
+import { UserActionTypes } from '@kbn/cases-plugin/common/types/domain';
 import { getPostCaseRequest } from '../../../../../common/lib/mock';
 import {
   deleteAllCaseItems,
   createCase,
   updateCase,
   pushCase,
-} from '../../../../../common/lib/utils';
-import {
   createCaseWithConnector,
   getServiceNowSimulationServer,
-} from '../../../../../common/lib/connectors';
-import { findCaseUserActions } from '../../../../../common/lib/user_actions';
+  findCaseUserActions,
+} from '../../../../../common/lib/api';
 
 import { ObjectRemover as ActionsRemover } from '../../../../../../alerting_api_integration/common/lib';
 import { FtrProviderContext } from '../../../../../common/ftr_provider_context';
@@ -75,7 +73,7 @@ export default ({ getService }: FtrProviderContext): void => {
           supertest,
           options: {
             sortOrder: 'asc',
-            types: [ActionTypes.assignees],
+            types: [UserActionTypes.assignees],
           },
         });
 
@@ -105,7 +103,7 @@ export default ({ getService }: FtrProviderContext): void => {
           supertest,
           options: {
             sortOrder: 'asc',
-            types: [ActionTypes.pushed],
+            types: [UserActionTypes.pushed],
           },
         });
 

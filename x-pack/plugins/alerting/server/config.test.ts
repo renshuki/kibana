@@ -13,7 +13,7 @@ describe('config validation', () => {
     expect(configSchema.validate(config)).toMatchInlineSnapshot(`
       Object {
         "cancelAlertsOnRuleTimeout": true,
-        "enableFrameworkAlerts": false,
+        "enableFrameworkAlerts": true,
         "healthCheck": Object {
           "interval": "60m",
         },
@@ -23,6 +23,7 @@ describe('config validation', () => {
         },
         "maxEphemeralActionsPerAlert": 10,
         "rules": Object {
+          "maxScheduledPerMinute": 32000,
           "minimumScheduleInterval": Object {
             "enforce": false,
             "value": "1m",
@@ -35,6 +36,9 @@ describe('config validation', () => {
               "max": 1000,
             },
           },
+        },
+        "rulesSettings": Object {
+          "cacheInterval": 60000,
         },
       }
     `);
@@ -109,5 +113,14 @@ describe('config validation', () => {
         `"[rules.run.actions.max]: Value must be equal to or lower than [100000]."`
       );
     });
+  });
+
+  test('maxScheduledPerMinute allows more than 32000', () => {
+    const config: Record<string, unknown> = {
+      rules: {
+        maxScheduledPerMinute: 50000,
+      },
+    };
+    expect(() => configSchema.validate(config)).not.toThrow();
   });
 });

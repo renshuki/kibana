@@ -1,15 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { SavedObject } from '@kbn/core-saved-objects-common';
 import type {
   SavedObjectsBaseOptions,
   SavedObjectsFindOptions,
+  SavedObjectsGetOptions,
   SavedObjectsClosePointInTimeOptions,
   SavedObjectsOpenPointInTimeOptions,
   SavedObjectsCreatePointInTimeFinderOptions,
@@ -19,6 +21,7 @@ import type {
   SavedObjectsUpdateObjectsSpacesOptions,
   SavedObjectsCollectMultiNamespaceReferencesObject,
   SavedObjectsUpdateObjectsSpacesResponse,
+  SavedObjectsResolveOptions,
   SavedObjectsResolveResponse,
   ISavedObjectsPointInTimeFinder,
   SavedObjectsRemoveReferencesToOptions,
@@ -76,9 +79,9 @@ export interface ISavedObjectsRepository {
    * @param {object} [options={}] {@link SavedObjectsCreateOptions} - options for the create operation
    * @property {string} [options.id] - force id on creation, not recommended
    * @property {boolean} [options.overwrite=false]
-   * @property {object} [options.migrationVersion=undefined]
    * @property {string} [options.namespace]
    * @property {array} [options.references=[]] - [{ name, type, id }]
+   * @property {string} [options.migrationVersionCompatibility]
    * @returns {promise} the created saved object { id, type, version, attributes }
    */
   create<T = unknown>(
@@ -94,6 +97,7 @@ export interface ISavedObjectsRepository {
    * @param {object} [options={}] {@link SavedObjectsCreateOptions} - options for the bulk create operation
    * @property {boolean} [options.overwrite=false] - overwrites existing documents
    * @property {string} [options.namespace]
+   * @property {string} [options.migrationVersionCompatibility]
    * @returns {promise} - {saved_objects: [[{ id, type, version, references, attributes, error: { message } }]}
    */
   bulkCreate<T = unknown>(
@@ -178,7 +182,8 @@ export interface ISavedObjectsRepository {
    * Returns an array of objects by id
    *
    * @param {array} objects - an array of objects containing id, type and optionally fields
-   * @param {object} [options={}] {@link SavedObjectsBaseOptions} - options for the bulk get operation
+   * @param {object} [options={}] {@link SavedObjectsGetOptions} - options for the bulk get operation
+   * @property {string} [options.migrationVersionCompatibility]
    * @property {string} [options.namespace]
    * @returns {promise} - { saved_objects: [{ id, type, version, attributes }] }
    * @example
@@ -190,14 +195,15 @@ export interface ISavedObjectsRepository {
    */
   bulkGet<T = unknown>(
     objects: SavedObjectsBulkGetObject[],
-    options?: SavedObjectsBaseOptions
+    options?: SavedObjectsGetOptions
   ): Promise<SavedObjectsBulkResponse<T>>;
 
   /**
    * Resolves an array of objects by id, using any legacy URL aliases if they exist
    *
    * @param {array} objects - an array of objects containing id, type
-   * @param {object} [options={}] {@link SavedObjectsBaseOptions} - options for the bulk resolve operation
+   * @param {object} [options={}] {@link SavedObjectsResolveOptions} - options for the bulk resolve operation
+   * @property {string} [options.migrationVersionCompatibility]
    * @property {string} [options.namespace]
    * @returns {promise} - { resolved_objects: [{ saved_object, outcome }] }
    * @example
@@ -209,7 +215,7 @@ export interface ISavedObjectsRepository {
    */
   bulkResolve<T = unknown>(
     objects: SavedObjectsBulkResolveObject[],
-    options?: SavedObjectsBaseOptions
+    options?: SavedObjectsResolveOptions
   ): Promise<SavedObjectsBulkResolveResponse<T>>;
 
   /**
@@ -217,14 +223,15 @@ export interface ISavedObjectsRepository {
    *
    * @param {string} type - the type of the object to get
    * @param {string} id - the ID of the object to get
-   * @param {object} [options={}] {@link SavedObjectsBaseOptions} - options for the get operation
+   * @param {object} [options={}] {@link SavedObjectsGetOptions} - options for the get operation
+   * @property {string} [options.migrationVersionCompatibility]
    * @property {string} [options.namespace]
    * @returns {promise} - { id, type, version, attributes }
    */
   get<T = unknown>(
     type: string,
     id: string,
-    options?: SavedObjectsBaseOptions
+    options?: SavedObjectsGetOptions
   ): Promise<SavedObject<T>>;
 
   /**
@@ -232,14 +239,15 @@ export interface ISavedObjectsRepository {
    *
    * @param {string} type - the type of the object to resolve
    * @param {string} id - the id of the object to resolve
-   * @param {object} [options={}] {@link SavedObjectsBaseOptions} - options for the resolve operation
+   * @param {object} [options={}] {@link SavedObjectsResolveOptions} - options for the resolve operation
+   * @property {string} [options.migrationVersionCompatibility]
    * @property {string} [options.namespace]
    * @returns {promise} - { saved_object, outcome }
    */
   resolve<T = unknown>(
     type: string,
     id: string,
-    options?: SavedObjectsBaseOptions
+    options?: SavedObjectsResolveOptions
   ): Promise<SavedObjectsResolveResponse<T>>;
 
   /**
@@ -307,9 +315,17 @@ export interface ISavedObjectsRepository {
   /**
    * Updates all objects containing a reference to the given {type, id} tuple to remove the said reference.
    *
-   * @remarks Will throw a conflict error if the `update_by_query` operation returns any failure. In that case
-   *          some references might have been removed, and some were not. It is the caller's responsibility
-   *          to handle and fix this situation if it was to happen.
+   * @remarks
+   * Will throw a conflict error if the `update_by_query` operation returns any failure. In that case some
+   * references might have been removed, and some were not. It is the caller's responsibility to handle and fix
+   * this situation if it was to happen.
+   *
+   * Intended use is to provide clean up of any references to an object which is being deleted (e.g. deleting
+   * a tag). See discussion here: https://github.com/elastic/kibana/issues/135259#issuecomment-1482515139
+   *
+   * When security is enabled, authorization for this method is based only on authorization to delete the object
+   * represented by the {type, id} tuple. Therefore it is recommended only to call this method for the intended
+   * use case.
    *
    * @param {string} type - the type of the object to remove references to
    * @param {string} id - the ID of the object to remove references to
@@ -333,7 +349,7 @@ export interface ISavedObjectsRepository {
    * It will not create a nested structure like:
    *   `{attributes: {stats: {api: {counter: 1}}}}`
    *
-   * When using incrementCounter for collecting usage data, you need to ensure
+   * When using incrementCounter you need to ensure
    * that usage collection happens on a best-effort basis and doesn't
    * negatively affect your plugin or users. See https://github.com/elastic/kibana/blob/main/src/plugins/usage_collection/README.mdx#tracking-interactions-with-incrementcounter)
    *
@@ -526,4 +542,14 @@ export interface ISavedObjectsRepository {
     findOptions: SavedObjectsCreatePointInTimeFinderOptions,
     dependencies?: SavedObjectsCreatePointInTimeFinderDependencies
   ): ISavedObjectsPointInTimeFinder<T, A>;
+
+  /**
+   * If the spaces extension is enabled, it's used to get the current namespace (and optionally throws an error if a
+   * consumer attempted to specify the namespace explicitly).
+   *
+   * If the spaces extension is *not* enabled, this function simply normalizes the specified namespace so that
+   * `'default'` can be used interchangeably with `undefined` i.e. the method always returns `undefined` for the default
+   * namespace.
+   */
+  getCurrentNamespace(namespace?: string): string | undefined;
 }

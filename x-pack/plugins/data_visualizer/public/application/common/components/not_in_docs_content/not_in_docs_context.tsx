@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, Fragment } from 'react';
+import type { FC } from 'react';
+import React, { Fragment } from 'react';
 import { EuiIcon, EuiText } from '@elastic/eui';
 
 import { FormattedMessage } from '@kbn/i18n-react';
@@ -13,7 +14,7 @@ import { FormattedMessage } from '@kbn/i18n-react';
 export const NotInDocsContent: FC = () => (
   <Fragment>
     <EuiText textAlign="center">
-      <EuiIcon type="alert" />
+      <EuiIcon type="warning" />
     </EuiText>
     <EuiText textAlign="center" size={'xs'}>
       <FormattedMessage

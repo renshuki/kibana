@@ -5,56 +5,66 @@
  * 2.0.
  */
 import expect from '@kbn/expect';
-import { ApmRuleType } from '@kbn/apm-plugin/common/rules/apm_rule_types';
+import { AggregationType } from '@kbn/apm-plugin/common/rules/apm_rule_types';
+import { ApmRuleType } from '@kbn/rule-data-utils';
 import { apm, timerange } from '@kbn/apm-synthtrace-client';
 import { FtrProviderContext } from '../../common/ftr_provider_context';
-import { waitForActiveAlert } from '../../common/utils/wait_for_active_alert';
+import { createApmRule, runRuleSoon, ApmAlertFields } from '../alerts/helpers/alerting_api_helper';
+import { waitForActiveRule } from '../alerts/helpers/wait_for_active_rule';
+import { waitForAlertsForRule } from '../alerts/helpers/wait_for_alerts_for_rule';
+import { cleanupRuleAndAlertState } from '../alerts/helpers/cleanup_rule_and_alert_state';
 
 export default function ServiceAlerts({ getService }: FtrProviderContext) {
   const registry = getService('registry');
   const apmApiClient = getService('apmApiClient');
   const supertest = getService('supertest');
-  const synthtraceEsClient = getService('synthtraceEsClient');
-  const esDeleteAllIndices = getService('esDeleteAllIndices');
-  const esClient = getService('es');
-  const log = getService('log');
-  const start = Date.now() - 24 * 60 * 60 * 1000;
-  const end = Date.now();
+  const apmSynthtraceEsClient = getService('apmSynthtraceEsClient');
+  const es = getService('es');
+  const dayInMs = 24 * 60 * 60 * 1000;
+  const start = Date.now() - dayInMs;
+  const end = Date.now() + dayInMs;
   const goService = 'synth-go';
+  const logger = getService('log');
 
-  async function getServiceAlerts(serviceName: string) {
+  async function getServiceAlerts({
+    serviceName,
+    environment,
+  }: {
+    serviceName: string;
+    environment: string;
+  }) {
     return apmApiClient.readUser({
       endpoint: 'GET /internal/apm/services/{serviceName}/alerts_count',
       params: {
         path: { serviceName },
+        query: {
+          start: new Date(start).toISOString(),
+          end: new Date(end).toISOString(),
+          environment,
+        },
       },
     });
   }
 
-  async function createRule() {
-    return supertest
-      .post(`/api/alerting/rule`)
-      .set('kbn-xsrf', 'true')
-      .send({
-        params: {
-          serviceName: goService,
-          transactionType: '',
-          windowSize: 99,
-          windowUnit: 'y',
-          threshold: 100,
-          aggregationType: 'avg',
-          environment: 'testing',
-        },
-        consumer: 'apm',
-        schedule: { interval: '1m' },
-        tags: ['apm'],
-        name: `Latency threshold | ${goService}`,
-        rule_type_id: ApmRuleType.TransactionDuration,
-        notify_when: 'onActiveAlert',
-        actions: [],
-      });
+  function createRule() {
+    return createApmRule({
+      supertest,
+      name: `Latency threshold | ${goService}`,
+      params: {
+        serviceName: goService,
+        transactionType: undefined,
+        windowSize: 5,
+        windowUnit: 'h',
+        threshold: 100,
+        aggregationType: AggregationType.Avg,
+        environment: 'testing',
+        groupBy: ['service.name', 'service.environment', 'transaction.type', 'transaction.name'],
+      },
+      ruleTypeId: ApmRuleType.TransactionDuration,
+    });
   }
 
+  // FLAKY: https://github.com/elastic/kibana/issues/177512
   registry.when('Service alerts', { config: 'basic', archives: [] }, () => {
     before(async () => {
       const synthServices = [
@@ -63,7 +73,7 @@ export default function ServiceAlerts({ getService }: FtrProviderContext) {
           .instance('instance-1'),
       ];
 
-      await synthtraceEsClient.index(
+      await apmSynthtraceEsClient.index(
         synthServices.map((service) =>
           timerange(start, end)
             .interval('5m')
@@ -104,24 +114,39 @@ export default function ServiceAlerts({ getService }: FtrProviderContext) {
     });
 
     after(async () => {
-      await synthtraceEsClient.clean();
+      await apmSynthtraceEsClient.clean();
     });
 
     describe('with alerts', () => {
       let ruleId: string;
+      let alerts: ApmAlertFields[];
+
       before(async () => {
-        const { body: createdRule } = await createRule();
+        const createdRule = await createRule();
         ruleId = createdRule.id;
-        await waitForActiveAlert({ ruleId, esClient, log });
+        alerts = await waitForAlertsForRule({ es, ruleId });
       });
 
       after(async () => {
-        await supertest.delete(`/api/alerting/rule/${ruleId}`).set('kbn-xsrf', 'true');
-        await esDeleteAllIndices('.alerts*');
+        await cleanupRuleAndAlertState({ es, supertest, logger });
+      });
+
+      it('checks if rule is active', async () => {
+        const ruleStatus = await waitForActiveRule({ ruleId, supertest });
+        expect(ruleStatus).to.be('active');
+      });
+
+      it('should successfully run the rule', async () => {
+        const response = await runRuleSoon({ ruleId, supertest });
+        expect(response.status).to.be(204);
+      });
+
+      it('produces 1 alert', async () => {
+        expect(alerts.length).to.be(1);
       });
 
       it('returns the correct number of alerts', async () => {
-        const response = await getServiceAlerts(goService);
+        const response = await getServiceAlerts({ serviceName: goService, environment: 'testing' });
         expect(response.status).to.be(200);
         expect(response.body.serviceName).to.be(goService);
         expect(response.body.alertsCount).to.be(1);
@@ -130,7 +155,7 @@ export default function ServiceAlerts({ getService }: FtrProviderContext) {
 
     describe('without alerts', () => {
       it('returns the correct number of alerts', async () => {
-        const response = await getServiceAlerts(goService);
+        const response = await getServiceAlerts({ serviceName: goService, environment: 'foo' });
         expect(response.status).to.be(200);
         expect(response.body.serviceName).to.be(goService);
         expect(response.body.alertsCount).to.be(0);

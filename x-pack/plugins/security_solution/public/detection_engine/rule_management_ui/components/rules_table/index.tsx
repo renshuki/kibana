@@ -9,11 +9,11 @@ import { EuiSpacer } from '@elastic/eui';
 import React from 'react';
 import { useRouteSpy } from '../../../../common/utils/route/use_route_spy';
 import { RulesManagementTour } from './rules_table/guided_onboarding/rules_management_tour';
-import { useInitializeRulesTableSavedState } from './rules_table/use_initialize_rules_table_saved_state';
 import { useSyncRulesTableSavedState } from './rules_table/use_sync_rules_table_saved_state';
 import { RulesTables } from './rules_tables';
-import type { AllRulesTabs } from './rules_table_toolbar';
-import { RulesTableToolbar } from './rules_table_toolbar';
+import { AllRulesTabs, RulesTableToolbar } from './rules_table_toolbar';
+import { UpgradePrebuiltRulesTable } from './upgrade_prebuilt_rules_table/upgrade_prebuilt_rules_table';
+import { UpgradePrebuiltRulesTableContextProvider } from './upgrade_prebuilt_rules_table/upgrade_prebuilt_rules_table_context';
 
 /**
  * Table Component for displaying all Rules for a given cluster. Provides the ability to filter
@@ -24,18 +24,29 @@ import { RulesTableToolbar } from './rules_table_toolbar';
  *   * Import/Export
  */
 export const AllRules = React.memo(() => {
-  useInitializeRulesTableSavedState();
   useSyncRulesTableSavedState();
   const [{ tabName }] = useRouteSpy();
 
-  return (
-    <>
-      <RulesManagementTour />
-      <RulesTableToolbar />
-      <EuiSpacer />
-      <RulesTables selectedTab={tabName as AllRulesTabs} />
-    </>
-  );
+  if (tabName !== AllRulesTabs.updates) {
+    return (
+      <>
+        <RulesManagementTour />
+        <RulesTableToolbar />
+        <EuiSpacer />
+        <RulesTables selectedTab={tabName as AllRulesTabs} />
+      </>
+    );
+  } else {
+    return (
+      <>
+        <UpgradePrebuiltRulesTableContextProvider>
+          <RulesTableToolbar />
+          <EuiSpacer />
+          <UpgradePrebuiltRulesTable />
+        </UpgradePrebuiltRulesTableContextProvider>
+      </>
+    );
+  }
 });
 
 AllRules.displayName = 'AllRules';

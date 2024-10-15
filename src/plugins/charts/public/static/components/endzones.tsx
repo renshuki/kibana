@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { FC } from 'react';
@@ -14,6 +15,7 @@ import {
   RectAnnotation,
   RectAnnotationDatum,
   RectAnnotationStyle,
+  AnnotationTooltipFormatter,
 } from '@elastic/charts';
 import { i18n } from '@kbn/i18n';
 import { EuiFlexGroup, EuiFlexItem, EuiIcon, EuiSpacer, useEuiTheme } from '@elastic/eui';
@@ -142,7 +144,7 @@ const partialDataText = i18n.translate('charts.partialData.bucketTooltipText', {
     'The selected time range does not include this entire bucket. It might contain partial data.',
 });
 
-const Prompt = () => {
+const Prompt: AnnotationTooltipFormatter = () => {
   const { euiTheme } = useEuiTheme();
   const headerPartialCss = css`
     font-weight: ${euiTheme.font.weight.regular};

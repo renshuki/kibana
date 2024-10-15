@@ -7,26 +7,21 @@
 
 import { chartData as mockChartData } from './__mocks__/mock_chart_data';
 import seriesConfig from './__mocks__/mock_series_config_filebeat.json';
-jest.mock('../../services/field_format_service', () => ({
-  mlFieldFormatService: {
-    getFieldFormat: jest.fn(),
-  },
-}));
 
 import { mountWithIntl } from '@kbn/test-jest-helpers';
+import { KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
 import React from 'react';
 
 import { ExplorerChartSingleMetric } from './explorer_chart_single_metric';
 import { timeBucketsMock } from '../../util/__mocks__/time_buckets';
 import { kibanaContextMock } from '../../contexts/kibana/__mocks__/kibana_context';
+import { BehaviorSubject } from 'rxjs';
 
 const utilityProps = {
   timeBuckets: timeBucketsMock,
-  chartTheme: kibanaContextMock.services.charts.theme.useChartsTheme(),
+  chartTheme: kibanaContextMock.services.charts.theme.useChartsBaseTheme(),
   onPointerUpdate: jest.fn(),
-  cursor: {
-    x: 10432423,
-  },
+  cursor$: new BehaviorSubject({ isDataHistorgram: true, cursor: { x: 10432423 } }),
 };
 
 describe('ExplorerChart', () => {
@@ -50,19 +45,21 @@ describe('ExplorerChart', () => {
     };
 
     const wrapper = mountWithIntl(
-      <ExplorerChartSingleMetric
-        mlSelectSeverityService={mlSelectSeverityServiceMock}
-        tooltipService={mockTooltipService}
-        severity={0}
-        {...utilityProps}
-      />
+      <KibanaContextProvider services={kibanaContextMock.services}>
+        <ExplorerChartSingleMetric
+          mlSelectSeverityService={mlSelectSeverityServiceMock}
+          tooltipService={mockTooltipService}
+          severity={0}
+          {...utilityProps}
+        />
+      </KibanaContextProvider>
     );
 
     // without setting any attributes and corresponding data
     // the directive just ends up being empty.
     expect(wrapper.isEmptyRender()).toBeTruthy();
     expect(wrapper.find('.content-wrapper')).toHaveLength(0);
-    expect(wrapper.find('.ml-loading-indicator .euiLoadingChart')).toHaveLength(0);
+    expect(wrapper.find('.euiLoadingChart')).toHaveLength(0);
   });
 
   test('Loading status active, no chart', () => {
@@ -76,18 +73,20 @@ describe('ExplorerChart', () => {
     };
 
     const wrapper = mountWithIntl(
-      <ExplorerChartSingleMetric
-        seriesConfig={config}
-        mlSelectSeverityService={mlSelectSeverityServiceMock}
-        tooltipService={mockTooltipService}
-        severity={0}
-        {...utilityProps}
-      />
+      <KibanaContextProvider services={kibanaContextMock.services}>
+        <ExplorerChartSingleMetric
+          seriesConfig={config}
+          mlSelectSeverityService={mlSelectSeverityServiceMock}
+          tooltipService={mockTooltipService}
+          severity={0}
+          {...utilityProps}
+        />
+      </KibanaContextProvider>
     );
 
     // test if the loading indicator is shown
     // Added span because class appears twice with classNames and Emotion
-    expect(wrapper.find('.ml-loading-indicator span.euiLoadingChart')).toHaveLength(1);
+    expect(wrapper.find('span.euiLoadingChart')).toHaveLength(1);
   });
 
   // For the following tests the directive needs to be rendered in the actual DOM,
@@ -110,15 +109,17 @@ describe('ExplorerChart', () => {
 
     // We create the element including a wrapper which sets the width:
     return mountWithIntl(
-      <div style={{ width: '500px' }}>
-        <ExplorerChartSingleMetric
-          seriesConfig={config}
-          mlSelectSeverityService={mlSelectSeverityServiceMock}
-          tooltipService={mockTooltipService}
-          severity={0}
-          {...utilityProps}
-        />
-      </div>
+      <KibanaContextProvider services={kibanaContextMock.services}>
+        <div style={{ width: '500px' }}>
+          <ExplorerChartSingleMetric
+            seriesConfig={config}
+            mlSelectSeverityService={mlSelectSeverityServiceMock}
+            tooltipService={mockTooltipService}
+            severity={0}
+            {...utilityProps}
+          />
+        </div>
+      </KibanaContextProvider>
     );
   }
 
@@ -126,7 +127,7 @@ describe('ExplorerChart', () => {
     const wrapper = init(mockChartData);
 
     // the loading indicator should not be shown
-    expect(wrapper.find('.ml-loading-indicator .euiLoadingChart')).toHaveLength(0);
+    expect(wrapper.find('.euiLoadingChart')).toHaveLength(0);
 
     // test if all expected elements are present
     // need to use getDOMNode() because the chart is not rendered via react itself
@@ -150,7 +151,7 @@ describe('ExplorerChart', () => {
     expect(+selectedInterval.getAttribute('height')).toBe(166);
 
     const xAxisTicks = wrapper.getDOMNode().querySelector('.x').querySelectorAll('.tick');
-    expect([...xAxisTicks]).toHaveLength(1);
+    expect([...xAxisTicks]).toHaveLength(8);
     const yAxisTicks = wrapper.getDOMNode().querySelector('.y').querySelectorAll('.tick');
     expect([...yAxisTicks]).toHaveLength(10);
 
@@ -159,7 +160,7 @@ describe('ExplorerChart', () => {
     expect(paths[1].getAttribute('class')).toBe('domain');
     expect(paths[2].getAttribute('class')).toBe('values-line');
     expect(paths[2].getAttribute('d')).toBe(
-      'MNaN,159.33024504444444ZMNaN,9.166257955555556LNaN,169.60736875555557'
+      'M-19.090909090909093,159.33024504444444ZM-20,9.166257955555556L-20.22727272727273,169.60736875555557'
     );
 
     const dots = wrapper.getDOMNode().querySelector('.values-dots').querySelectorAll('circle');

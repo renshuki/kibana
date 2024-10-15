@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { BehaviorSubject } from 'rxjs';
@@ -11,12 +12,13 @@ import { BehaviorSubject } from 'rxjs';
 import type { CoreContext } from '@kbn/core-base-server-internal';
 
 import { NodeService } from './node_service';
+import type { NodeRolesConfig } from './node_config';
 
 import { configServiceMock } from '@kbn/config-mocks';
 import { mockCoreContext } from '@kbn/core-base-server-mocks';
 import { loggingSystemMock } from '@kbn/core-logging-server-mocks';
 
-const getMockedConfigService = (nodeConfig: unknown) => {
+const getMockedConfigService = (nodeConfig: { roles: NodeRolesConfig }) => {
   const configService = configServiceMock.create();
   configService.atPath.mockImplementation((path) => {
     if (path === 'node') {
@@ -51,6 +53,7 @@ describe('NodeService', () => {
 
       expect(roles.backgroundTasks).toBe(true);
       expect(roles.ui).toBe(true);
+      expect(roles.migrator).toBe(false);
     });
 
     it('returns correct roles when node is configured to `background_tasks`', async () => {
@@ -62,6 +65,7 @@ describe('NodeService', () => {
 
       expect(roles.backgroundTasks).toBe(true);
       expect(roles.ui).toBe(false);
+      expect(roles.migrator).toBe(false);
     });
 
     it('returns correct roles when node is configured to `ui`', async () => {
@@ -73,6 +77,7 @@ describe('NodeService', () => {
 
       expect(roles.backgroundTasks).toBe(false);
       expect(roles.ui).toBe(true);
+      expect(roles.migrator).toBe(false);
     });
 
     it('returns correct roles when node is configured to both `background_tasks` and `ui`', async () => {
@@ -84,6 +89,19 @@ describe('NodeService', () => {
 
       expect(roles.backgroundTasks).toBe(true);
       expect(roles.ui).toBe(true);
+      expect(roles.migrator).toBe(false);
+    });
+
+    it('returns correct roles when node is configured to `migrator`', async () => {
+      configService = getMockedConfigService({ roles: ['migrator'] });
+      coreContext = mockCoreContext.create({ logger, configService });
+
+      service = new NodeService(coreContext);
+      const { roles } = await service.preboot({ loggingSystem: logger });
+
+      expect(roles.backgroundTasks).toBe(false);
+      expect(roles.ui).toBe(false);
+      expect(roles.migrator).toBe(true);
     });
 
     it('logs the node roles', async () => {

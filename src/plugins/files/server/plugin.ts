@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type {
@@ -21,27 +22,35 @@ import {
   getFileKindsRegistry,
   FileKindsRegistryImpl,
 } from '../common/file_kinds_registry';
-import { registerDefaultFileKinds } from '../common/register_default_file_kinds';
 
 import { BlobStorageService } from './blob_storage_service';
 import { FileServiceFactory } from './file_service';
 import type {
-  FilesPluginSetupDependencies,
-  FilesPluginStartDependencies,
-  FilesSetup,
-  FilesStart,
+  FilesServerSetupDependencies,
+  FilesServerStartDependencies,
+  FilesServerSetup,
+  FilesServerStart,
 } from './types';
 
 import type { FilesRequestHandlerContext, FilesRouter } from './routes/types';
 import { registerRoutes, registerFileKindRoutes } from './routes';
 import { Counters, registerUsageCollector } from './usage';
+import * as DefaultImageKind from '../common/default_image_file_kind';
 
-export class FilesPlugin implements Plugin<FilesSetup, FilesStart, FilesPluginSetupDependencies> {
+export class FilesPlugin
+  implements
+    Plugin<
+      FilesServerSetup,
+      FilesServerStart,
+      FilesServerSetupDependencies,
+      FilesServerStartDependencies
+    >
+{
   private static analytics?: AnalyticsServiceStart;
   private readonly logger: Logger;
   private fileServiceFactory: undefined | FileServiceFactory;
-  private securitySetup: FilesPluginSetupDependencies['security'];
-  private securityStart: FilesPluginStartDependencies['security'];
+  private securitySetup: FilesServerSetupDependencies['security'];
+  private securityStart: FilesServerStartDependencies['security'];
 
   constructor(initializerContext: PluginInitializerContext) {
     this.logger = initializerContext.logger.get();
@@ -57,8 +66,8 @@ export class FilesPlugin implements Plugin<FilesSetup, FilesStart, FilesPluginSe
 
   public setup(
     core: CoreSetup,
-    { security, usageCollection }: FilesPluginSetupDependencies
-  ): FilesSetup {
+    { security, usageCollection }: FilesServerSetupDependencies
+  ): FilesServerSetup {
     const usageCounter = usageCollection?.createUsageCounter(PLUGIN_ID);
     FileServiceFactory.setup(core.savedObjects, usageCounter);
     this.securitySetup = security;
@@ -92,8 +101,7 @@ export class FilesPlugin implements Plugin<FilesSetup, FilesStart, FilesPluginSe
       getFileService: () => this.fileServiceFactory?.asInternal(),
     });
 
-    // Now that everything is set up:
-    registerDefaultFileKinds();
+    this.registerDefaultImageFileKind();
 
     return {
       registerFileKind(fileKind) {
@@ -102,7 +110,7 @@ export class FilesPlugin implements Plugin<FilesSetup, FilesStart, FilesPluginSe
     };
   }
 
-  public start(coreStart: CoreStart, { security }: FilesPluginStartDependencies): FilesStart {
+  public start(coreStart: CoreStart, { security }: FilesServerStartDependencies): FilesServerStart {
     const { savedObjects, analytics } = coreStart;
     this.securityStart = security;
     FilesPlugin.setAnalytics(analytics);
@@ -125,4 +133,22 @@ export class FilesPlugin implements Plugin<FilesSetup, FilesStart, FilesPluginSe
   }
 
   public stop() {}
+
+  private registerDefaultImageFileKind() {
+    const registry = getFileKindsRegistry();
+    registry.register({
+      ...DefaultImageKind.kind,
+      maxSizeBytes: DefaultImageKind.maxSize,
+      http: {
+        create: { tags: DefaultImageKind.tags },
+        delete: { tags: DefaultImageKind.tags },
+        download: { tags: DefaultImageKind.tags },
+        getById: { tags: DefaultImageKind.tags },
+        list: { tags: DefaultImageKind.tags },
+        share: { tags: DefaultImageKind.tags },
+        update: { tags: DefaultImageKind.tags },
+      },
+      hashes: ['sha256'],
+    });
+  }
 }

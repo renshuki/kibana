@@ -6,19 +6,22 @@
  */
 
 import { transformError } from '@kbn/securitysolution-es-utils';
-import { validate } from '@kbn/securitysolution-io-ts-utils';
+import type { IKibanaResponse } from '@kbn/core-http-server';
+
 import type { SecuritySolutionPluginRouter } from '../../../../../types';
 
 import { TIMELINE_PREPACKAGED_URL } from '../../../../../../common/constants';
 
-import type { SetupPlugins } from '../../../../../plugin';
 import type { ConfigType } from '../../../../../config';
-
+import {
+  InstallPrepackedTimelinesRequestBody,
+  type InstallPrepackedTimelinesResponse,
+} from '../../../../../../common/api/timeline';
 import { buildSiemResponse } from '../../../../detection_engine/routes/utils';
 
 import { installPrepackagedTimelines } from './helpers';
 
-import { checkTimelinesStatus, checkTimelineStatusRt } from '../../../utils/check_timelines_status';
+import { checkTimelinesStatus } from '../../../utils/check_timelines_status';
 
 import { buildFrameworkRequest } from '../../../utils/common';
 
@@ -26,13 +29,11 @@ export { installPrepackagedTimelines } from './helpers';
 
 export const installPrepackedTimelinesRoute = (
   router: SecuritySolutionPluginRouter,
-  config: ConfigType,
-  security: SetupPlugins['security']
+  config: ConfigType
 ) => {
-  router.post(
-    {
+  router.versioned
+    .post({
       path: `${TIMELINE_PREPACKAGED_URL}`,
-      validate: {},
       options: {
         tags: ['access:securitySolution'],
         body: {
@@ -40,54 +41,61 @@ export const installPrepackedTimelinesRoute = (
           output: 'stream',
         },
       },
-    },
-    async (context, request, response) => {
-      try {
-        const frameworkRequest = await buildFrameworkRequest(context, security, request);
-        const prepackagedTimelineStatus = await checkTimelinesStatus(frameworkRequest);
-        const [validatedprepackagedTimelineStatus, prepackagedTimelineStatusError] = validate(
-          prepackagedTimelineStatus,
-          checkTimelineStatusRt
-        );
+      access: 'public',
+    })
+    .addVersion(
+      {
+        validate: {},
+        version: '2023-10-31',
+      },
+      async (
+        context,
+        request,
+        response
+      ): Promise<IKibanaResponse<InstallPrepackedTimelinesResponse>> => {
+        try {
+          const frameworkRequest = await buildFrameworkRequest(context, request);
+          const prepackagedTimelineStatus = await checkTimelinesStatus(frameworkRequest);
 
-        if (prepackagedTimelineStatusError != null) {
-          throw prepackagedTimelineStatusError;
-        }
+          const installResult =
+            InstallPrepackedTimelinesRequestBody.safeParse(prepackagedTimelineStatus);
 
-        const timelinesToInstalled =
-          validatedprepackagedTimelineStatus?.timelinesToInstall.length ?? 0;
-        const timelinesNotUpdated =
-          validatedprepackagedTimelineStatus?.timelinesToUpdate.length ?? 0;
-        let res = null;
+          if (installResult.error) {
+            throw installResult.error;
+          }
 
-        if (timelinesToInstalled > 0 || timelinesNotUpdated > 0) {
-          res = await installPrepackagedTimelines(
-            config.maxTimelineImportExportSize,
-            frameworkRequest,
-            true
-          );
-        }
-        if (res instanceof Error) {
-          throw res;
-        } else {
-          return response.ok({
-            body: res ?? {
-              success: true,
-              success_count: 0,
-              timelines_installed: 0,
-              timelines_updated: 0,
-              errors: [],
-            },
+          const timelinesToInstalled = installResult.data.timelinesToInstall.length ?? 0;
+          const timelinesNotUpdated = installResult.data.timelinesToUpdate.length ?? 0;
+          let res = null;
+
+          if (timelinesToInstalled > 0 || timelinesNotUpdated > 0) {
+            res = await installPrepackagedTimelines(
+              config.maxTimelineImportExportSize,
+              frameworkRequest,
+              true
+            );
+          }
+          if (res instanceof Error) {
+            throw res;
+          } else {
+            return response.ok({
+              body: res ?? {
+                success: true,
+                success_count: 0,
+                timelines_installed: 0,
+                timelines_updated: 0,
+                errors: [],
+              },
+            });
+          }
+        } catch (err) {
+          const error = transformError(err);
+          const siemResponse = buildSiemResponse(response);
+          return siemResponse.error({
+            body: error.message,
+            statusCode: error.statusCode,
           });
         }
-      } catch (err) {
-        const error = transformError(err);
-        const siemResponse = buildSiemResponse(response);
-        return siemResponse.error({
-          body: error.message,
-          statusCode: error.statusCode,
-        });
       }
-    }
-  );
+    );
 };

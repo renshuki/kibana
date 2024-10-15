@@ -7,7 +7,12 @@
 
 import { waitFor, waitForElementToBeRemoved } from '@testing-library/react';
 import React from 'react';
+import {
+  TEST_PROCESS_INDEX,
+  TEST_SESSION_START_TIME,
+} from '../../../common/mocks/constants/session_view_process.mock';
 import { sessionViewProcessEventsMock } from '../../../common/mocks/responses/session_view_process_events.mock';
+import { sessionViewProcessEventsMergedMock } from '../../../common/mocks/responses/session_view_process_events_merged.mock';
 import { AppContextTestRender, createAppRootMockRenderer } from '../../test';
 import { SessionView } from '.';
 import userEvent from '@testing-library/user-event';
@@ -23,31 +28,18 @@ describe('SessionView component', () => {
   let mockedContext: AppContextTestRender;
   let mockedApi: AppContextTestRender['coreStart']['http']['get'];
 
-  beforeAll(() => {
-    // https://stackoverflow.com/questions/39830580/jest-test-fails-typeerror-window-matchmedia-is-not-a-function
-    // xtermjs is using window.matchMedia, which isn't mocked in jest by default.
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
-      value: jest.fn().mockImplementation((query) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: jest.fn(), // Deprecated
-        removeListener: jest.fn(), // Deprecated
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        dispatchEvent: jest.fn(),
-      })),
-    });
-
-    global.ResizeObserver = require('resize-observer-polyfill');
-  });
-
   beforeEach(() => {
     mockedContext = createAppRootMockRenderer();
     mockedApi = mockedContext.coreStart.http.get;
     render = () =>
-      (renderResult = mockedContext.render(<SessionView sessionEntityId="test-entity-id" />));
+      (renderResult = mockedContext.render(
+        <SessionView
+          index={TEST_PROCESS_INDEX}
+          sessionStartTime={TEST_SESSION_START_TIME}
+          sessionEntityId="test-entity-id"
+          trackEvent={jest.fn()}
+        />
+      ));
     mockUseDateFormat.mockImplementation(() => 'MMM D, YYYY @ HH:mm:ss.SSS');
   });
 
@@ -129,7 +121,7 @@ describe('SessionView component', () => {
         });
       });
 
-      it('should show items on the list, and auto selects session leader', async () => {
+      it('should show items on the list', async () => {
         render();
 
         await waitFor(() => {
@@ -144,7 +136,7 @@ describe('SessionView component', () => {
           expect(renderResult.getByTestId('sessionView:sessionViewDetailPanelToggle')).toBeTruthy();
         });
 
-        userEvent.click(renderResult.getByTestId('sessionView:sessionViewDetailPanelToggle'));
+        await userEvent.click(renderResult.getByTestId('sessionView:sessionViewDetailPanelToggle'));
         expect(renderResult.getByText('Process')).toBeTruthy();
         expect(renderResult.getByText('Metadata')).toBeTruthy();
         expect(renderResult.getByText('Alerts')).toBeTruthy();
@@ -157,7 +149,7 @@ describe('SessionView component', () => {
           expect(renderResult.getByTestId('sessionView:sessionViewOptionButton')).toBeTruthy();
         });
 
-        userEvent.click(renderResult.getByTestId('sessionView:sessionViewOptionButton'));
+        await userEvent.click(renderResult.getByTestId('sessionView:sessionViewOptionButton'));
         expect(renderResult.getByText('Display options')).toBeTruthy();
         expect(renderResult.getByText('Timestamp')).toBeTruthy();
         expect(renderResult.getByText('Verbose mode')).toBeTruthy();
@@ -168,6 +160,20 @@ describe('SessionView component', () => {
 
         await waitFor(() => {
           expect(renderResult.getAllByTestId('sessionView:sessionViewRefreshButton')).toBeTruthy();
+        });
+      });
+    });
+
+    describe('And data contains merged process events', () => {
+      beforeEach(async () => {
+        mockedApi.mockResolvedValue(sessionViewProcessEventsMergedMock);
+      });
+
+      it('should show items on the list', async () => {
+        render();
+
+        await waitFor(() => {
+          expect(renderResult.getAllByTestId('sessionView:processTreeNode')).toBeTruthy();
         });
       });
     });
@@ -188,30 +194,6 @@ describe('SessionView component', () => {
 
         await waitFor(() => {
           expect(renderResult.queryByTestId('sessionView:TTYPlayerToggle')).toBeTruthy();
-        });
-      });
-
-      it('should show tty player button as disabled, if session has no output', async () => {
-        mockedApi.mockImplementation(async (options) => {
-          // for some reason the typescript interface for options says its an object with a field called path.
-          // in reality options is a string (which equals the path...)
-          const path = String(options);
-
-          if (path === PROCESS_EVENTS_ROUTE) {
-            return sessionViewProcessEventsMock;
-          } else if (path === GET_TOTAL_IO_BYTES_ROUTE) {
-            return { total: 0 };
-          }
-
-          return { total: 0 };
-        });
-
-        render();
-
-        await waitFor(() => {
-          expect(renderResult.queryByTestId('sessionView:TTYPlayerToggle')?.classList[2]).toContain(
-            'disabled'
-          );
         });
       });
     });

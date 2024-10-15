@@ -22,8 +22,10 @@ export interface Pipeline {
   description?: string;
   version?: number;
   processors: Processor[];
+  _meta?: { [key: string]: any };
   on_failure?: Processor[];
   isManaged?: boolean;
+  deprecated?: boolean;
 }
 
 export interface PipelinesByName {

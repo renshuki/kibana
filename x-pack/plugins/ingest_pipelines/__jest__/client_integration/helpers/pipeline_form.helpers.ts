@@ -29,18 +29,28 @@ export const getFormActions = (testBed: TestBed) => {
     component.update();
   };
 
-  const toggleVersionSwitch = () => {
-    act(() => {
-      form.toggleEuiSwitch('versionToggle');
+  const toggleSwitch = async (testSubject: string) => {
+    await act(async () => {
+      form.toggleEuiSwitch(testSubject);
     });
 
     component.update();
   };
 
+  const getToggleValue = (testSubject: string): boolean =>
+    find(testSubject).props()['aria-checked'];
+
+  const setMetaField = (value: object) => {
+    find('metaEditor').getDOMNode().setAttribute('data-currentvalue', JSON.stringify(value));
+    find('metaEditor').simulate('change');
+  };
+
   return {
+    getToggleValue,
     clickSubmitButton,
     clickShowRequestLink,
-    toggleVersionSwitch,
+    toggleSwitch,
+    setMetaField,
   };
 };
 
@@ -54,6 +64,8 @@ export type PipelineFormTestSubjects =
   | 'pipelineForm'
   | 'versionToggle'
   | 'versionField'
+  | 'metaToggle'
+  | 'metaEditor'
   | 'nameField.input'
   | 'descriptionField.input'
   | 'processorsEditor'
@@ -63,6 +75,7 @@ export type PipelineFormTestSubjects =
   | 'showRequestLink'
   | 'apiRequestFlyout'
   | 'apiRequestFlyout.apiRequestFlyoutTitle'
+  | 'deprecatedPipelineCallout'
   | 'testPipelineFlyout'
   | 'testPipelineFlyout.title'
   | 'documentationLink';

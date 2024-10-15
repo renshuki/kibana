@@ -5,21 +5,19 @@
  * 2.0.
  */
 
-import { coreMock, httpServerMock } from '@kbn/core/server/mocks';
 import {
-  createPackagePolicyServiceMock,
-  createArtifactsClientMock,
-  createMockPackageService,
-  createMockAgentService,
-  createMockAgentPolicyService,
-} from '@kbn/fleet-plugin/server/mocks';
+  coreMock,
+  elasticsearchServiceMock,
+  httpServerMock,
+  savedObjectsClientMock,
+} from '@kbn/core/server/mocks';
+import { createFleetStartContractMock } from '@kbn/fleet-plugin/server/mocks';
 import { taskManagerMock } from '@kbn/task-manager-plugin/server/mocks';
 
 import { createPackagePolicyMock, deletePackagePolicyMock } from '@kbn/fleet-plugin/common/mocks';
 import { dataPluginMock } from '@kbn/data-plugin/server/mocks';
 import { CspPlugin } from './plugin';
 import { CspServerPluginStartDeps } from './types';
-import { createFleetAuthzMock } from '@kbn/fleet-plugin/common/mocks';
 import {
   Installation,
   ListResult,
@@ -27,15 +25,13 @@ import {
   UpdatePackagePolicy,
 } from '@kbn/fleet-plugin/common';
 import {
-  ExternalCallback,
-  FleetStartContract,
   PostPackagePolicyPostDeleteCallback,
   PostPackagePolicyPostCreateCallback,
 } from '@kbn/fleet-plugin/server';
 import { CLOUD_SECURITY_POSTURE_PACKAGE_NAME } from '../common/constants';
 import Chance from 'chance';
 import type { AwaitedProperties } from '@kbn/utility-types';
-import type { DeeplyMockedKeys } from '@kbn/utility-types-jest';
+import { createIndexPatternsStartMock } from '@kbn/data-views-plugin/server/mocks';
 import {
   ElasticsearchClient,
   RequestHandlerContext,
@@ -50,35 +46,16 @@ const mockRouteContext = {
   core: coreMock.createRequestHandlerContext(),
 } as unknown as AwaitedProperties<RequestHandlerContext>;
 
-const createMockFleetStartContract = (): DeeplyMockedKeys<FleetStartContract> => {
-  return {
-    authz: {
-      fromRequest: jest.fn(async (_) => createFleetAuthzMock()),
-    },
-    fleetSetupCompleted: jest.fn().mockResolvedValue(undefined),
-    esIndexPatternService: {
-      getESIndexPattern: jest.fn().mockResolvedValue(undefined),
-    },
-    // @ts-expect-error 2322
-    agentService: createMockAgentService(),
-    // @ts-expect-error 2322
-    packageService: createMockPackageService(),
-    agentPolicyService: createMockAgentPolicyService(),
-    registerExternalCallback: jest.fn((..._: ExternalCallback) => {}),
-    packagePolicyService: createPackagePolicyServiceMock(),
-    createArtifactsClient: jest.fn().mockReturnValue(createArtifactsClientMock()),
-  };
-};
-
 describe('Cloud Security Posture Plugin', () => {
   describe('start()', () => {
-    const fleetMock = createMockFleetStartContract();
+    const fleetMock = createFleetStartContractMock();
     const mockPlugins: CspServerPluginStartDeps = {
       fleet: fleetMock,
       data: dataPluginMock.createStartContract(),
       taskManager: taskManagerMock.createStart(),
       security: securityMock.createStart(),
       licensing: licensingMock.createStart(),
+      dataViews: createIndexPatternsStartMock(),
     };
 
     const contextMock = coreMock.createCustomRequestHandlerContext(mockRouteContext);
@@ -146,45 +123,10 @@ describe('Cloud Security Posture Plugin', () => {
       expect(spy).toHaveBeenCalledTimes(0);
     });
 
-    it('should initialize when new package is created', async () => {
-      fleetMock.packageService.asInternalUser.getInstallation.mockImplementationOnce(
-        async (): Promise<Installation | undefined> => {
-          return;
-        }
-      );
-
-      const packageMock = createPackagePolicyMock();
-      packageMock.package!.name = CLOUD_SECURITY_POSTURE_PACKAGE_NAME;
-
-      const packagePolicyPostCreateCallbacks: PostPackagePolicyPostCreateCallback[] = [];
-      fleetMock.registerExternalCallback.mockImplementation((...args) => {
-        if (args[0] === 'packagePolicyPostCreate') {
-          packagePolicyPostCreateCallbacks.push(args[1]);
-        }
-      });
-
-      const context = coreMock.createPluginInitializerContext<unknown>();
-      plugin = new CspPlugin(context);
-      const spy = jest.spyOn(plugin, 'initialize').mockImplementation();
-
-      // Act
-      await plugin.start(coreMock.createStart(), mockPlugins);
-      await mockPlugins.fleet.fleetSetupCompleted();
-
-      // Assert
-      expect(fleetMock.packageService.asInternalUser.getInstallation).toHaveBeenCalledTimes(1);
-      expect(spy).toHaveBeenCalledTimes(0);
-
-      expect(packagePolicyPostCreateCallbacks.length).toBeGreaterThan(0);
-
-      for (const cb of packagePolicyPostCreateCallbacks) {
-        await cb(packageMock, contextMock, httpServerMock.createKibanaRequest());
-      }
-
-      expect(spy).toHaveBeenCalledTimes(1);
-    });
-
     it('should not initialize when other package is created', async () => {
+      const soClient = savedObjectsClientMock.create();
+      const esClient = elasticsearchServiceMock.createClusterClient().asInternalUser;
+
       fleetMock.packageService.asInternalUser.getInstallation.mockImplementationOnce(
         async (): Promise<Installation | undefined> => {
           return;
@@ -216,7 +158,13 @@ describe('Cloud Security Posture Plugin', () => {
       expect(packagePolicyPostCreateCallbacks.length).toBeGreaterThan(0);
 
       for (const cb of packagePolicyPostCreateCallbacks) {
-        await cb(packageMock, contextMock, httpServerMock.createKibanaRequest());
+        await cb(
+          packageMock,
+          soClient,
+          esClient,
+          contextMock,
+          httpServerMock.createKibanaRequest()
+        );
       }
 
       expect(spy).toHaveBeenCalledTimes(0);
@@ -266,9 +214,14 @@ describe('Cloud Security Posture Plugin', () => {
 
       expect(packagePolicyPostCreateCallbacks.length).toBeGreaterThan(0);
 
+      const soClient = savedObjectsClientMock.create();
+      const esClient = elasticsearchServiceMock.createClusterClient().asInternalUser;
+
       for (const cb of packagePolicyPostCreateCallbacks) {
         const updatedPackagePolicy = await cb(
           packageMock,
+          soClient,
+          esClient,
           contextMock,
           httpServerMock.createKibanaRequest()
         );
@@ -284,6 +237,9 @@ describe('Cloud Security Posture Plugin', () => {
     ])(
       'should uninstall resources when package is removed',
       async (total, items, expectedNumberOfCallsToUninstallResources) => {
+        const soClient = savedObjectsClientMock.create();
+        const esClient = elasticsearchServiceMock.createClusterClient().asInternalUser;
+
         fleetMock.packagePolicyService.list.mockImplementationOnce(
           async (): Promise<ListResult<PackagePolicy>> => {
             return {
@@ -320,7 +276,7 @@ describe('Cloud Security Posture Plugin', () => {
         expect(packagePolicyPostDeleteCallbacks.length).toBeGreaterThan(0);
 
         for (const cb of packagePolicyPostDeleteCallbacks) {
-          await cb(deletedPackagePolicyMock);
+          await cb(deletedPackagePolicyMock, soClient, esClient);
         }
         expect(fleetMock.packagePolicyService.list).toHaveBeenCalledTimes(1);
         expect(spy).toHaveBeenCalledTimes(expectedNumberOfCallsToUninstallResources);

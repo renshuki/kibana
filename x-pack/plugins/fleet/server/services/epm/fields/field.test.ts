@@ -9,9 +9,9 @@ import { readFileSync } from 'fs';
 import path from 'path';
 
 import globby from 'globby';
-import { safeLoad } from 'js-yaml';
+import { load } from 'js-yaml';
 
-import { getField, processFields } from './field';
+import { getField, processFields, processFieldsWithWildcard } from './field';
 import type { Field, Fields } from './field';
 
 // Add our own serialiser to just do JSON.stringify
@@ -30,7 +30,7 @@ test('tests loading fields.yml', () => {
   const files = globby.sync(path.join(__dirname, '/tests/*.yml'));
   for (const file of files) {
     const fieldsYML = readFileSync(file, 'utf-8');
-    const fields: Field[] = safeLoad(fieldsYML);
+    const fields: Field[] = load(fieldsYML);
     const processedFields = processFields(fields);
 
     // Check that content file and generated file are equal
@@ -261,6 +261,37 @@ describe('processFields', () => {
       {
         name: 'a',
         type: 'group-nested',
+        dynamic: true,
+        fields: [
+          {
+            name: 'b',
+            type: 'keyword',
+          },
+        ],
+      },
+    ];
+    expect(processFields(nested)).toEqual(nestedExpanded);
+  });
+
+  test('correctly handles properties of nested type fields with subfields', () => {
+    const nested = [
+      {
+        name: 'a',
+        type: 'nested',
+        dynamic: true,
+        fields: [
+          {
+            name: 'b',
+            type: 'keyword',
+          },
+        ],
+      },
+    ];
+
+    const nestedExpanded = [
+      {
+        name: 'a',
+        type: 'nested',
         dynamic: true,
         fields: [
           {
@@ -669,5 +700,116 @@ describe('processFields', () => {
         }
       ]
     `);
+  });
+
+  test('handle wildcard field inside group', () => {
+    const wildcardFields = [
+      {
+        name: 'prometheus',
+        type: 'group',
+        fields: [
+          {
+            name: 'metrics.*',
+            type: 'double',
+            metric_type: 'gauge',
+          },
+          {
+            name: 'child_group',
+            type: 'group',
+            fields: [
+              {
+                name: 'child.*',
+                type: 'double',
+                metric_type: 'gauge',
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    expect(processFieldsWithWildcard(wildcardFields)).toEqual([
+      {
+        name: 'prometheus',
+        type: 'group',
+        fields: [
+          {
+            name: 'metrics.*',
+            type: 'object',
+            object_type: 'double',
+            metric_type: 'gauge',
+          },
+          {
+            name: 'child_group',
+            type: 'group',
+            fields: [
+              {
+                name: 'child.*',
+                type: 'object',
+                object_type: 'double',
+                metric_type: 'gauge',
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  describe('processFieldsWithWildcard', () => {
+    const wildcardWithObjectTypeYml = `
+    - name: a.*.b
+      type: long
+      format: bytes
+      unit: byte
+      object_type: scaled_float
+      metric_type: gauge
+      description: |
+        Total swap memory.
+`;
+
+    const noWildcardYml = `
+    - name: test
+      type: long
+      format: bytes
+      unit: byte
+      metric_type: gauge
+      description: |
+        Total swap memory.
+`;
+
+    const noWildcardFields: Field[] = load(noWildcardYml);
+    const wildcardWithObjectTypeFields: Field[] = load(wildcardWithObjectTypeYml);
+
+    test('Does not add object type when object_type field when is already defined and name has wildcard', () => {
+      expect(processFieldsWithWildcard(wildcardWithObjectTypeFields)).toMatchInlineSnapshot(`
+        [
+          {
+            "name": "a.*.b",
+            "type": "long",
+            "format": "bytes",
+            "unit": "byte",
+            "object_type": "scaled_float",
+            "metric_type": "gauge",
+            "description": "Total swap memory.\\n"
+          }
+        ]
+      `);
+    });
+
+    test('Returns input fields when name has no wildcard', () => {
+      expect(processFieldsWithWildcard(noWildcardFields)).toMatchInlineSnapshot(`
+        [
+          {
+            "name": "test",
+            "type": "long",
+            "format": "bytes",
+            "unit": "byte",
+            "metric_type": "gauge",
+            "description": "Total swap memory.\\n"
+          }
+        ]
+      `);
+    });
   });
 });

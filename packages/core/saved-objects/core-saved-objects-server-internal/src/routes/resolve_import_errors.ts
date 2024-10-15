@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { extname } from 'path';
@@ -37,6 +38,11 @@ export const registerResolveImportErrorsRoute = (
     {
       path: '/_resolve_import_errors',
       options: {
+        summary: `Resolve import errors`,
+        tags: ['oas-tag:saved objects'],
+        access: 'public',
+        description:
+          'To resolve errors from the import objects API, you can retry certain saved objects, overwrite specific saved objects, and change references to different saved objects',
         body: {
           maxBytes: maxImportPayloadBytes,
           output: 'stream',
@@ -44,9 +50,19 @@ export const registerResolveImportErrorsRoute = (
         },
       },
       validate: {
-        query: schema.object({
-          createNewCopies: schema.boolean({ defaultValue: false }),
-        }),
+        query: schema.object(
+          {
+            createNewCopies: schema.boolean({ defaultValue: false }),
+            compatibilityMode: schema.boolean({ defaultValue: false }),
+          },
+          {
+            validate: (object) => {
+              if (object.createNewCopies && object.compatibilityMode) {
+                return 'cannot use [createNewCopies] with [compatibilityMode]';
+              }
+            },
+          }
+        ),
         body: schema.object({
           file: schema.stream(),
           retries: schema.arrayOf(
@@ -71,11 +87,15 @@ export const registerResolveImportErrorsRoute = (
       },
     },
     catchAndReturnBoomErrors(async (context, req, res) => {
-      const { createNewCopies } = req.query;
+      const { createNewCopies, compatibilityMode } = req.query;
 
       const usageStatsClient = coreUsageData.getClient();
       usageStatsClient
-        .incrementSavedObjectsResolveImportErrors({ request: req, createNewCopies })
+        .incrementSavedObjectsResolveImportErrors({
+          request: req,
+          createNewCopies,
+          compatibilityMode,
+        })
         .catch(() => {});
 
       const file = req.body.file as FileStream;
@@ -111,6 +131,7 @@ export const registerResolveImportErrorsRoute = (
           readStream,
           retries: req.body.retries,
           createNewCopies,
+          compatibilityMode,
         });
 
         return res.ok({ body: result });

@@ -9,13 +9,45 @@ import { mockBrowserFields } from './mock';
 
 import {
   categoryHasFields,
+  getCategory,
+  getDescription,
   getFieldCount,
   filterBrowserFieldsByFieldName,
   filterSelectedBrowserFields,
 } from './helpers';
 import { BrowserFields } from '@kbn/rule-registry-plugin/common';
+import { EcsFlat } from '@elastic/ecs';
 
 describe('helpers', () => {
+  describe('getCategory', () => {
+    test('it returns "host" category for given name host.hostname', () => {
+      const category = getCategory('host.hostname');
+      expect(category).toEqual('host');
+    });
+    test('it returns "base" category for given name _id', () => {
+      const category = getCategory('_id');
+      expect(category).toEqual('base');
+    });
+    test('it returns "base" category for given name @timestamp', () => {
+      const category = getCategory('@timestamp');
+      expect(category).toEqual('base');
+    });
+    test('it returns "(unknown)" category for null field', () => {
+      // @ts-expect-error cannot have 'null' for parameter
+      const category = getCategory(null);
+      expect(category).toEqual('(unknown)');
+    });
+  });
+  describe('getDescription', () => {
+    test('it returns description for given name', () => {
+      const description = getDescription('host.hostname', EcsFlat);
+      expect(description).toMatchInlineSnapshot(`
+        "Hostname of the host.
+        It normally contains what the \`hostname\` command returns on the host machine."
+      `);
+    });
+  });
+
   describe('categoryHasFields', () => {
     test('it returns false if the category fields property is undefined', () => {
       expect(categoryHasFields({})).toBe(false);
@@ -34,7 +66,6 @@ describe('helpers', () => {
               category: 'auditd',
               description: null,
               example: null,
-              format: '',
               indexes: ['auditbeat'],
               name: 'auditd.data.a0',
               searchable: true,
@@ -55,7 +86,6 @@ describe('helpers', () => {
               description:
                 'Ephemeral identifier of this agent (if one exists). This id normally changes across restarts, but `agent.id` does not.',
               example: '8a4f500f',
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'agent.ephemeral_id',
               searchable: true,
@@ -66,7 +96,6 @@ describe('helpers', () => {
               category: 'agent',
               description: null,
               example: null,
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'agent.hostname',
               searchable: true,
@@ -96,7 +125,6 @@ describe('helpers', () => {
               category: 'auditd',
               description: null,
               example: null,
-              format: '',
               indexes: ['auditbeat'],
               name: 'auditd.data.a0',
               searchable: true,
@@ -117,7 +145,6 @@ describe('helpers', () => {
               description:
                 'Ephemeral identifier of this agent (if one exists). This id normally changes across restarts, but `agent.id` does not.',
               example: '8a4f500f',
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'agent.ephemeral_id',
               searchable: true,
@@ -128,7 +155,6 @@ describe('helpers', () => {
               category: 'agent',
               description: null,
               example: null,
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'agent.hostname',
               searchable: true,
@@ -179,7 +205,6 @@ describe('helpers', () => {
               description:
                 'Ephemeral identifier of this agent (if one exists). This id normally changes across restarts, but `agent.id` does not.',
               example: '8a4f500f',
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'agent.ephemeral_id',
               searchable: true,
@@ -191,7 +216,6 @@ describe('helpers', () => {
               description:
                 'Unique identifier of this agent (if one exists). Example: For Beats this would be beat.id.',
               example: '8a4f500d',
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'agent.id',
               searchable: true,
@@ -221,7 +245,6 @@ describe('helpers', () => {
               description:
                 'The cloud account or organization id used to identify different entities in a multi-tenant environment. Examples: AWS account id, Google Cloud ORG Id, or other unique identifier.',
               example: '666777888999',
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'cloud.account.id',
               searchable: true,
@@ -236,11 +259,23 @@ describe('helpers', () => {
               category: 'container',
               description: 'Unique container id.',
               example: null,
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'container.id',
               searchable: true,
               type: 'string',
+            },
+          },
+        },
+        kibana: {
+          fields: {
+            'kibana.alert.case_ids': {
+              name: 'kibana.alert.case_ids',
+              type: 'string',
+              searchable: true,
+              aggregatable: true,
+              readFromDocValues: true,
+              category: 'kibana',
+              format: { id: 'string' },
             },
           },
         },
@@ -253,6 +288,34 @@ describe('helpers', () => {
         })
       ).toEqual(filtered);
     });
+
+    test.each(['cases', 'Cases', 'case', 'Case', 'ca'])(
+      'it matches the cases label with search term: %s',
+      (searchTerm) => {
+        const casesField = {
+          kibana: {
+            fields: {
+              'kibana.alert.case_ids': {
+                name: 'kibana.alert.case_ids',
+                type: 'string',
+                searchable: true,
+                aggregatable: true,
+                readFromDocValues: true,
+                category: 'kibana',
+                format: { id: 'string' },
+              },
+            },
+          },
+        };
+
+        expect(
+          filterBrowserFieldsByFieldName({
+            browserFields: { ...casesField, mockBrowserFields },
+            substring: searchTerm,
+          })
+        ).toEqual(casesField);
+      }
+    );
   });
 
   describe('filterSelectedBrowserFields', () => {
@@ -285,7 +348,6 @@ describe('helpers', () => {
               description:
                 'Ephemeral identifier of this agent (if one exists). This id normally changes across restarts, but `agent.id` does not.',
               example: '8a4f500f',
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'agent.ephemeral_id',
               searchable: true,
@@ -297,7 +359,6 @@ describe('helpers', () => {
               description:
                 'Unique identifier of this agent (if one exists). Example: For Beats this would be beat.id.',
               example: '8a4f500d',
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'agent.id',
               searchable: true,
@@ -312,7 +373,6 @@ describe('helpers', () => {
               category: 'container',
               description: 'Unique container id.',
               example: null,
-              format: '',
               indexes: ['auditbeat', 'filebeat', 'packetbeat'],
               name: 'container.id',
               searchable: true,

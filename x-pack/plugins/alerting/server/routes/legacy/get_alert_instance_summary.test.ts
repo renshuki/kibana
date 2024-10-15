@@ -13,6 +13,7 @@ import { SavedObjectsErrorHelpers } from '@kbn/core/server';
 import { rulesClientMock } from '../../rules_client.mock';
 import { AlertSummary } from '../../types';
 import { trackLegacyRouteUsage } from '../../lib/track_legacy_route_usage';
+import { RULE_SAVED_OBJECT_TYPE } from '../../saved_objects';
 
 const rulesClient = rulesClientMock.create();
 jest.mock('../../lib/license_api_access', () => ({
@@ -47,6 +48,7 @@ describe('getAlertInstanceSummaryRoute', () => {
       average: 0,
       valuesWithTimestamp: {},
     },
+    revision: 0,
   };
 
   it('gets alert instance summary', async () => {
@@ -58,6 +60,7 @@ describe('getAlertInstanceSummaryRoute', () => {
     const [config, handler] = router.get.mock.calls[0];
 
     expect(config.path).toMatchInlineSnapshot(`"/api/alerts/alert/{id}/_instance_summary"`);
+    expect(config.options?.access).toBe('public');
 
     rulesClient.getAlertSummary.mockResolvedValueOnce(mockedAlertInstanceSummary);
 
@@ -87,6 +90,18 @@ describe('getAlertInstanceSummaryRoute', () => {
     expect(res.ok).toHaveBeenCalled();
   });
 
+  it('should have internal access for serverless', async () => {
+    const licenseState = licenseStateMock.create();
+    const router = httpServiceMock.createRouter();
+
+    getAlertInstanceSummaryRoute(router, licenseState, undefined, true);
+
+    const [config] = router.get.mock.calls[0];
+
+    expect(config.path).toMatchInlineSnapshot(`"/api/alerts/alert/{id}/_instance_summary"`);
+    expect(config.options?.access).toBe('internal');
+  });
+
   it('returns NOT-FOUND when alert is not found', async () => {
     const licenseState = licenseStateMock.create();
     const router = httpServiceMock.createRouter();
@@ -97,7 +112,9 @@ describe('getAlertInstanceSummaryRoute', () => {
 
     rulesClient.getAlertSummary = jest
       .fn()
-      .mockResolvedValueOnce(SavedObjectsErrorHelpers.createGenericNotFoundError('alert', '1'));
+      .mockResolvedValueOnce(
+        SavedObjectsErrorHelpers.createGenericNotFoundError(RULE_SAVED_OBJECT_TYPE, '1')
+      );
 
     const [context, req, res] = mockHandlerArguments(
       { rulesClient },

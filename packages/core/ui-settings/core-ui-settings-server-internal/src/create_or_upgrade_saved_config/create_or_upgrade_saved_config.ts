@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { defaults } from 'lodash';
@@ -11,7 +12,7 @@ import { defaults } from 'lodash';
 import type { Logger, LogMeta } from '@kbn/logging';
 import { asyncForEach } from '@kbn/std';
 import type { SavedObjectsClientContract } from '@kbn/core-saved-objects-api-server';
-import { SavedObjectsErrorHelpers } from '@kbn/core-saved-objects-utils-server';
+import { SavedObjectsErrorHelpers } from '@kbn/core-saved-objects-server';
 
 import { getUpgradeableConfig } from './get_upgradeable_config';
 import { transforms } from '../saved_objects';
@@ -63,7 +64,7 @@ export async function createOrUpgradeSavedConfig(
 
   try {
     // create the new SavedConfig
-    await savedObjectsClient.create(type, attributes, { id: version });
+    await savedObjectsClient.create(type, attributes, { id: version, refresh: false });
   } catch (error) {
     if (handleWriteErrors) {
       if (SavedObjectsErrorHelpers.isConflictError(error)) {

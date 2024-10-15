@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useEffect, useReducer, useCallback, useState, useRef } from 'react';
@@ -16,15 +17,19 @@ import { FiltersBuilderReducer } from './reducer';
 import { getPathInArray } from './utils';
 import { FilterLocation } from './types';
 import { filtersBuilderCss } from './filters_builder.styles';
+import { SuggestionsAbstraction } from '../typeahead/suggestions_component';
 
 export interface FiltersBuilderProps {
   filters: Filter[];
   dataView: DataView;
   onChange: (filters: Filter[]) => void;
   timeRangeForSuggestionsOverride?: boolean;
+  filtersForSuggestions?: Filter[];
   maxDepth?: number;
   hideOr?: boolean;
   disabled?: boolean;
+  suggestionsAbstraction?: SuggestionsAbstraction;
+  filtersCount?: number;
 }
 
 const rootLevelConditionType = BooleanRelation.AND;
@@ -35,9 +40,12 @@ function FiltersBuilder({
   dataView,
   filters,
   timeRangeForSuggestionsOverride,
+  filtersForSuggestions,
   maxDepth = DEFAULT_MAX_DEPTH,
   hideOr = false,
   disabled = false,
+  suggestionsAbstraction,
+  filtersCount,
 }: FiltersBuilderProps) {
   const filtersRef = useRef(filters);
   const [state, dispatch] = useReducer(FiltersBuilderReducer, { filters });
@@ -124,11 +132,18 @@ function FiltersBuilder({
           dispatch,
           dropTarget,
           timeRangeForSuggestionsOverride,
+          filtersForSuggestions,
           disabled,
+          suggestionsAbstraction,
         }}
       >
         <EuiDragDropContext onDragEnd={onDragEnd} onDragUpdate={onDragActive}>
-          <FilterGroup filters={state.filters} booleanRelation={rootLevelConditionType} path={''} />
+          <FilterGroup
+            filters={state.filters}
+            booleanRelation={rootLevelConditionType}
+            path={''}
+            filtersCount={filtersCount}
+          />
         </EuiDragDropContext>
       </FiltersBuilderContextType.Provider>
     </div>

@@ -6,28 +6,31 @@
  */
 
 import React from 'react';
-import { EuiBadge, SearchFilterConfig } from '@elastic/eui';
+import type { SearchFilterConfig } from '@elastic/eui';
+import { EuiBadge } from '@elastic/eui';
 import type { Clause, Value } from '@elastic/eui/src/components/search_bar/query/ast';
 import { i18n } from '@kbn/i18n';
 import {
   TRANSFORM_FUNCTION,
   TRANSFORM_MODE,
   TRANSFORM_STATE,
+  TRANSFORM_HEALTH_STATUS,
 } from '../../../../../../common/constants';
 import { isLatestTransform, isPivotTransform } from '../../../../../../common/types/transform';
-import { TransformListRow } from '../../../../common';
-import { getTaskStateBadge } from './use_columns';
+import type { TransformListRow } from '../../../../common';
+import { TransformTaskStateBadge } from './transform_task_state_badge';
+import { TransformHealthColoredDot } from './transform_health_colored_dot';
 
 export const transformFilters: SearchFilterConfig[] = [
   {
     type: 'field_value_selection',
-    field: 'state.state',
+    field: 'stats.state',
     name: i18n.translate('xpack.transform.statusFilter', { defaultMessage: 'Status' }),
     multiSelect: 'or',
     options: Object.values(TRANSFORM_STATE).map((val) => ({
       value: val,
       name: val,
-      view: getTaskStateBadge(val),
+      view: <TransformTaskStateBadge state={val} />,
     })),
   },
   {
@@ -45,14 +48,29 @@ export const transformFilters: SearchFilterConfig[] = [
       ),
     })),
   },
+  {
+    type: 'field_value_selection',
+    field: 'stats.health.status',
+    name: i18n.translate('xpack.transform.healthFilter', { defaultMessage: 'Health' }),
+    multiSelect: false,
+    options: Object.values(TRANSFORM_HEALTH_STATUS).map((val) => ({
+      value: val,
+      name: val,
+      view: <TransformHealthColoredDot compact={true} showToolTip={false} healthStatus={val} />,
+    })),
+  },
 ];
 
 function stringMatch(str: string | undefined, substr: any) {
-  return (
-    typeof str === 'string' &&
-    typeof substr === 'string' &&
-    (str.toLowerCase().match(substr.toLowerCase()) === null) === false
-  );
+  try {
+    return (
+      typeof str === 'string' &&
+      typeof substr === 'string' &&
+      (str.toLowerCase().match(substr.toLowerCase()) === null) === false
+    );
+  } catch (error) {
+    return false;
+  }
 }
 
 export const filterTransforms = (transforms: TransformListRow[], clauses: Clause[]) => {
@@ -93,9 +111,15 @@ export const filterTransforms = (transforms: TransformListRow[], clauses: Clause
       // filter other clauses, i.e. the mode and status filters
       if (c.type !== 'is' && Array.isArray(c.value)) {
         // the status value is an array of string(s) e.g. ['failed', 'stopped']
-        ts = transforms.filter((transform) => (c.value as Value[]).includes(transform.stats.state));
+        ts = transforms.filter(
+          (transform) => transform.stats && (c.value as Value[]).includes(transform.stats.state)
+        );
       } else {
         ts = transforms.filter((transform) => {
+          if (!transform.stats) return false;
+          if (c.type === 'field' && c.field === 'stats.health.status') {
+            return transform.stats.health?.status === c.value;
+          }
           if (c.type === 'field' && c.field === 'mode') {
             return transform.mode === c.value;
           }

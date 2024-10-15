@@ -42,6 +42,21 @@
             "properties": {
               "created": {
                 "type": "keyword"
+              },
+              "action": {
+                "type": "text",
+                "fields": {
+                  "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                  }
+                }
+              },
+              "original": {
+                "type": "text"
+              },
+              "module": {
+                "type": "text"
               }
             }
           },
@@ -51,6 +66,46 @@
                 "properties": {
                   "valid": {
                     "type": "keyword"
+                  }
+                }
+              }
+            }
+          },
+          "process.command_line": {
+            "type": "keyword",
+            "ignore_above": 10, 
+            "fields": {
+              "text": {
+                "type": "text"
+              }
+            }
+          },
+          "nonEcs.command_line": {
+            "type": "keyword",
+            "ignore_above": 10, 
+            "fields": {
+              "text": {
+                "type": "text"
+              }
+            }
+          },
+          "random": {
+            "properties": {
+              "entry_leader": {
+                "properties": {
+                  "name": {
+                    "type": "keyword",
+                    "ignore_above": 1024,
+                    "fields": {
+                      "text": {
+                        "type": "match_only_text"
+                      },
+                      "caseless": {
+                        "type": "keyword",
+                        "ignore_above": 1024,
+                        "normalizer": "lowercase"
+                      }
+                    }
                   }
                 }
               }

@@ -15,21 +15,20 @@ import { i18n } from '@kbn/i18n';
 import * as myI18n from './translations';
 import * as commonI18n from '../translations';
 
-import { useFindRulesInMemory } from '../../../../rule_management_ui/components/rules_table/rules_table/use_find_rules_in_memory';
-import type { Rule } from '../../../../rule_management/logic/types';
 import { getRulesTableColumn } from '../utils';
 import { LinkRuleSwitch } from './link_rule_switch';
+import { useFindRules } from '../../../../rule_management/logic/use_find_rules';
+import type { RuleResponse } from '../../../../../../common/api/detection_engine/model';
 
 export interface ExceptionsAddToRulesComponentProps {
-  initiallySelectedRules?: Rule[];
-  onRuleSelectionChange: (rulesSelectedToAdd: Rule[]) => void;
+  initiallySelectedRules?: RuleResponse[];
+  onRuleSelectionChange: (rulesSelectedToAdd: RuleResponse[]) => void;
 }
 export const useAddToRulesTable = ({
   initiallySelectedRules,
   onRuleSelectionChange,
 }: ExceptionsAddToRulesComponentProps) => {
-  const { data: { rules } = { rules: [], total: 0 }, isFetched } = useFindRulesInMemory({
-    isInMemorySorting: true,
+  const { data: { rules } = { rules: [], total: 0 }, isFetched } = useFindRules({
     filterOptions: {
       filter: '',
       showCustomRules: false,
@@ -37,17 +36,19 @@ export const useAddToRulesTable = ({
       tags: [],
     },
     sortingOptions: undefined,
-    pagination: undefined,
-    refetchInterval: false,
+    pagination: {
+      page: 1,
+      perPage: 10000,
+    },
   });
 
   const [pagination, setPagination] = useState({
     pageIndex: 0,
-    initialPageSize: 5,
+    initialPageSize: 25,
     showPerPageOptions: false,
   });
 
-  const [linkedRules, setLinkedRules] = useState<Rule[]>(initiallySelectedRules || []);
+  const [linkedRules, setLinkedRules] = useState<RuleResponse[]>(initiallySelectedRules || []);
   useEffect(() => {
     onRuleSelectionChange(linkedRules);
   }, [linkedRules, onRuleSelectionChange]);
@@ -63,24 +64,28 @@ export const useAddToRulesTable = ({
   );
 
   const tagOptions = useMemo(() => {
-    const uniqueTags = sortedRulesByLinkedRulesOnTop.reduce((acc: Set<string>, item: Rule) => {
-      const { tags } = item;
+    const uniqueTags = sortedRulesByLinkedRulesOnTop.reduce(
+      (acc: Set<string>, item: RuleResponse) => {
+        const { tags } = item;
 
-      tags.forEach((tag) => acc.add(tag));
-      return acc;
-    }, new Set());
-    return [...uniqueTags].map((tag) => ({ value: tag, name: tag }));
+        tags.forEach((tag) => acc.add(tag));
+        return acc;
+      },
+      new Set()
+    );
+    return Array.from(uniqueTags).map((tag) => ({ value: tag, name: tag, field: 'tags' }));
   }, [sortedRulesByLinkedRulesOnTop]);
 
   const searchOptions = useMemo(
     () => ({
       box: {
         incremental: true,
+        schema: true,
       },
       filters: [
         {
           type: 'field_value_selection' as const,
-          field: 'tags',
+          operator: 'exact',
           name: i18n.translate(
             'xpack.securitySolution.exceptions.addToRulesTable.tagsFilterLabel',
             {
@@ -95,14 +100,14 @@ export const useAddToRulesTable = ({
     [tagOptions]
   );
 
-  const rulesTableColumnsWithLinkSwitch: Array<EuiBasicTableColumn<Rule>> = useMemo(
+  const rulesTableColumnsWithLinkSwitch: Array<EuiBasicTableColumn<RuleResponse>> = useMemo(
     () => [
       {
         field: 'link',
         name: commonI18n.LINK_COLUMN,
         align: 'left' as HorizontalAlignment,
         'data-test-subj': 'ruleActionLinkRuleSwitch',
-        render: (_, rule: Rule) => (
+        render: (_: unknown, rule: RuleResponse) => (
           <LinkRuleSwitch rule={rule} linkedRules={linkedRules} onRuleLinkChange={setLinkedRules} />
         ),
       },

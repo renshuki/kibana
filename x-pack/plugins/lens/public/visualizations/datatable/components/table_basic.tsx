@@ -6,7 +6,7 @@
  */
 
 import './table_basic.scss';
-import { CUSTOM_PALETTE } from '@kbn/coloring';
+import { ColorMappingInputData, PaletteOutput, getFallbackDataBounds } from '@kbn/coloring';
 import React, {
   useLayoutEffect,
   useCallback,
@@ -27,14 +27,17 @@ import {
   EuiDataGridSorting,
   EuiDataGridStyle,
 } from '@elastic/eui';
-import { EmptyPlaceholder } from '@kbn/charts-plugin/public';
+import { CustomPaletteState, EmptyPlaceholder } from '@kbn/charts-plugin/public';
 import { ClickTriggerEvent } from '@kbn/charts-plugin/public';
 import { IconChartDatatable } from '@kbn/chart-icons';
+import useObservable from 'react-use/lib/useObservable';
+import { getColorCategories } from '@kbn/chart-expressions-common';
 import type { LensTableRowContextMenuEvent } from '../../../types';
-import type { FormatFactory } from '../../../../common';
-import type { LensGridDirection } from '../../../../common/expressions';
+import type { FormatFactory } from '../../../../common/types';
+import { RowHeightMode } from '../../../../common/types';
+import { getOriginalId, isTransposeId, LensGridDirection } from '../../../../common/expressions';
 import { VisualizationContainer } from '../../../visualization_container';
-import { findMinMaxByColumnId } from '../../../shared_components';
+import { findMinMaxByColumnId, shouldColorByTerms } from '../../../shared_components';
 import type {
   DataContextType,
   DatatableRenderProps,
@@ -46,6 +49,7 @@ import type {
 import { createGridColumns } from './columns';
 import { createGridCell } from './cell_value';
 import {
+  buildSchemaDetectors,
   createGridFilterHandler,
   createGridHideHandler,
   createGridResizeHandler,
@@ -53,7 +57,13 @@ import {
   createTransposeColumnFilterHandler,
 } from './table_actions';
 import { getFinalSummaryConfiguration } from '../../../../common/expressions/datatable/summary';
-import { getOriginalId } from '../../../../common/expressions/datatable/transpose_helpers';
+import { DEFAULT_HEADER_ROW_HEIGHT, DEFAULT_HEADER_ROW_HEIGHT_LINES } from './constants';
+import {
+  getFieldMetaFromDatatable,
+  isNumericField,
+} from '../../../../common/expressions/datatable/utils';
+import { CellColorFn, getCellColorFn } from '../../../shared_components/coloring/get_cell_color_fn';
+import { getColumnAlignment } from '../utils';
 
 export const DataContext = React.createContext<DataContextType>({});
 
@@ -69,6 +79,7 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
   const dataGridRef = useRef<EuiDataGridRefProps>(null);
 
   const isInteractive = props.interactive;
+  const isDarkMode = useObservable(props.theme.theme$, { darkMode: false }).darkMode;
 
   const [columnConfig, setColumnConfig] = useState({
     columns: props.args.columns,
@@ -141,7 +152,7 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
 
   const hasAtLeastOneRowClickAction = props.rowHasRowClickTriggerActions?.some((x) => x);
 
-  const { getType, dispatchEvent, renderMode, formatFactory } = props;
+  const { getType, dispatchEvent, renderMode, formatFactory, syncColors } = props;
 
   const formatters: Record<string, ReturnType<FormatFactory>> = useMemo(
     () =>
@@ -176,13 +187,13 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
   );
 
   const onChangeItemsPerPage = useCallback(
-    (pageSize) => onEditAction({ action: 'pagesize', size: pageSize }),
+    (pageSize: number) => onEditAction({ action: 'pagesize', size: pageSize }),
     [onEditAction]
   );
 
   // active page isn't persisted, so we manage this state locally
   const onChangePage = useCallback(
-    (pageIndex) => {
+    (pageIndex: number) => {
       setPagination((_pagination) => {
         if (_pagination) {
           return { pageSize: _pagination?.pageSize, pageIndex };
@@ -217,15 +228,12 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
     [onClickValue, untransposedDataRef, isInteractive]
   );
 
-  const bucketColumns = useMemo(
+  const bucketedColumns = useMemo(
     () =>
       columnConfig.columns
         .filter((_col, index) => {
           const col = firstTableRef.current.columns[index];
-          return (
-            col?.meta?.sourceParams?.type &&
-            getType(col.meta.sourceParams.type as string)?.type === 'buckets'
-          );
+          return getType(col?.meta)?.type === 'buckets';
         })
         .map((col) => col.columnId),
     [firstTableRef, columnConfig, getType]
@@ -233,8 +241,8 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
 
   const isEmpty =
     firstLocalTable.rows.length === 0 ||
-    (bucketColumns.length &&
-      props.data.rows.every((row) => bucketColumns.every((col) => row[col] == null)));
+    (bucketedColumns.length > 0 &&
+      props.data.rows.every((row) => bucketedColumns.every((col) => row[col] == null)));
 
   const visibleColumns = useMemo(
     () =>
@@ -243,8 +251,6 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
         .map((col) => col.columnId),
     [columnConfig]
   );
-
-  const { sortingColumnId: sortBy, sortingDirection: sortDirection } = props.args;
 
   const isReadOnlySorted = renderMode !== 'edit';
 
@@ -261,50 +267,39 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
     [onEditAction, setColumnConfig, columnConfig, isInteractive]
   );
 
-  const isNumericMap: Record<string, boolean> = useMemo(() => {
-    const numericMap: Record<string, boolean> = {};
-    for (const column of firstLocalTable.columns) {
-      // filtered metrics result as "number" type, but have no field
-      numericMap[column.id] =
-        (column.meta.type === 'number' && column.meta.field != null) ||
-        // as fallback check the first available value type
-        // mind here: date can be seen as numbers, to carefully check that is a filtered metric
-        (column.meta.field == null &&
-          typeof firstLocalTable.rows.find((row) => row[column.id] != null)?.[column.id] ===
-            'number');
-    }
-    return numericMap;
-  }, [firstLocalTable]);
+  const isNumericMap: Map<string, boolean> = useMemo(
+    () =>
+      firstLocalTable.columns.reduce((acc, column) => {
+        acc.set(column.id, isNumericField(column.meta));
+        return acc;
+      }, new Map<string, boolean>()),
+    [firstLocalTable.columns]
+  );
 
-  const alignments: Record<string, 'left' | 'right' | 'center'> = useMemo(() => {
-    const alignmentMap: Record<string, 'left' | 'right' | 'center'> = {};
-    columnConfig.columns.forEach((column) => {
-      if (column.alignment) {
-        alignmentMap[column.columnId] = column.alignment;
-      } else {
-        alignmentMap[column.columnId] = isNumericMap[column.columnId] ? 'right' : 'left';
-      }
-    });
-    return alignmentMap;
-  }, [columnConfig, isNumericMap]);
+  const alignments: Map<string, 'left' | 'right' | 'center'> = useMemo(() => {
+    return columnConfig.columns.reduce((acc, column) => {
+      acc.set(column.columnId, getColumnAlignment(column, isNumericMap.get(column.columnId)));
+      return acc;
+    }, new Map<string, 'left' | 'right' | 'center'>());
+  }, [columnConfig.columns, isNumericMap]);
 
-  const minMaxByColumnId: Record<string, { min: number; max: number }> = useMemo(() => {
+  const minMaxByColumnId: Map<string, { min: number; max: number }> = useMemo(() => {
     return findMinMaxByColumnId(
       columnConfig.columns
-        .filter(({ columnId }) => isNumericMap[columnId])
+        .filter(({ columnId }) => isNumericMap.get(columnId))
         .map(({ columnId }) => columnId),
       props.data,
       getOriginalId
     );
   }, [props.data, isNumericMap, columnConfig]);
 
-  const headerRowHeight = props.args.headerRowHeight ?? 'single';
-  const headerRowLines = props.args.headerRowHeightLines ?? 1;
+  const headerRowHeight = props.args.headerRowHeight ?? DEFAULT_HEADER_ROW_HEIGHT;
+  const headerRowLines = props.args.headerRowHeightLines ?? DEFAULT_HEADER_ROW_HEIGHT_LINES;
 
   const columns: EuiDataGridColumn[] = useMemo(
     () =>
       createGridColumns(
-        bucketColumns,
+        bucketedColumns,
         firstLocalTable,
         handleFilterClick,
         handleTransposedColumnClick,
@@ -322,7 +317,7 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
         props.columnFilterable
       ),
     [
-      bucketColumns,
+      bucketedColumns,
       firstLocalTable,
       handleFilterClick,
       handleTransposedColumnClick,
@@ -338,6 +333,11 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
       columnCellValueActions,
       props.columnFilterable,
     ]
+  );
+
+  const schemaDetectors = useMemo(
+    () => buildSchemaDetectors(columns, columnConfig, firstLocalTable, formatters),
+    [columns, firstLocalTable, columnConfig, formatters]
   );
 
   const trailingControlColumns: EuiDataGridControlColumn[] = useMemo(() => {
@@ -382,17 +382,71 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
     isInteractive,
   ]);
 
-  const renderCellValue = useMemo(
-    () =>
-      createGridCell(
-        formatters,
-        columnConfig,
-        DataContext,
-        props.uiSettings,
-        props.args.fitRowToContent
-      ),
-    [formatters, columnConfig, props.uiSettings, props.args.fitRowToContent]
-  );
+  const renderCellValue = useMemo(() => {
+    const cellColorFnMap = new Map<string, CellColorFn>();
+    const getCellColor = (
+      columnId: string,
+      palette?: PaletteOutput<CustomPaletteState>,
+      colorMapping?: string
+    ): CellColorFn => {
+      const originalId = getOriginalId(columnId); // workout what bucket the value belongs to
+
+      if (cellColorFnMap.has(originalId)) {
+        return cellColorFnMap.get(originalId)!;
+      }
+
+      const dataType = getFieldMetaFromDatatable(firstLocalTable, originalId)?.type;
+      const isBucketed = bucketedColumns.some((id) => id === columnId);
+      const colorByTerms = shouldColorByTerms(dataType, isBucketed);
+
+      const data: ColorMappingInputData = colorByTerms
+        ? {
+            type: 'categories',
+            categories: getColorCategories(
+              firstLocalTable.rows,
+              originalId,
+              isTransposeId(columnId),
+              [null]
+            ),
+          }
+        : {
+            type: 'ranges',
+            bins: 0,
+            ...(minMaxByColumnId.get(originalId) ?? getFallbackDataBounds()),
+          };
+      const colorFn = getCellColorFn(
+        props.paletteService,
+        data,
+        colorByTerms,
+        isDarkMode,
+        syncColors,
+        palette,
+        colorMapping
+      );
+      cellColorFnMap.set(originalId, colorFn);
+
+      return colorFn;
+    };
+
+    return createGridCell(
+      formatters,
+      columnConfig,
+      DataContext,
+      isDarkMode,
+      getCellColor,
+      props.args.fitRowToContent
+    );
+  }, [
+    formatters,
+    columnConfig,
+    isDarkMode,
+    props.args.fitRowToContent,
+    props.paletteService,
+    firstLocalTable,
+    bucketedColumns,
+    minMaxByColumnId,
+    syncColors,
+  ]);
 
   const columnVisibility = useMemo(
     () => ({
@@ -403,8 +457,13 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
   );
 
   const sorting = useMemo<EuiDataGridSorting | undefined>(
-    () => createGridSortingConfig(sortBy, sortDirection as LensGridDirection, onEditAction),
-    [onEditAction, sortBy, sortDirection]
+    () =>
+      createGridSortingConfig(
+        columnConfig.sortingColumnId,
+        columnConfig.sortingDirection as LensGridDirection,
+        onEditAction
+      ),
+    [onEditAction, columnConfig]
   );
 
   const renderSummaryRow = useMemo(() => {
@@ -425,7 +484,7 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
         ])
       );
       return ({ columnId }: { columnId: string }) => {
-        const currentAlignment = alignments && alignments[columnId];
+        const currentAlignment = alignments.get(columnId);
         const alignmentClassName = `lnsTableCell--${currentAlignment}`;
         const columnName =
           columns.find(({ id }) => id === columnId)?.displayAsText?.replace(/ /g, '-') || columnId;
@@ -463,7 +522,6 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
           rowHasRowClickTriggerActions: props.rowHasRowClickTriggerActions,
           alignments,
           minMaxByColumnId,
-          getColorForValue: props.paletteService.get(CUSTOM_PALETTE).getColorForValue!,
           handleFilterClick,
         }}
       >
@@ -472,19 +530,21 @@ export const DatatableComponent = (props: DatatableRenderProps) => {
           data-test-subj="lnsDataTable"
           rowHeightsOptions={{
             defaultHeight: props.args.fitRowToContent
-              ? 'auto'
+              ? RowHeightMode.auto
               : props.args.rowHeightLines && props.args.rowHeightLines !== 1
               ? {
                   lineCount: props.args.rowHeightLines,
                 }
               : undefined,
           }}
+          inMemory={{ level: 'sorting' }}
           columns={columns}
           columnVisibility={columnVisibility}
           trailingControlColumns={trailingControlColumns}
           rowCount={firstLocalTable.rows.length}
           renderCellValue={renderCellValue}
           gridStyle={gridStyle}
+          schemaDetectors={schemaDetectors}
           sorting={sorting}
           pagination={
             pagination && {

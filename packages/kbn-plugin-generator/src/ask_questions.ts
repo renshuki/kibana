@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import Path from 'path';
@@ -58,36 +59,10 @@ export const QUESTIONS = [
     default: undefined,
   },
   {
-    name: 'internal',
-    type: 'confirm',
-    message: 'Will this plugin be part of the Kibana repository?',
-    default: false,
-  },
-  {
-    name: 'internalLocation',
-    type: 'list',
-    message: 'What type of internal plugin would you like to create',
-    choices: INTERNAL_PLUGIN_LOCATIONS,
-    default: INTERNAL_PLUGIN_LOCATIONS[0].value,
-    when: ({ internal }: Answers) => internal,
-  },
-  {
     name: 'ownerName',
     message: 'Who is developing and maintaining this plugin?',
     default: undefined,
     when: ({ internal }: Answers) => !internal,
-  },
-  {
-    name: 'ownerName',
-    message: 'What team will maintain this plugin?',
-    default: undefined,
-    when: ({ internal }: Answers) => internal,
-  },
-  {
-    name: 'githubTeam',
-    message: 'What is your gitHub team alias?',
-    default: undefined,
-    when: ({ internal }: Answers) => internal,
   },
   {
     name: 'ui',

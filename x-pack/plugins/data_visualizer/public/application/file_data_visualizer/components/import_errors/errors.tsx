@@ -6,12 +6,14 @@
  */
 
 import { FormattedMessage } from '@kbn/i18n-react';
-import React, { FC } from 'react';
+import type { FC } from 'react';
+import React from 'react';
 import { i18n } from '@kbn/i18n';
 
 import { EuiCallOut, EuiAccordion } from '@elastic/eui';
 
-import { IMPORT_STATUS, Statuses } from '../import_progress';
+import type { Statuses } from '../import_progress';
+import { IMPORT_STATUS } from '../import_progress';
 
 interface ImportError {
   msg: string;
@@ -128,17 +130,19 @@ function toString(error: any): ImportError {
       return { msg: error.msg };
     } else if (error.error !== undefined) {
       if (typeof error.error === 'object') {
-        if (error.error.reason !== undefined) {
-          // this will catch a bulk ingest failure
-          const errorObj: ImportError = { msg: error.error.reason };
-          if (error.error.root_cause !== undefined) {
-            errorObj.more = JSON.stringify(error.error.root_cause);
+        // this will catch a bulk ingest failure
+        const reason = error.error.reason ?? error.error.meta.body.error.reason;
+        if (reason !== undefined) {
+          const errorObj: ImportError = { msg: reason };
+          const rootCause = error.error.root_cause ?? error.error.meta.body.error.root_cause;
+          if (rootCause !== undefined) {
+            errorObj.more = JSON.stringify(rootCause);
           }
           return errorObj;
         }
 
+        // this will catch javascript errors such as JSON parsing issues
         if (error.error.message !== undefined) {
-          // this will catch javascript errors such as JSON parsing issues
           return { msg: error.error.message };
         }
       } else {

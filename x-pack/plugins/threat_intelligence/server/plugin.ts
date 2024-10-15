@@ -6,7 +6,10 @@
  */
 
 import type { PluginInitializerContext, Logger } from '@kbn/core/server';
-import { THREAT_INTELLIGENCE_SEARCH_STRATEGY_NAME } from '../common/constants';
+import {
+  CASE_ATTACHMENT_TYPE_ID,
+  THREAT_INTELLIGENCE_SEARCH_STRATEGY_NAME,
+} from '../common/constants';
 import {
   IThreatIntelligencePlugin,
   ThreatIntelligencePluginCoreSetupDependencies,
@@ -27,7 +30,7 @@ export class ThreatIntelligencePlugin implements IThreatIntelligencePlugin {
   ) {
     this.logger.debug('setup');
 
-    core.getStartServices().then(([_, { data: dataStartService }]) => {
+    void core.getStartServices().then(([_, { data: dataStartService }]) => {
       const threatIntelligenceSearchStrategy =
         threatIntelligenceSearchStrategyProvider(dataStartService);
 
@@ -38,6 +41,8 @@ export class ThreatIntelligencePlugin implements IThreatIntelligencePlugin {
 
       this.logger.debug(`search strategy "${THREAT_INTELLIGENCE_SEARCH_STRATEGY_NAME}" registered`);
     });
+
+    plugins.cases.attachmentFramework.registerExternalReference({ id: CASE_ATTACHMENT_TYPE_ID });
 
     return {};
   }

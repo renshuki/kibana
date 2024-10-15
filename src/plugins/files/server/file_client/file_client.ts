@@ -1,15 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import moment from 'moment';
 import { Readable } from 'stream';
 import mimeType from 'mime';
-import cuid from 'cuid';
+import { createId } from '@paralleldrive/cuid2';
 import { type Logger, SavedObjectsErrorHelpers } from '@kbn/core/server';
 import type { AuditLogger } from '@kbn/security-plugin/server';
 import type { UsageCounter } from '@kbn/usage-collection-plugin/server';
@@ -40,8 +41,13 @@ import {
   withReportPerformanceMetric,
   FILE_DOWNLOAD_PERFORMANCE_EVENT_NAME,
 } from '../performance';
+import { createFileHashTransform } from './stream_transforms/file_hash_transform';
+import { isFileHashTransform } from './stream_transforms/file_hash_transform/file_hash_transform';
+import { SupportedFileHashAlgorithm } from '../saved_objects/file';
 
 export type UploadOptions = Omit<BlobUploadOptions, 'id'>;
+
+const fourMiB = 4 * 1024 * 1024;
 
 export function createFileClient({
   fileKindDescriptor,
@@ -124,7 +130,7 @@ export class FileClientImpl implements FileClient {
   public async create<M = unknown>({ id, metadata }: CreateArgs): Promise<File<M>> {
     const serializedMetadata = serializeJSON({ ...metadata, mimeType: metadata.mime });
     const result = await this.metadataClient.create({
-      id: id || cuid(),
+      id: id || createId(),
       metadata: {
         ...createDefaultFileAttributes(),
         ...serializedMetadata,
@@ -206,23 +212,53 @@ export class FileClientImpl implements FileClient {
 
   /**
    * Upload a blob
-   * @param id - The ID of the file content is associated with
+   * @param file - The file Record that the content is associated with
    * @param rs - The readable stream of the file content
    * @param options - Options for the upload
    */
   public upload = async (
-    id: string,
+    file: FileJSON,
     rs: Readable,
     options?: UploadOptions
-  ): ReturnType<BlobStorageClient['upload']> => {
-    return this.blobStorageClient.upload(rs, {
-      ...options,
-      transforms: [
-        ...(options?.transforms || []),
-        enforceMaxByteSizeTransform(this.fileKindDescriptor.maxSizeBytes ?? Infinity),
-      ],
-      id,
+  ): Promise<UploadResult> => {
+    const { maxSizeBytes, hashes } = this.fileKindDescriptor;
+    const { transforms = [], ...blobOptions } = options || {};
+
+    let maxFileSize: number = typeof maxSizeBytes === 'number' ? maxSizeBytes : fourMiB;
+
+    if (typeof maxSizeBytes === 'function') {
+      const sizeLimitPerFile = maxSizeBytes(file);
+      if (typeof sizeLimitPerFile === 'number') {
+        maxFileSize = sizeLimitPerFile;
+      }
+    }
+
+    transforms.push(enforceMaxByteSizeTransform(maxFileSize));
+
+    if (hashes && hashes.length) {
+      for (const hash of hashes) {
+        transforms.push(createFileHashTransform(hash));
+      }
+    }
+
+    const uploadResult = await this.blobStorageClient.upload(rs, {
+      ...blobOptions,
+      transforms,
+      id: file.id,
     });
+
+    const result: UploadResult = { ...uploadResult, hashes: [] };
+
+    if (transforms && transforms.length) {
+      for (const transform of transforms) {
+        if (isFileHashTransform(transform)) {
+          const fileHash = transform.getFileHash();
+          result.hashes.push(fileHash);
+        }
+      }
+    }
+
+    return result;
   };
 
   public download: BlobStorageClient['download'] = async (args) => {
@@ -286,4 +322,13 @@ export class FileClientImpl implements FileClient {
     }
     return this.internalFileShareService.list(args);
   };
+}
+
+export interface UploadResult {
+  id: string;
+  size: number;
+  hashes: Array<{
+    algorithm: SupportedFileHashAlgorithm;
+    value: string;
+  }>;
 }

@@ -1,15 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import chalk from 'chalk';
+import { getPackages } from '@kbn/repo-packages';
 import { CliArgs, Env, RawConfigService } from '@kbn/config';
 import { CriticalError } from '@kbn/core-base-server-internal';
 import { Root } from './root';
+import { MIGRATION_EXCEPTION_CODE } from './constants';
 
 interface BootstrapArgs {
   configs: string[];
@@ -39,12 +42,19 @@ export async function bootstrap({ configs, cliArgs, applyConfigOverrides }: Boot
   const env = Env.createDefault(REPO_ROOT, {
     configs,
     cliArgs,
+    repoPackages: getPackages(REPO_ROOT),
   });
 
   const rawConfigService = new RawConfigService(env.configs, applyConfigOverrides);
   rawConfigService.loadConfig();
 
   const root = new Root(rawConfigService, env, onRootShutdown);
+  const cliLogger = root.logger.get('cli');
+  const rootLogger = root.logger.get('root');
+
+  rootLogger.info('Kibana is starting');
+
+  cliLogger.debug('Kibana configurations evaluated in this order: ' + env.configs.join(', '));
 
   process.on('SIGHUP', () => reloadConfiguration());
 
@@ -60,7 +70,6 @@ export async function bootstrap({ configs, cliArgs, applyConfigOverrides }: Boot
   });
 
   function reloadConfiguration(reason = 'SIGHUP signal received') {
-    const cliLogger = root.logger.get('cli');
     cliLogger.info(`Reloading Kibana configuration (reason: ${reason}).`, { tags: ['config'] });
 
     try {
@@ -72,8 +81,14 @@ export async function bootstrap({ configs, cliArgs, applyConfigOverrides }: Boot
     cliLogger.info(`Reloaded Kibana configuration (reason: ${reason}).`, { tags: ['config'] });
   }
 
-  process.on('SIGINT', () => shutdown());
-  process.on('SIGTERM', () => shutdown());
+  process.on('SIGINT', () => {
+    rootLogger.info('SIGINT received - initiating shutdown');
+    shutdown();
+  });
+  process.on('SIGTERM', () => {
+    rootLogger.info('SIGTERM received - initiating shutdown');
+    shutdown();
+  });
 
   function shutdown(reason?: Error) {
     rawConfigService.stop();
@@ -81,20 +96,24 @@ export async function bootstrap({ configs, cliArgs, applyConfigOverrides }: Boot
   }
 
   try {
-    const { preboot } = await root.preboot();
+    const prebootContract = await root.preboot();
+    let isSetupOnHold = false;
 
-    // If setup is on hold then preboot server is supposed to serve user requests and we can let
-    // dev parent process know that we are ready for dev mode.
-    const isSetupOnHold = preboot.isSetupOnHold();
-    if (process.send && isSetupOnHold) {
-      process.send(['SERVER_LISTENING']);
-    }
+    if (prebootContract) {
+      const { preboot } = prebootContract;
+      // If setup is on hold then preboot server is supposed to serve user requests and we can let
+      // dev parent process know that we are ready for dev mode.
+      isSetupOnHold = preboot.isSetupOnHold();
+      if (process.send && isSetupOnHold) {
+        process.send(['SERVER_LISTENING']);
+      }
 
-    if (isSetupOnHold) {
-      root.logger.get().info('Holding setup until preboot stage is completed.');
-      const { shouldReloadConfig } = await preboot.waitUntilCanSetup();
-      if (shouldReloadConfig) {
-        await reloadConfiguration('configuration might have changed during preboot stage');
+      if (isSetupOnHold) {
+        rootLogger.info('Holding setup until preboot stage is completed.');
+        const { shouldReloadConfig } = await preboot.waitUntilCanSetup();
+        if (shouldReloadConfig) {
+          await reloadConfiguration('configuration might have changed during preboot stage');
+        }
       }
     }
 
@@ -112,11 +131,13 @@ export async function bootstrap({ configs, cliArgs, applyConfigOverrides }: Boot
 
 function onRootShutdown(reason?: any) {
   if (reason !== undefined) {
-    // There is a chance that logger wasn't configured properly and error that
-    // that forced root to shut down could go unnoticed. To prevent this we always
-    // mirror such fatal errors in standard output with `console.error`.
-    // eslint-disable-next-line no-console
-    console.error(`\n${chalk.white.bgRed(' FATAL ')} ${reason}\n`);
+    if (reason.code !== MIGRATION_EXCEPTION_CODE) {
+      // There is a chance that logger wasn't configured properly and error that
+      // that forced root to shut down could go unnoticed. To prevent this we always
+      // mirror such fatal errors in standard output with `console.error`.
+      // eslint-disable-next-line no-console
+      console.error(`\n${chalk.white.bgRed(' FATAL ')} ${reason}\n`);
+    }
 
     process.exit(reason instanceof CriticalError ? reason.processExitCode : 1);
   }

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { Logger } from '@kbn/logging';
@@ -41,6 +42,7 @@ export function registerRoutes({
   migratorPromise,
   kibanaVersion,
   kibanaIndex,
+  isServerless,
 }: {
   http: InternalHttpServiceSetup;
   coreUsageData: InternalCoreUsageDataSetup;
@@ -49,21 +51,30 @@ export function registerRoutes({
   migratorPromise: Promise<IKibanaMigrator>;
   kibanaVersion: string;
   kibanaIndex: string;
+  isServerless: boolean;
 }) {
   const router =
     http.createRouter<InternalSavedObjectsRequestHandlerContext>('/api/saved_objects/');
 
-  registerGetRoute(router, { coreUsageData });
-  registerResolveRoute(router, { coreUsageData });
-  registerCreateRoute(router, { coreUsageData });
-  registerDeleteRoute(router, { coreUsageData });
-  registerFindRoute(router, { coreUsageData });
-  registerUpdateRoute(router, { coreUsageData });
-  registerBulkGetRoute(router, { coreUsageData });
-  registerBulkCreateRoute(router, { coreUsageData });
-  registerBulkResolveRoute(router, { coreUsageData });
-  registerBulkUpdateRoute(router, { coreUsageData });
-  registerBulkDeleteRoute(router, { coreUsageData });
+  const internalOnServerless = isServerless ? 'internal' : 'public';
+
+  registerGetRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+  registerResolveRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+  registerCreateRoute(router, {
+    config,
+    coreUsageData,
+    logger,
+    access: internalOnServerless,
+  });
+  registerDeleteRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+  registerFindRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+  registerUpdateRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+  registerBulkGetRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+  registerBulkCreateRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+  registerBulkResolveRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+  registerBulkUpdateRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+  registerBulkDeleteRoute(router, { config, coreUsageData, logger, access: internalOnServerless });
+
   registerExportRoute(router, { config, coreUsageData });
   registerImportRoute(router, { config, coreUsageData });
   registerResolveImportErrorsRoute(router, { config, coreUsageData });
@@ -73,8 +84,14 @@ export function registerRoutes({
     maxImportPayloadBytes: config.maxImportPayloadBytes,
     coreUsageData,
     logger,
+    access: internalOnServerless,
   });
-  registerLegacyExportRoute(legacyRouter, { kibanaVersion, coreUsageData, logger });
+  registerLegacyExportRoute(legacyRouter, {
+    kibanaVersion,
+    coreUsageData,
+    logger,
+    access: internalOnServerless,
+  });
 
   const internalRouter = http.createRouter<InternalSavedObjectsRequestHandlerContext>(
     '/internal/saved_objects/'

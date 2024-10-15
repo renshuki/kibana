@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
+import type { FC } from 'react';
+import React from 'react';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { i18n } from '@kbn/i18n';
 import {
@@ -76,6 +77,7 @@ export const NotificationsIndicator: FC = () => {
             <EuiHealth
               css={{ display: 'block' }}
               color="primary"
+              role="img"
               aria-label={i18n.translate('xpack.ml.notificationsIndicator.unreadIcon', {
                 defaultMessage: 'Unread notifications indicator.',
               })}

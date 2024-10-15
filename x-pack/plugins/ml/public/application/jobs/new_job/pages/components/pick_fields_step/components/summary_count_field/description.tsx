@@ -5,18 +5,19 @@
  * 2.0.
  */
 
-import React, { memo, FC } from 'react';
+import type { FC, PropsWithChildren } from 'react';
+import React, { memo } from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { EuiDescribedFormGroup, EuiFormRow, EuiLink } from '@elastic/eui';
-import { Validation } from '../../../../../common/job_validator';
+import type { Validation } from '../../../../../common/job_validator';
 import { useMlKibana } from '../../../../../../../contexts/kibana';
 
 interface Props {
   validation: Validation;
 }
 
-export const Description: FC<Props> = memo(({ children, validation }) => {
+export const Description: FC<PropsWithChildren<Props>> = memo(({ children, validation }) => {
   const title = i18n.translate('xpack.ml.newJob.wizard.pickFieldsStep.summaryCountField.title', {
     defaultMessage: 'Summary count field',
   });
@@ -44,7 +45,7 @@ export const Description: FC<Props> = memo(({ children, validation }) => {
         />
       }
     >
-      <EuiFormRow label={title} error={validation.message} isInvalid={validation.valid === false}>
+      <EuiFormRow error={validation.message} isInvalid={validation.valid === false}>
         <>{children}</>
       </EuiFormRow>
     </EuiDescribedFormGroup>

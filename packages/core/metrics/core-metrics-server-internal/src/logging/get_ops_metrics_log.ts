@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import numeral from '@elastic/numeral';
@@ -55,6 +56,11 @@ export function getEcsOpsMetricsLog(metrics: OpsMetrics) {
       ).format('0.000')} }`
     : '';
 
+  const eventLoopUtilizationVal = process?.event_loop_utilization;
+  const eventLoopUtilizationMsg = eventLoopUtilizationVal
+    ? ` utilization: ${numeral(process?.event_loop_utilization.utilization).format('0.00000')}`
+    : '';
+
   const loadEntries = {
     '1m': os?.load ? os?.load['1m'] : undefined,
     '5m': os?.load ? os?.load['5m'] : undefined,
@@ -81,10 +87,16 @@ export function getEcsOpsMetricsLog(metrics: OpsMetrics) {
       memory: {
         heap: {
           usedInBytes: processMemoryUsedInBytes,
+          totalInBytes: process?.memory?.heap.total_in_bytes,
+          sizeLimit: process?.memory?.heap.size_limit,
         },
+        residentSetSizeInBytes: process?.memory?.resident_set_size_in_bytes,
+        externalInBytes: process?.memory?.external_in_bytes,
+        arrayBuffersInBytes: process?.memory?.array_buffers_in_bytes,
       },
       eventLoopDelay: eventLoopDelayVal,
       eventLoopDelayHistogram: eventLoopDelayHistVals,
+      eventLoopUtilization: eventLoopUtilizationVal,
     },
     host: {
       os: {
@@ -101,6 +113,7 @@ export function getEcsOpsMetricsLog(metrics: OpsMetrics) {
       loadValsMsg,
       eventLoopDelayValMsg,
       eventLoopDelayHistMsg,
+      eventLoopUtilizationMsg,
     ].join(''),
     meta,
   };

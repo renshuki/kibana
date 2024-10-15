@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, useCallback, useMemo, useState } from 'react';
+import type { FC } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   EuiFlexGroup,
   EuiFlexItem,
@@ -15,35 +16,44 @@ import {
   EuiPanel,
   EuiSpacer,
   EuiCallOut,
-  EuiRange,
   EuiSelect,
   EuiFormRow,
 } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
-import { debounce, sortedIndex } from 'lodash';
 import { FormattedMessage } from '@kbn/i18n-react';
-import { isDefined } from '@kbn/ml-is-defined';
-import type { DocumentCountChartPoint } from './document_count_chart';
+import type { LogRateHistogramItem } from '@kbn/aiops-log-rate-analysis';
+import type { RandomSamplerOption } from '../../../index_data_visualizer/constants/random_sampler';
 import {
-  RANDOM_SAMPLER_STEP,
-  RANDOM_SAMPLER_PROBABILITIES,
-  RandomSamplerOption,
   RANDOM_SAMPLER_SELECT_OPTIONS,
   RANDOM_SAMPLER_OPTION,
 } from '../../../index_data_visualizer/constants/random_sampler';
 import { TotalCountHeader } from './total_count_header';
 import type { DocumentCountStats } from '../../../../../common/types/field_stats';
 import { DocumentCountChart } from './document_count_chart';
+import { RandomSamplerRangeSlider } from '../random_sampling_menu/random_sampler_range_slider';
+import { ProbabilityUsedMessage } from '../random_sampling_menu/probability_used';
 
 export interface Props {
   documentCountStats?: DocumentCountStats;
   totalCount: number;
   samplingProbability?: number | null;
-  setSamplingProbability?: (value: number) => void;
+  setSamplingProbability?: (value: number | null) => void;
   randomSamplerPreference?: RandomSamplerOption;
-  setRandomSamplerPreference: (value: RandomSamplerOption) => void;
+  setRandomSamplerPreference?: (value: RandomSamplerOption) => void;
   loading: boolean;
+  showSettings?: boolean;
 }
+
+const CalculatingProbabilityMessage = (
+  <div data-test-subj="dvRandomSamplerCalculatingProbabilityMsg">
+    <EuiSpacer size="m" />
+
+    <FormattedMessage
+      id="xpack.dataVisualizer.randomSamplerSettingsPopUp.calculatingProbabilityLabel"
+      defaultMessage="Calculating the optimal probability"
+    />
+  </div>
+);
 
 export const DocumentCountContent: FC<Props> = ({
   documentCountStats,
@@ -53,6 +63,7 @@ export const DocumentCountContent: FC<Props> = ({
   loading,
   randomSamplerPreference,
   setRandomSamplerPreference,
+  showSettings = true,
 }) => {
   const [showSamplingOptionsPopover, setShowSamplingOptionsPopover] = useState(false);
 
@@ -63,24 +74,6 @@ export const DocumentCountContent: FC<Props> = ({
   const closeSamplingOptions = useCallback(() => {
     setShowSamplingOptionsPopover(false);
   }, [setShowSamplingOptionsPopover]);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const updateSamplingProbability = useCallback(
-    debounce((newProbability: number) => {
-      if (setSamplingProbability) {
-        const idx = sortedIndex(RANDOM_SAMPLER_PROBABILITIES, newProbability);
-        const closestPrev = RANDOM_SAMPLER_PROBABILITIES[idx - 1];
-        const closestNext = RANDOM_SAMPLER_PROBABILITIES[idx];
-        const closestProbability =
-          Math.abs(closestPrev - newProbability) < Math.abs(closestNext - newProbability)
-            ? closestPrev
-            : closestNext;
-
-        setSamplingProbability(closestProbability / 100);
-      }
-    }, 100),
-    [setSamplingProbability]
-  );
 
   const calloutInfoMessage = useMemo(() => {
     switch (randomSamplerPreference) {
@@ -118,7 +111,7 @@ export const DocumentCountContent: FC<Props> = ({
   if (timeRangeEarliest === undefined || timeRangeLatest === undefined)
     return <TotalCountHeader totalCount={totalCount} />;
 
-  let chartPoints: DocumentCountChartPoint[] = [];
+  let chartPoints: LogRateHistogramItem[] = [];
   if (documentCountStats.buckets !== undefined) {
     const buckets: Record<string, number> = documentCountStats?.buckets;
     chartPoints = Object.entries(buckets).map(([time, value]) => ({ time: +time, value }));
@@ -126,110 +119,83 @@ export const DocumentCountContent: FC<Props> = ({
 
   const approximate = documentCountStats.randomlySampled === true;
 
-  const ProbabilityUsed =
-    randomSamplerPreference !== RANDOM_SAMPLER_OPTION.OFF && isDefined(samplingProbability) ? (
-      <div data-test-subj="dvRandomSamplerAutomaticProbabilityMsg">
-        <EuiSpacer size="m" />
-
-        <FormattedMessage
-          id="xpack.dataVisualizer.randomSamplerSettingsPopUp.probabilityLabel"
-          defaultMessage="Probability used: {samplingProbability}%"
-          values={{ samplingProbability: samplingProbability * 100 }}
-        />
-      </div>
-    ) : null;
-
   return (
     <>
       <EuiFlexGroup alignItems="center" gutterSize="xs">
         <TotalCountHeader totalCount={totalCount} approximate={approximate} loading={loading} />
-        <EuiFlexItem grow={false} style={{ marginLeft: 'auto' }}>
-          <EuiPopover
-            data-test-subj="dvRandomSamplerOptionsPopover"
-            id="dataVisualizerSamplingOptions"
-            button={
-              <EuiToolTip
-                content={i18n.translate('xpack.dataVisualizer.samplingOptionsButton', {
-                  defaultMessage: 'Sampling options',
-                })}
-              >
-                <EuiButtonIcon
-                  size="xs"
-                  iconType="gear"
-                  onClick={onShowSamplingOptions}
-                  data-test-subj="dvRandomSamplerOptionsButton"
-                  aria-label={i18n.translate('xpack.dataVisualizer.samplingOptionsButton', {
+        {showSettings ? (
+          <EuiFlexItem grow={false} style={{ marginLeft: 'auto' }}>
+            <EuiPopover
+              data-test-subj="dvRandomSamplerOptionsPopover"
+              id="dataVisualizerSamplingOptions"
+              button={
+                <EuiToolTip
+                  content={i18n.translate('xpack.dataVisualizer.samplingOptionsButton', {
                     defaultMessage: 'Sampling options',
                   })}
-                />
-              </EuiToolTip>
-            }
-            isOpen={showSamplingOptionsPopover}
-            closePopover={closeSamplingOptions}
-            panelPaddingSize="none"
-            anchorPosition="downLeft"
-          >
-            <EuiPanel style={{ maxWidth: 400 }}>
-              <EuiFlexItem grow={true}>
-                <EuiCallOut size="s" color={'primary'} title={calloutInfoMessage} />
-              </EuiFlexItem>
-              <EuiSpacer size="m" />
-
-              <EuiFormRow
-                data-test-subj="dvRandomSamplerOptionsFormRow"
-                label={i18n.translate(
-                  'xpack.dataVisualizer.randomSamplerSettingsPopUp.randomSamplerRowLabel',
-                  {
-                    defaultMessage: 'Random sampling',
-                  }
-                )}
-              >
-                <EuiSelect
-                  data-test-subj="dvRandomSamplerOptionsSelect"
-                  options={RANDOM_SAMPLER_SELECT_OPTIONS}
-                  value={randomSamplerPreference}
-                  onChange={(e) =>
-                    setRandomSamplerPreference(e.target.value as RandomSamplerOption)
-                  }
-                />
-              </EuiFormRow>
-
-              {randomSamplerPreference === RANDOM_SAMPLER_OPTION.ON_MANUAL ? (
+                >
+                  <EuiButtonIcon
+                    size="xs"
+                    iconType="gear"
+                    onClick={onShowSamplingOptions}
+                    data-test-subj="dvRandomSamplerOptionsButton"
+                    aria-label={i18n.translate('xpack.dataVisualizer.samplingOptionsButton', {
+                      defaultMessage: 'Sampling options',
+                    })}
+                  />
+                </EuiToolTip>
+              }
+              isOpen={showSamplingOptionsPopover}
+              closePopover={closeSamplingOptions}
+              panelPaddingSize="none"
+              anchorPosition="downLeft"
+            >
+              <EuiPanel style={{ maxWidth: 400 }}>
                 <EuiFlexItem grow={true}>
-                  <EuiSpacer size="m" />
+                  <EuiCallOut size="s" color={'primary'} title={calloutInfoMessage} />
+                </EuiFlexItem>
+                <EuiSpacer size="m" />
+
+                {setRandomSamplerPreference ? (
                   <EuiFormRow
+                    data-test-subj="dvRandomSamplerOptionsFormRow"
                     label={i18n.translate(
-                      'xpack.dataVisualizer.randomSamplerSettingsPopUp.randomSamplerPercentageRowLabel',
+                      'xpack.dataVisualizer.randomSamplerSettingsPopUp.randomSamplerRowLabel',
                       {
-                        defaultMessage: 'Sampling percentage',
+                        defaultMessage: 'Random sampling',
                       }
                     )}
                   >
-                    <EuiRange
-                      fullWidth
-                      showValue
-                      showTicks
-                      showRange={false}
-                      min={RANDOM_SAMPLER_STEP}
-                      max={0.5 * 100}
-                      value={(samplingProbability ?? 1) * 100}
-                      ticks={RANDOM_SAMPLER_PROBABILITIES.map((d) => ({
-                        value: d,
-                        label: d === 0.001 || d >= 5 ? `${d}%` : '',
-                      }))}
-                      onChange={(e) => updateSamplingProbability(Number(e.currentTarget.value))}
-                      step={RANDOM_SAMPLER_STEP}
-                      data-test-subj="dvRandomSamplerProbabilityRange"
+                    <EuiSelect
+                      data-test-subj="dvRandomSamplerOptionsSelect"
+                      options={RANDOM_SAMPLER_SELECT_OPTIONS}
+                      value={randomSamplerPreference}
+                      onChange={(e) =>
+                        setRandomSamplerPreference(e.target.value as RandomSamplerOption)
+                      }
                     />
                   </EuiFormRow>
-                </EuiFlexItem>
-              ) : (
-                ProbabilityUsed
-              )}
-            </EuiPanel>
-          </EuiPopover>
-          <EuiFlexItem />
-        </EuiFlexItem>
+                ) : null}
+
+                {randomSamplerPreference === RANDOM_SAMPLER_OPTION.ON_MANUAL ? (
+                  <RandomSamplerRangeSlider
+                    samplingProbability={samplingProbability}
+                    setSamplingProbability={setSamplingProbability}
+                  />
+                ) : null}
+
+                {randomSamplerPreference === RANDOM_SAMPLER_OPTION.ON_AUTOMATIC ? (
+                  loading ? (
+                    CalculatingProbabilityMessage
+                  ) : (
+                    <ProbabilityUsedMessage samplingProbability={samplingProbability} />
+                  )
+                ) : null}
+              </EuiPanel>
+            </EuiPopover>
+            <EuiFlexItem />
+          </EuiFlexItem>
+        ) : null}
       </EuiFlexGroup>
       <DocumentCountChart
         chartPoints={chartPoints}

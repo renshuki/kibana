@@ -12,6 +12,7 @@ import { DataRequest } from '../../../util/data_request';
 import { DataRequestContext } from '../../../../actions';
 import { canSkipSourceUpdate } from '../../../util/can_skip_fetch';
 import { IMvtVectorSource } from '../../../sources/vector_source';
+import { isESVectorTileSource } from '../../../sources/es_source';
 
 // shape of sourceDataRequest.getData()
 export interface MvtSourceData {
@@ -21,9 +22,11 @@ export interface MvtSourceData {
   tileUrl: string;
   refreshToken: string;
   hasLabels: boolean;
+  buffer: number;
 }
 
 export async function syncMvtSourceData({
+  buffer,
   hasLabels,
   layerId,
   layerName,
@@ -32,6 +35,7 @@ export async function syncMvtSourceData({
   source,
   syncContext,
 }: {
+  buffer: number;
   hasLabels: boolean;
   layerId: string;
   layerName: string;
@@ -62,7 +66,8 @@ export async function syncMvtSourceData({
       !syncContext.forceRefreshDueToDrawing &&
       noChangesInSourceState &&
       noChangesInSearchState &&
-      prevData.hasLabels === hasLabels;
+      prevData.hasLabels === hasLabels &&
+      prevData.buffer === buffer;
 
     if (canSkip) {
       return;
@@ -78,8 +83,8 @@ export async function syncMvtSourceData({
         ? uuidv4()
         : prevData.refreshToken;
 
-    const tileUrl = await source.getTileUrl(requestMeta, refreshToken, hasLabels);
-    if (source.isESSource()) {
+    const tileUrl = await source.getTileUrl(requestMeta, refreshToken, hasLabels, buffer);
+    if (isESVectorTileSource(source)) {
       syncContext.inspectorAdapters.vectorTiles.addLayer(layerId, layerName, tileUrl);
     }
     const sourceData = {
@@ -89,9 +94,10 @@ export async function syncMvtSourceData({
       tileMaxZoom: source.getMaxZoom(),
       refreshToken,
       hasLabels,
+      buffer,
     };
     syncContext.stopLoading(SOURCE_DATA_REQUEST_ID, requestToken, sourceData, {});
   } catch (error) {
-    syncContext.onLoadError(SOURCE_DATA_REQUEST_ID, requestToken, error.message);
+    syncContext.onLoadError(SOURCE_DATA_REQUEST_ID, requestToken, error);
   }
 }

@@ -11,6 +11,20 @@ import { mount } from 'enzyme';
 import { ExceptionsViewerUtility } from './utility_bar';
 import { TestProviders } from '../../../../common/mock';
 
+jest.mock('@kbn/i18n-react', () => {
+  const { i18n } = jest.requireActual('@kbn/i18n');
+  i18n.init({ locale: 'en' });
+
+  const originalModule = jest.requireActual('@kbn/i18n-react');
+  const FormattedRelative = jest.fn();
+  FormattedRelative.mockImplementation(() => '20 hours ago');
+
+  return {
+    ...originalModule,
+    FormattedRelative,
+  };
+});
+
 describe('ExceptionsViewerUtility', () => {
   it('it renders correct item counts', () => {
     const wrapper = mount(
@@ -22,7 +36,10 @@ describe('ExceptionsViewerUtility', () => {
             totalItemCount: 105,
             pageSizeOptions: [5, 10, 20, 50, 100],
           }}
+          exceptionsToShow={{ active: true }}
+          onChangeExceptionsToShow={(optionId: string) => {}}
           lastUpdated={1660534202}
+          isEndpoint={false}
         />
       </TestProviders>
     );
@@ -42,13 +59,16 @@ describe('ExceptionsViewerUtility', () => {
             totalItemCount: 1,
             pageSizeOptions: [5, 10, 20, 50, 100],
           }}
+          exceptionsToShow={{ active: true }}
+          onChangeExceptionsToShow={(optionId: string) => {}}
           lastUpdated={Date.now()}
+          isEndpoint={false}
         />
       </TestProviders>
     );
 
     expect(wrapper.find('[data-test-subj="exceptionsViewerLastUpdated"]').at(0).text()).toEqual(
-      'Updated now'
+      'Updated 20 hours ago'
     );
   });
 });

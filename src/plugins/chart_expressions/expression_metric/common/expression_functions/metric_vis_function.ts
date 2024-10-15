@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { i18n } from '@kbn/i18n';
@@ -14,7 +15,7 @@ import {
   validateAccessor,
 } from '@kbn/visualizations-plugin/common/utils';
 import { LayoutDirection } from '@elastic/charts';
-import { visType } from '../types';
+import { MetricVisRenderConfig, visType } from '../types';
 import { MetricVisExpressionFunctionDefinition } from '../types';
 import { EXPRESSION_METRIC_NAME, EXPRESSION_METRIC_TRENDLINE_NAME } from '../constants';
 
@@ -72,16 +73,45 @@ export const metricVisFunction = (): MetricVisExpressionFunctionDefinition => ({
     progressDirection: {
       types: ['string'],
       options: [LayoutDirection.Vertical, LayoutDirection.Horizontal],
-      default: LayoutDirection.Vertical,
       help: i18n.translate('expressionMetricVis.function.progressDirection.help', {
-        defaultMessage: 'The direction the progress bar should grow.',
+        defaultMessage:
+          'The direction the progress bar should grow. Must be provided to render a progress bar.',
       }),
-      strict: true,
+    },
+    titlesTextAlign: {
+      types: ['string'],
+      help: i18n.translate('expressionMetricVis.function.titlesTextAlign.help', {
+        defaultMessage: 'The alignment of the Title and Subtitle.',
+      }),
+    },
+    valuesTextAlign: {
+      types: ['string'],
+      help: i18n.translate('expressionMetricVis.function.valuesTextAlign.help', {
+        defaultMessage: 'The alignment of the Primary and Secondary Metric.',
+      }),
+    },
+    iconAlign: {
+      types: ['string'],
+      help: i18n.translate('expressionMetricVis.function.iconAlign.help', {
+        defaultMessage: 'The alignment of icon.',
+      }),
+    },
+    valueFontSize: {
+      types: ['string', 'number'],
+      help: i18n.translate('expressionMetricVis.function.valueFontSize.help', {
+        defaultMessage: 'The value font size.',
+      }),
     },
     color: {
       types: ['string'],
       help: i18n.translate('expressionMetricVis.function.color.help', {
         defaultMessage: 'Provides a static visualization color. Overridden by palette.',
+      }),
+    },
+    icon: {
+      types: ['string'],
+      help: i18n.translate('expressionMetricVis.function.icon.help', {
+        defaultMessage: 'Provides a static visualization icon.',
       }),
     },
     palette: {
@@ -181,8 +211,13 @@ export const metricVisFunction = (): MetricVisExpressionFunctionDefinition => ({
             subtitle: args.subtitle,
             secondaryPrefix: args.secondaryPrefix,
             color: args.color,
+            icon: args.icon,
             palette: args.palette?.params,
             progressDirection: args.progressDirection,
+            titlesTextAlign: args.titlesTextAlign,
+            valuesTextAlign: args.valuesTextAlign,
+            iconAlign: args.iconAlign,
+            valueFontSize: args.valueFontSize,
             maxCols: args.maxCols,
             minTiles: args.minTiles,
             trends: args.trendline?.trends,
@@ -194,6 +229,7 @@ export const metricVisFunction = (): MetricVisExpressionFunctionDefinition => ({
             breakdownBy: args.breakdownBy,
           },
         },
+        overrides: handlers.variables?.overrides as MetricVisRenderConfig['overrides'],
       },
     };
   },

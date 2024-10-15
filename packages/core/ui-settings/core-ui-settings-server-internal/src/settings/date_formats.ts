@@ -1,28 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import moment from 'moment-timezone';
 import { schema } from '@kbn/config-schema';
 import { i18n } from '@kbn/i18n';
-import type { UiSettingsParams } from '@kbn/core-ui-settings-common';
+import { UiSettingsParams, TIMEZONE_OPTIONS } from '@kbn/core-ui-settings-common';
 
 export const getDateFormatSettings = (): Record<string, UiSettingsParams> => {
   const weekdays = moment.weekdays().slice();
   const [defaultWeekday] = weekdays;
 
-  const timezones = [
-    'Browser',
-    ...moment.tz
-      .names()
-      // We need to filter out some time zones, that moment.js knows about, but Elasticsearch
-      // does not understand and would fail thus with a 400 bad request when using them.
-      .filter((tz) => !['America/Nuuk', 'EST', 'HST', 'ROC', 'MST'].includes(tz)),
-  ];
+  const timezones = ['Browser', ...TIMEZONE_OPTIONS];
 
   return {
     dateFormat: {

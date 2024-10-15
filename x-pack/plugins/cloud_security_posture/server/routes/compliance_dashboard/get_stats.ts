@@ -7,8 +7,10 @@
 
 import { ElasticsearchClient } from '@kbn/core/server';
 import type { QueryDslQueryContainer, SearchRequest } from '@elastic/elasticsearch/lib/api/types';
+import { MappingRuntimeFields } from '@elastic/elasticsearch/lib/api/types';
+import type { Logger } from '@kbn/core/server';
 import { calculatePostureScore } from '../../../common/utils/helpers';
-import type { ComplianceDashboardData } from '../../../common/types';
+import type { ComplianceDashboardData } from '../../../common/types_old';
 
 export interface FindingsEvaluationsQueryResult {
   failed_findings: {
@@ -41,10 +43,14 @@ const uniqueResourcesCountQuery = {
 
 export const getEvaluationsQuery = (
   query: QueryDslQueryContainer,
-  pitId: string
+  pitId: string,
+  runtimeMappings: MappingRuntimeFields
 ): SearchRequest => ({
-  query,
   size: 0,
+  // creates the `safe_posture_type` runtime fields,
+  // `safe_posture_type` is used by the `query` to filter by posture type for older findings without this field
+  runtime_mappings: runtimeMappings,
+  query,
   aggs: {
     ...findingsEvaluationAggsQuery,
     ...uniqueResourcesCountQuery,
@@ -75,14 +81,22 @@ export const getStatsFromFindingsEvaluationsAggs = (
 export const getStats = async (
   esClient: ElasticsearchClient,
   query: QueryDslQueryContainer,
-  pitId: string
+  pitId: string,
+  runtimeMappings: MappingRuntimeFields,
+  logger: Logger
 ): Promise<ComplianceDashboardData['stats']> => {
-  const evaluationsQueryResult = await esClient.search<unknown, FindingsEvaluationsQueryResult>(
-    getEvaluationsQuery(query, pitId)
-  );
+  try {
+    const evaluationsQueryResult = await esClient.search<unknown, FindingsEvaluationsQueryResult>(
+      getEvaluationsQuery(query, pitId, runtimeMappings)
+    );
 
-  const findingsEvaluations = evaluationsQueryResult.aggregations;
-  if (!findingsEvaluations) throw new Error('missing findings evaluations');
+    const findingsEvaluations = evaluationsQueryResult.aggregations;
+    if (!findingsEvaluations) throw new Error('missing findings evaluations');
 
-  return getStatsFromFindingsEvaluationsAggs(findingsEvaluations);
+    return getStatsFromFindingsEvaluationsAggs(findingsEvaluations);
+  } catch (err) {
+    logger.error(`Failed to fetch stats ${err.message}`);
+    logger.error(err);
+    throw err;
+  }
 };

@@ -5,64 +5,64 @@
  * 2.0.
  */
 
+import type { IKibanaResponse } from '@kbn/core-http-server';
 import { transformError } from '@kbn/securitysolution-es-utils';
+import { buildRouteValidationWithZod } from '@kbn/zod-helpers';
 import type { SecuritySolutionPluginRouter } from '../../../../types';
 
 import { NOTE_URL } from '../../../../../common/constants';
 
-import type { SetupPlugins } from '../../../../plugin';
-import { buildRouteValidationWithExcess } from '../../../../utils/build_validation/route_validation';
-import type { ConfigType } from '../../../..';
-
 import { buildSiemResponse } from '../../../detection_engine/routes/utils';
 
 import { buildFrameworkRequest } from '../../utils/common';
-import { persistNoteSchema } from '../../schemas/notes';
+import {
+  PersistNoteRouteRequestBody,
+  type PersistNoteRouteResponse,
+} from '../../../../../common/api/timeline';
 import { persistNote } from '../../saved_object/notes';
 
-export const persistNoteRoute = (
-  router: SecuritySolutionPluginRouter,
-  config: ConfigType,
-  security: SetupPlugins['security']
-) => {
-  router.patch(
-    {
+export const persistNoteRoute = (router: SecuritySolutionPluginRouter) => {
+  router.versioned
+    .patch({
       path: NOTE_URL,
-      validate: {
-        body: buildRouteValidationWithExcess(persistNoteSchema),
-      },
       options: {
         tags: ['access:securitySolution'],
       },
-    },
-    async (context, request, response) => {
-      const siemResponse = buildSiemResponse(response);
+      access: 'public',
+    })
+    .addVersion(
+      {
+        validate: {
+          request: { body: buildRouteValidationWithZod(PersistNoteRouteRequestBody) },
+        },
+        version: '2023-10-31',
+      },
+      async (context, request, response): Promise<IKibanaResponse<PersistNoteRouteResponse>> => {
+        const siemResponse = buildSiemResponse(response);
 
-      try {
-        const frameworkRequest = await buildFrameworkRequest(context, security, request);
-        const { note } = request.body;
-        const noteId = request.body?.noteId ?? null;
+        try {
+          const frameworkRequest = await buildFrameworkRequest(context, request);
+          const { note } = request.body;
+          const noteId = request.body?.noteId ?? null;
 
-        const res = await persistNote({
-          request: frameworkRequest,
-          noteId,
-          note: {
-            ...note,
-            timelineId: note.timelineId || null,
-          },
-          overrideOwner: true,
-        });
+          const res = await persistNote({
+            request: frameworkRequest,
+            noteId,
+            note,
+            overrideOwner: true,
+          });
+          const body: PersistNoteRouteResponse = { data: { persistNote: res } };
 
-        return response.ok({
-          body: { data: { persistNote: res } },
-        });
-      } catch (err) {
-        const error = transformError(err);
-        return siemResponse.error({
-          body: error.message,
-          statusCode: error.statusCode,
-        });
+          return response.ok({
+            body,
+          });
+        } catch (err) {
+          const error = transformError(err);
+          return siemResponse.error({
+            body: error.message,
+            statusCode: error.statusCode,
+          });
+        }
       }
-    }
-  );
+    );
 };

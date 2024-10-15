@@ -24,6 +24,8 @@
     "@kbn/repo-source-classifier",
     "@kbn/import-resolver",
     "@kbn/picomatcher",
+    "@kbn/repo-packages",
+    "@kbn/dev-utils",
   ],
   "exclude": [
     "target/**/*",

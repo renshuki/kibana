@@ -21,16 +21,21 @@ import {
 import { euiStyled } from '@kbn/kibana-react-plugin/common';
 
 import { withSuspense, LazyReplacementCard } from '@kbn/custom-integrations-plugin/public';
+import { uniq } from 'lodash';
 
 import type {
   PackageInfo,
   PackageSpecCategory,
   AssetTypeToParts,
   KibanaAssetType,
+  RegistryPolicyTemplate,
+  RegistryPolicyIntegrationTemplate,
 } from '../../../../../types';
 import { entries } from '../../../../../types';
-import { useGetCategories } from '../../../../../hooks';
-import { AssetTitleMap, DisplayedAssets, ServiceTitleMap } from '../../../constants';
+import { useGetCategoriesQuery } from '../../../../../hooks';
+import { AssetTitleMap, DisplayedAssetsFromPackageInfo, ServiceTitleMap } from '../../../constants';
+
+import { ChangelogModal } from '../settings/changelog_modal';
 
 import { NoticeModal } from './notice_modal';
 import { LicenseModal } from './license_modal';
@@ -39,6 +44,7 @@ const ReplacementCard = withSuspense(LazyReplacementCard);
 
 interface Props {
   packageInfo: PackageInfo;
+  integrationInfo?: RegistryPolicyTemplate;
 }
 
 const Replacements = euiStyled(EuiFlexItem)`
@@ -58,26 +64,47 @@ const Replacements = euiStyled(EuiFlexItem)`
   }
 `;
 
-export const Details: React.FC<Props> = memo(({ packageInfo }) => {
-  const { data: categoriesData, isLoading: isLoadingCategories } = useGetCategories();
+export const Details: React.FC<Props> = memo(({ packageInfo, integrationInfo }) => {
+  const { data: categoriesData, isLoading: isLoadingCategories } = useGetCategoriesQuery();
+
+  const mergedCategories: Array<string | undefined> = useMemo(() => {
+    let allCategories: Array<string | undefined> = [];
+
+    if (packageInfo?.categories) {
+      allCategories = packageInfo.categories;
+    }
+    if ((integrationInfo as RegistryPolicyIntegrationTemplate)?.categories) {
+      allCategories = uniq([
+        ...allCategories,
+        ...((integrationInfo as RegistryPolicyIntegrationTemplate)?.categories || []),
+      ]);
+    }
+    return allCategories;
+  }, [integrationInfo, packageInfo?.categories]);
+
   const packageCategories: string[] = useMemo(() => {
-    if (!isLoadingCategories && categoriesData && categoriesData.response) {
-      return categoriesData.response
-        .filter((category) => packageInfo.categories?.includes(category.id as PackageSpecCategory))
+    if (!isLoadingCategories && categoriesData?.items) {
+      return categoriesData.items
+        .filter((category) => mergedCategories?.includes(category.id as PackageSpecCategory))
         .map((category) => category.title);
     }
     return [];
-  }, [categoriesData, isLoadingCategories, packageInfo.categories]);
+  }, [categoriesData, isLoadingCategories, mergedCategories]);
 
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const toggleNoticeModal = useCallback(() => {
-    setIsNoticeModalOpen(!isNoticeModalOpen);
-  }, [isNoticeModalOpen]);
+    setIsNoticeModalOpen((currentState) => !currentState);
+  }, []);
 
   const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
   const toggleLicenseModal = useCallback(() => {
-    setIsLicenseModalOpen(!isLicenseModalOpen);
-  }, [isLicenseModalOpen]);
+    setIsLicenseModalOpen((currentState) => !currentState);
+  }, []);
+
+  const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
+  const toggleChangelogModal = useCallback(() => {
+    setIsChangelogModalOpen((currentState) => !currentState);
+  }, []);
 
   const listItems = useMemo(() => {
     // Base details: version and categories
@@ -106,7 +133,7 @@ export const Details: React.FC<Props> = memo(({ packageInfo }) => {
       // (currently we only display Kibana and Elasticsearch assets)
       const filteredTypes: AssetTypeToParts = entries(typeToParts).reduce(
         (acc: any, [asset, value]) => {
-          if (DisplayedAssets[service].includes(asset)) acc[asset] = value;
+          if (DisplayedAssetsFromPackageInfo[service].includes(asset)) acc[asset] = value;
           return acc;
         },
         {}
@@ -172,6 +199,45 @@ export const Details: React.FC<Props> = memo(({ packageInfo }) => {
       ),
     });
 
+    let ownerTypeDescription: React.ReactNode;
+    switch (packageInfo.owner.type) {
+      case 'community':
+        ownerTypeDescription = (
+          <FormattedMessage
+            id="xpack.fleet.epm.ownerTypeCommunityDescription"
+            defaultMessage="Community"
+          />
+        );
+        break;
+      case 'partner':
+        ownerTypeDescription = (
+          <FormattedMessage
+            id="xpack.fleet.epm.ownerTypePartnerDescription"
+            defaultMessage="Partner"
+          />
+        );
+        break;
+      case 'elastic':
+        ownerTypeDescription = (
+          <FormattedMessage
+            id="xpack.fleet.epm.ownerTypeElasticDescription"
+            defaultMessage="Elastic"
+          />
+        );
+        break;
+    }
+
+    if (ownerTypeDescription) {
+      items.push({
+        title: (
+          <EuiTextColor color="subdued">
+            <FormattedMessage id="xpack.fleet.epm.ownerTypeLabel" defaultMessage="Developed by" />
+          </EuiTextColor>
+        ),
+        description: ownerTypeDescription,
+      });
+    }
+
     // License details
     if (packageInfo.licensePath || packageInfo.source?.license || packageInfo.notice) {
       items.push({
@@ -201,6 +267,21 @@ export const Details: React.FC<Props> = memo(({ packageInfo }) => {
       });
     }
 
+    items.push({
+      title: (
+        <EuiTextColor color="subdued">
+          <FormattedMessage id="xpack.fleet.epm.changelogLabel" defaultMessage="Changelog" />
+        </EuiTextColor>
+      ),
+      description: (
+        <>
+          <p>
+            <EuiLink onClick={toggleChangelogModal}>View Changelog</EuiLink>
+          </p>
+        </>
+      ),
+    });
+
     return items;
   }, [
     packageCategories,
@@ -211,9 +292,11 @@ export const Details: React.FC<Props> = memo(({ packageInfo }) => {
     packageInfo.licensePath,
     packageInfo.notice,
     packageInfo.source?.license,
+    packageInfo.owner.type,
     packageInfo.version,
     toggleLicenseModal,
     toggleNoticeModal,
+    toggleChangelogModal,
   ]);
 
   return (
@@ -229,6 +312,15 @@ export const Details: React.FC<Props> = memo(({ packageInfo }) => {
             licenseName={packageInfo.source?.license}
             licensePath={packageInfo.licensePath}
             onClose={toggleLicenseModal}
+          />
+        )}
+      </EuiPortal>
+      <EuiPortal>
+        {isChangelogModalOpen && (
+          <ChangelogModal
+            latestVersion={packageInfo.version}
+            packageName={packageInfo.name}
+            onClose={toggleChangelogModal}
           />
         )}
       </EuiPortal>

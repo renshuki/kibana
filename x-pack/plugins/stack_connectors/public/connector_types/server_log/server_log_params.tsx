@@ -14,7 +14,15 @@ import { ServerLogActionParams } from '../types';
 
 export const ServerLogParamsFields: React.FunctionComponent<
   ActionParamsProps<ServerLogActionParams>
-> = ({ actionParams, editAction, index, errors, messageVariables, defaultMessage }) => {
+> = ({
+  actionParams,
+  editAction,
+  index,
+  errors,
+  messageVariables,
+  defaultMessage,
+  useDefaultMessage,
+}) => {
   const { message, level } = actionParams;
   const levelOptions = [
     { value: 'trace', text: 'Trace' },
@@ -29,13 +37,14 @@ export const ServerLogParamsFields: React.FunctionComponent<
       editAction('level', 'info', index);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [actionParams.level]);
 
   const [[isUsingDefault, defaultMessageUsed], setDefaultMessageUsage] = useState<
     [boolean, string | undefined]
   >([false, defaultMessage]);
   useEffect(() => {
     if (
+      useDefaultMessage ||
       !actionParams?.message ||
       (isUsingDefault &&
         actionParams?.message === defaultMessageUsed &&

@@ -17,9 +17,9 @@ export const RulesSettingsLink = () => {
     application: { capabilities },
   } = useKibana().services;
 
-  const { show, readFlappingSettingsUI } = capabilities.rulesSettings;
+  const { show, readFlappingSettingsUI, readQueryDelaySettingsUI } = capabilities.rulesSettings;
 
-  if (!show || !readFlappingSettingsUI) {
+  if (!show || (!readFlappingSettingsUI && !readQueryDelaySettingsUI)) {
     return null;
   }
 
@@ -39,3 +39,6 @@ export const RulesSettingsLink = () => {
     </>
   );
 };
+
+// eslint-disable-next-line import/no-default-export
+export { RulesSettingsLink as default };

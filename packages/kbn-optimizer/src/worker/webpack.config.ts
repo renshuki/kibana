@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import Path from 'path';
@@ -15,33 +16,27 @@ import webpack from 'webpack';
 import TerserPlugin from 'terser-webpack-plugin';
 import webpackMerge from 'webpack-merge';
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
-import CompressionPlugin from 'compression-webpack-plugin';
 import UiSharedDepsNpm from '@kbn/ui-shared-deps-npm';
 import * as UiSharedDepsSrc from '@kbn/ui-shared-deps-src';
+import StatoscopeWebpackPlugin from '@statoscope/webpack-plugin';
+// @ts-expect-error
+import VisualizerPlugin from 'webpack-visualizer-plugin2';
+import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
 
-import { Bundle, BundleRefs, WorkerConfig, parseDllManifest } from '../common';
-import { BundleRefsPlugin } from './bundle_refs_plugin';
+import { Bundle, BundleRemotes, WorkerConfig, parseDllManifest } from '../common';
+import { BundleRemotesPlugin } from './bundle_remotes_plugin';
 import { BundleMetricsPlugin } from './bundle_metrics_plugin';
 import { EmitStatsPlugin } from './emit_stats_plugin';
 import { PopulateBundleCachePlugin } from './populate_bundle_cache_plugin';
 
-const BABEL_PRESET = [
-  require.resolve('@kbn/babel-preset/webpack_preset'),
-  {
-    'kibana/ignoredPkgIds': Object.keys(UiSharedDepsSrc.externals),
-  },
-];
+const BABEL_PRESET = require.resolve('@kbn/babel-preset/webpack_preset');
 const DLL_MANIFEST = JSON.parse(Fs.readFileSync(UiSharedDepsNpm.dllManifestPath, 'utf8'));
 
-const nodeModulesButNotKbnPackages = (path: string) => {
-  if (!path.includes('node_modules')) {
-    return false;
-  }
-
-  return !path.includes(`node_modules${Path.sep}@kbn${Path.sep}`);
-};
-
-export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker: WorkerConfig) {
+export function getWebpackConfig(
+  bundle: Bundle,
+  bundleRemotes: BundleRemotes,
+  worker: WorkerConfig
+) {
   const ENTRY_CREATOR = require.resolve('./entry_point_creator');
 
   const commonConfig: webpack.Configuration = {
@@ -56,6 +51,7 @@ export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker:
     profile: worker.profileWebpack,
 
     output: {
+      hashFunction: 'sha1',
       path: bundle.outputDir,
       filename: `${bundle.id}.${bundle.type}.js`,
       chunkFilename: `${bundle.id}.chunk.[id].js`,
@@ -83,14 +79,31 @@ export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker:
 
     plugins: [
       new CleanWebpackPlugin(),
-      new BundleRefsPlugin(bundle, bundleRefs),
+      new BundleRemotesPlugin(bundle, bundleRemotes),
       new PopulateBundleCachePlugin(worker, bundle, parseDllManifest(DLL_MANIFEST)),
       new BundleMetricsPlugin(bundle),
       new webpack.DllReferencePlugin({
         context: worker.repoRoot,
         manifest: DLL_MANIFEST,
       }),
-      ...(worker.profileWebpack ? [new EmitStatsPlugin(bundle)] : []),
+      // @ts-ignore something is wrong with the StatoscopeWebpackPlugin type.
+      ...(worker.profileWebpack
+        ? [
+            new EmitStatsPlugin(bundle),
+            new StatoscopeWebpackPlugin({
+              open: false,
+              saveReportTo: `${bundle.outputDir}/${bundle.id}.statoscope.html`,
+            }),
+            new VisualizerPlugin({ filename: `${bundle.id}.visualizer.html` }),
+            new BundleAnalyzerPlugin({
+              analyzerMode: 'static',
+              reportFilename: `${bundle.id}.analyzer.html`,
+              openAnalyzer: false,
+              logLevel: 'silent',
+            }),
+          ]
+        : []),
+      // @ts-ignore something is wrong with the StatoscopeWebpackPlugin type.
       ...(bundle.banner ? [new webpack.BannerPlugin({ banner: bundle.banner, raw: true })] : []),
     ],
 
@@ -100,7 +113,7 @@ export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker:
       // already bundled with all its necessary dependencies
       noParse: [
         /[\/\\]node_modules[\/\\]lodash[\/\\]index\.js$/,
-        /[\/\\]node_modules[\/\\]vega[\/\\]build[\/\\]vega\.js$/,
+        /[\/\\]node_modules[\/\\]vega[\/\\]build-es5[\/\\]vega\.js$/,
       ],
 
       rules: [
@@ -116,10 +129,10 @@ export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker:
             {
               loader: require.resolve('val-loader'),
               options: {
-                entries: bundle.publicDirNames.map((name) => {
-                  const absolute = Path.resolve(bundle.contextDir, name);
+                entries: bundle.remoteInfo.targets.map((target) => {
+                  const absolute = Path.resolve(bundle.contextDir, target);
                   const newContext = Path.dirname(ENTRY_CREATOR);
-                  const importId = `${bundle.type}/${bundle.id}/${name}`;
+                  const importId = `${bundle.type}/${bundle.id}/${target}`;
 
                   // relative path from context of the ENTRY_CREATOR, with linux path separators
                   let requirePath = Path.relative(newContext, absolute).split('\\').join('/');
@@ -160,7 +173,7 @@ export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker:
         },
         {
           test: /\.scss$/,
-          exclude: nodeModulesButNotKbnPackages,
+          exclude: /node_modules/,
           oneOf: [
             ...worker.themeTags.map((theme) => ({
               resourceQuery: `?${theme}`,
@@ -195,12 +208,12 @@ export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker:
                         )
                       )};\n${content}`;
                     },
-                    webpackImporter: false,
-                    implementation: require('node-sass'),
+                    implementation: require('sass-embedded'),
                     sassOptions: {
-                      outputStyle: worker.dist ? 'compressed' : 'nested',
+                      outputStyle: worker.dist ? 'compressed' : 'expanded',
                       includePaths: [Path.resolve(worker.repoRoot, 'node_modules')],
-                      sourceMapRoot: `/${bundle.type}:${bundle.id}`,
+                      sourceMap: true,
+                      quietDeps: true,
                     },
                   },
                 },
@@ -235,6 +248,18 @@ export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker:
           },
         },
         {
+          test: /node_modules\/@?xstate5\/.*\.js$/,
+          use: {
+            loader: 'babel-loader',
+            options: {
+              babelrc: false,
+              envName: worker.dist ? 'production' : 'development',
+              presets: [BABEL_PRESET],
+              plugins: ['@babel/plugin-transform-logical-assignment-operators'],
+            },
+          },
+        },
+        {
           test: /\.(html|md|txt|tmpl)$/,
           use: {
             loader: 'raw-loader',
@@ -257,7 +282,6 @@ export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker:
         ),
         vega: Path.resolve(worker.repoRoot, 'node_modules/vega/build-es5/vega.js'),
       },
-      symlinks: false,
     },
 
     performance: {
@@ -279,15 +303,6 @@ export function getWebpackConfig(bundle: Bundle, bundleRefs: BundleRefs, worker:
       new webpack.DefinePlugin({
         'process.env': {
           IS_KIBANA_DISTRIBUTABLE: `"true"`,
-        },
-      }),
-      new CompressionPlugin({
-        algorithm: 'brotliCompress',
-        filename: '[path].br',
-        test: /\.(js|css)$/,
-        cache: false,
-        compressionOptions: {
-          level: 11,
         },
       }),
     ],

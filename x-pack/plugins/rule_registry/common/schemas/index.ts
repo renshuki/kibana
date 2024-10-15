@@ -5,16 +5,21 @@
  * 2.0.
  */
 
+import type { CommonAlertIdFieldName870 } from './8.7.0';
+
 import type {
-  CommonAlertFieldName870,
-  CommonAlertIdFieldName870,
-  CommonAlertFields870,
-  AlertWithCommonFields870,
-} from './8.7.0';
+  AlertWithCommonFields880,
+  CommonAlertFieldName880,
+  CommonAlertFields880,
+} from './8.8.0';
+
+import type { AlertWithSuppressionFields8130, SuppressionFields8130 } from './8.13.0';
 
 export type {
-  CommonAlertFieldName870 as CommonAlertFieldNameLatest,
+  AlertWithSuppressionFields8130 as AlertWithSuppressionFieldsLatest,
+  SuppressionFields8130 as SuppressionFieldsLatest,
+  CommonAlertFieldName880 as CommonAlertFieldNameLatest,
   CommonAlertIdFieldName870 as CommonAlertIdFieldNameLatest,
-  CommonAlertFields870 as CommonAlertFieldsLatest,
-  AlertWithCommonFields870 as AlertWithCommonFieldsLatest,
+  CommonAlertFields880 as CommonAlertFieldsLatest,
+  AlertWithCommonFields880 as AlertWithCommonFieldsLatest,
 };

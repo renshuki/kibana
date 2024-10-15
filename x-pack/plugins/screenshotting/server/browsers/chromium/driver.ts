@@ -10,13 +10,13 @@ import {
   KBN_SCREENSHOT_MODE_HEADER,
   ScreenshotModePluginSetup,
 } from '@kbn/screenshot-mode-plugin/server';
+import { ConfigType } from '@kbn/screenshotting-server';
 import { truncate } from 'lodash';
 import open from 'opn';
-import puppeteer, { ElementHandle, Page, EvaluateFunc } from 'puppeteer';
+import { ElementHandle, EvaluateFunc, HTTPResponse, Page } from 'puppeteer';
 import { Subject } from 'rxjs';
 import { parse as parseUrl } from 'url';
 import { getDisallowedOutgoingUrlError } from '.';
-import { ConfigType } from '../../config';
 import { Layout } from '../../layouts';
 import { getPrintLayoutSelectors } from '../../layouts/print_layout';
 import { allowRequest } from '../network_policy';
@@ -244,15 +244,17 @@ export class HeadlessChromiumDriver {
     if (error) {
       await this.injectScreenshottingErrorHeader(error, getPrintLayoutSelectors().screenshot);
     }
-    return this.page.pdf({
-      format: 'a4',
-      preferCSSPageSize: true,
-      scale: 1,
-      landscape: false,
-      displayHeaderFooter: true,
-      headerTemplate: await getHeaderTemplate({ title }),
-      footerTemplate: await getFooterTemplate({ logo }),
-    });
+    return Buffer.from(
+      await this.page.pdf({
+        format: 'a4',
+        preferCSSPageSize: true,
+        scale: 1,
+        landscape: false,
+        displayHeaderFooter: true,
+        headerTemplate: await getHeaderTemplate({ title }),
+        footerTemplate: await getFooterTemplate({ logo }),
+      })
+    );
   }
 
   /*
@@ -272,6 +274,7 @@ export class HeadlessChromiumDriver {
     }
 
     const { boundingClientRect, scroll } = elementPosition;
+
     const screenshot = await this.page.screenshot({
       clip: {
         x: boundingClientRect.left + scroll.x,
@@ -282,8 +285,8 @@ export class HeadlessChromiumDriver {
       captureBeyondViewport: false, // workaround for an internal resize. See: https://github.com/puppeteer/puppeteer/issues/7043
     });
 
-    if (Buffer.isBuffer(screenshot)) {
-      return screenshot;
+    if (screenshot.byteLength) {
+      return Buffer.from(screenshot);
     }
 
     if (typeof screenshot === 'string') {
@@ -386,7 +389,7 @@ export class HeadlessChromiumDriver {
           errorReason: 'Aborted',
           requestId,
         });
-        this.page.browser().close();
+        void this.page.browser().close();
         const error = getDisallowedOutgoingUrlError(interceptedUrl);
         this.screenshottingErrorSubject.next(error);
         logger.error(error);
@@ -426,7 +429,7 @@ export class HeadlessChromiumDriver {
       this.interceptedCount = this.interceptedCount + (isData ? 0 : 1);
     });
 
-    this.page.on('response', (interceptedResponse: puppeteer.HTTPResponse) => {
+    this.page.on('response', (interceptedResponse: HTTPResponse) => {
       const interceptedUrl = interceptedResponse.url();
       const allowed = !interceptedUrl.startsWith('file://');
       const status = interceptedResponse.status();
@@ -438,7 +441,7 @@ export class HeadlessChromiumDriver {
       }
 
       if (!allowed || !this.allowRequest(interceptedUrl)) {
-        this.page.browser().close();
+        void this.page.browser().close();
         const error = getDisallowedOutgoingUrlError(interceptedUrl);
         this.screenshottingErrorSubject.next(error);
         logger.error(error);
@@ -464,7 +467,7 @@ export class HeadlessChromiumDriver {
     const wsEndpoint = this.page.browser().wsEndpoint();
     const { port } = parseUrl(wsEndpoint);
 
-    open(
+    await open(
       `http://localhost:${port}/devtools/inspector.html?ws=localhost:${port}/devtools/page/${targetId}`
     );
   }

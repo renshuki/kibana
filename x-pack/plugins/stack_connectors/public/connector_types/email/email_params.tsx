@@ -11,12 +11,27 @@ import { EuiComboBox, EuiButtonEmpty, EuiFormRow } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import type { ActionParamsProps } from '@kbn/triggers-actions-ui-plugin/public';
 import {
-  TextAreaWithMessageVariables,
   TextFieldWithMessageVariables,
+  TextAreaWithMessageVariables,
 } from '@kbn/triggers-actions-ui-plugin/public';
 import { EmailActionParams } from '../types';
 
 const noop = () => {};
+
+export const getFormattedEmailOptions = (
+  searchValue: string,
+  previousOptions: Array<{ label: string }>
+): Array<{ label: string }> => {
+  if (!searchValue.trim()) return previousOptions;
+  const previousEmails: string[] = previousOptions.map((option) => option.label);
+  const allUniqueEmails: Set<string> = new Set(previousEmails);
+  searchValue.split(',').forEach((email) => {
+    const trimmedEmail = email.trim();
+    if (trimmedEmail) allUniqueEmails.add(trimmedEmail);
+  });
+  const formattedOptions = Array.from(allUniqueEmails).map((email) => ({ label: email }));
+  return formattedOptions;
+};
 
 export const EmailParamsFields = ({
   actionParams,
@@ -29,6 +44,8 @@ export const EmailParamsFields = ({
   isDisabled,
   onBlur = noop,
   showEmailSubjectAndMessage = true,
+  useDefaultMessage,
+  ruleTypeId,
 }: ActionParamsProps<EmailActionParams>) => {
   const { to, cc, bcc, subject, message } = actionParams;
   const toOptions = to ? to.map((label: string) => ({ label })) : [];
@@ -42,6 +59,7 @@ export const EmailParamsFields = ({
   >([false, defaultMessage]);
   useEffect(() => {
     if (
+      useDefaultMessage ||
       !actionParams?.message ||
       (isUsingDefault &&
         actionParams?.message === defaultMessageUsed &&
@@ -52,17 +70,20 @@ export const EmailParamsFields = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultMessage]);
-  const isToInvalid: boolean = to !== undefined && errors.to !== undefined && errors.to.length > 0;
+  const isToInvalid: boolean =
+    to !== undefined && errors.to !== undefined && Number(errors.to.length) > 0;
   const isSubjectInvalid: boolean =
-    subject !== undefined && errors.subject !== undefined && errors.subject.length > 0;
-  const isCCInvalid: boolean = errors.cc !== undefined && errors.cc.length > 0 && cc !== undefined;
+    subject !== undefined && errors.subject !== undefined && Number(errors.subject.length) > 0;
+  const isCCInvalid: boolean =
+    errors.cc !== undefined && Number(errors.cc.length) > 0 && cc !== undefined;
   const isBCCInvalid: boolean =
-    errors.bcc !== undefined && errors.bcc.length > 0 && bcc !== undefined;
+    errors.bcc !== undefined && Number(errors.bcc.length) > 0 && bcc !== undefined;
+
   return (
     <>
       <EuiFormRow
         fullWidth
-        error={errors.to}
+        error={errors.to as string}
         isInvalid={isToInvalid}
         label={i18n.translate('xpack.stackConnectors.components.email.recipientTextFieldLabel', {
           defaultMessage: 'To',
@@ -99,7 +120,7 @@ export const EmailParamsFields = ({
           data-test-subj="toEmailAddressInput"
           selectedOptions={toOptions}
           onCreateOption={(searchValue: string) => {
-            const newOptions = [...toOptions, { label: searchValue }];
+            const newOptions = getFormattedEmailOptions(searchValue, toOptions);
             editAction(
               'to',
               newOptions.map((newOption) => newOption.label),
@@ -124,7 +145,7 @@ export const EmailParamsFields = ({
       {addCC || (cc && cc?.length > 0) ? (
         <EuiFormRow
           fullWidth
-          error={errors.cc}
+          error={errors.cc as string}
           isInvalid={isCCInvalid}
           isDisabled={isDisabled}
           label={i18n.translate(
@@ -142,7 +163,7 @@ export const EmailParamsFields = ({
             data-test-subj="ccEmailAddressInput"
             selectedOptions={ccOptions}
             onCreateOption={(searchValue: string) => {
-              const newOptions = [...ccOptions, { label: searchValue }];
+              const newOptions = getFormattedEmailOptions(searchValue, ccOptions);
               editAction(
                 'cc',
                 newOptions.map((newOption) => newOption.label),
@@ -168,7 +189,7 @@ export const EmailParamsFields = ({
       {addBCC || (bcc && bcc?.length > 0) ? (
         <EuiFormRow
           fullWidth
-          error={errors.bcc}
+          error={errors.bcc as string}
           isInvalid={isBCCInvalid}
           label={i18n.translate(
             'xpack.stackConnectors.components.email.recipientBccTextFieldLabel',
@@ -186,7 +207,7 @@ export const EmailParamsFields = ({
             data-test-subj="bccEmailAddressInput"
             selectedOptions={bccOptions}
             onCreateOption={(searchValue: string) => {
-              const newOptions = [...bccOptions, { label: searchValue }];
+              const newOptions = getFormattedEmailOptions(searchValue, bccOptions);
               editAction(
                 'bcc',
                 newOptions.map((newOption) => newOption.label),
@@ -212,7 +233,7 @@ export const EmailParamsFields = ({
       {showEmailSubjectAndMessage && (
         <EuiFormRow
           fullWidth
-          error={errors.subject}
+          error={errors.subject as string}
           isInvalid={isSubjectInvalid}
           label={i18n.translate('xpack.stackConnectors.components.email.subjectTextFieldLabel', {
             defaultMessage: 'Subject',

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { externals } from '@kbn/ui-shared-deps-src';
@@ -75,6 +76,10 @@ export default ({ config: storybookConfig }: { config: Configuration }) => {
     },
     externals,
     module: {
+      // no parse rules for a few known large packages which have no require() statements
+      // or which have require() statements that should be ignored because the file is
+      // already bundled with all its necessary dependencies
+      noParse: [/[\/\\]node_modules[\/\\]vega[\/\\]build-es5[\/\\]vega\.js$/],
       rules: [
         {
           test: /\.(html|md|txt|tmpl)$/,
@@ -111,13 +116,25 @@ export default ({ config: storybookConfig }: { config: Configuration }) => {
                     resolve(REPO_ROOT, 'src/core/public/styles/core_app/_globals_v8light.scss')
                   )};\n${content}`;
                 },
-                implementation: require('node-sass'),
+                implementation: require('sass-embedded'),
                 sassOptions: {
                   includePaths: [resolve(REPO_ROOT, 'node_modules')],
+                  quietDeps: true,
                 },
               },
             },
           ],
+        },
+        {
+          test: /node_modules\/@?xstate5\/.*\.js$/,
+          use: {
+            loader: 'babel-loader',
+            options: {
+              babelrc: false,
+              presets: [require.resolve('@kbn/babel-preset/webpack_preset')],
+              plugins: ['@babel/plugin-transform-logical-assignment-operators'],
+            },
+          },
         },
       ],
     },
@@ -128,11 +145,14 @@ export default ({ config: storybookConfig }: { config: Configuration }) => {
       alias: {
         core_app_image_assets: resolve(REPO_ROOT, 'src/core/public/styles/core_app/images'),
         core_styles: resolve(REPO_ROOT, 'src/core/public/index.scss'),
+        vega: resolve(REPO_ROOT, 'node_modules/vega/build-es5/vega.js'),
       },
-      symlinks: false,
     },
     stats,
   };
+
+  // Override storybookConfig mainFields instead of merging with config
+  delete storybookConfig.resolve?.mainFields;
 
   const updatedModuleRules = [];
   // clone and modify the module.rules config provided by storybook so that the default babel plugins run after the typescript preset
@@ -152,9 +172,7 @@ export default ({ config: storybookConfig }: { config: Configuration }) => {
       // move the plugins to the top of the preset array so they will run after the typescript preset
       options.presets = [
         require.resolve('@kbn/babel-preset/common_preset'),
-        {
-          plugins: [...plugins, require.resolve('@kbn/babel-plugin-package-imports')],
-        },
+        { plugins },
         ...(options.presets as Preset[]).filter(isDesiredPreset).map((preset) => {
           const tsPreset = getTsPreset(preset);
           if (!tsPreset) {

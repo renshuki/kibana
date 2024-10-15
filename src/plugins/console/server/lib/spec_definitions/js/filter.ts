@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { SpecDefinitionsService } from '../../../services';
@@ -36,7 +37,6 @@ filters.ids = {
   __template: {
     values: ['ID'],
   },
-  type: '{type}',
   values: [''],
 };
 
@@ -97,38 +97,6 @@ filters.geo_distance = {
   },
 };
 
-filters.geo_distance_range = {
-  __template: {
-    from: 100,
-    to: 200,
-    distance_unit: 'km',
-    FIELD: {
-      lat: 40.73,
-      lon: -74.1,
-    },
-  },
-  from: 100,
-  to: 200,
-
-  distance_unit: {
-    __one_of: ['km', 'miles'],
-  },
-  distance_type: {
-    __one_of: ['arc', 'plane'],
-  },
-  include_lower: {
-    __one_of: [true, false],
-  },
-  include_upper: {
-    __one_of: [true, false],
-  },
-
-  '{field}': {
-    lat: 40.73,
-    lon: -74.1,
-  },
-};
-
 filters.geo_polygon = {
   __template: {
     FIELD: {
@@ -175,7 +143,6 @@ filters.geo_shape = {
     indexed_shape: {
       id: '',
       index: '{index}',
-      type: '{type}',
       shape_field_name: 'shape',
     },
     relation: {
@@ -189,7 +156,7 @@ filters.has_child = {
     type: 'TYPE',
     filter: {},
   },
-  type: '{type}',
+  type: '',
   query: {},
   filter: {},
   _scope: '',
@@ -202,7 +169,7 @@ filters.has_parent = {
     parent_type: 'TYPE',
     filter: {},
   },
-  parent_type: '{type}',
+  parent_type: '',
   query: {},
   filter: {},
   _scope: '',

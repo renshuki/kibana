@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Readable } from 'stream';
@@ -16,13 +17,15 @@ import {
   createConcatStream,
 } from '@kbn/utils';
 import Boom from '@hapi/boom';
-import type { RequestHandlerWrapper } from '@kbn/core-http-server';
-import type { SavedObject } from '@kbn/core-saved-objects-common';
-import type {
+import type { KibanaRequest, RequestHandlerWrapper } from '@kbn/core-http-server';
+import {
+  SavedObject,
   ISavedObjectTypeRegistry,
   SavedObjectsExportResultDetails,
+  SavedObjectsErrorHelpers,
 } from '@kbn/core-saved-objects-server';
-import { SavedObjectsErrorHelpers } from '@kbn/core-saved-objects-utils-server';
+import type { Logger } from '@kbn/logging';
+import { EXPORT_ALL_TYPES_TOKEN } from '@kbn/core-saved-objects-import-export-server-internal';
 
 export async function createSavedObjectsStreamFromNdJson(ndJsonStream: Readable) {
   const savedObjects = await createPromiseFromStreams([
@@ -42,7 +45,9 @@ export async function createSavedObjectsStreamFromNdJson(ndJsonStream: Readable)
 }
 
 export function validateTypes(types: string[], supportedTypes: string[]): string | undefined {
-  const invalidTypes = types.filter((t) => !supportedTypes.includes(t));
+  const invalidTypes = types.filter(
+    (t) => t !== EXPORT_ALL_TYPES_TOKEN && !supportedTypes.includes(t)
+  );
   if (invalidTypes.length) {
     return `Trying to export non-exportable type(s): ${invalidTypes.join(', ')}`;
   }
@@ -108,6 +113,7 @@ export function throwOnGloballyHiddenTypes(
     );
   }
 }
+
 /**
  * @param {string[]} unsupportedTypes saved object types registered with hidden=false and hiddenFromHttpApis=true
  */
@@ -119,6 +125,7 @@ export function throwOnHttpHiddenTypes(unsupportedTypes: string[]) {
     );
   }
 }
+
 /**
  * @param {string[]} type saved object type
  * @param {ISavedObjectTypeRegistry} registry the saved object type registry
@@ -146,9 +153,37 @@ export function throwIfAnyTypeNotVisibleByAPI(
     throwOnHttpHiddenTypes(unsupportedTypes);
   }
 }
+
 export interface BulkGetItem {
   type: string;
   id: string;
   fields?: string[];
   namespaces?: string[];
+}
+
+export function isKibanaRequest({ headers }: KibanaRequest) {
+  // The presence of these two request headers gives us a good indication that this is a first-party request from the Kibana client.
+  // We can't be 100% certain, but this is a reasonable attempt.
+  return (
+    headers && headers['kbn-version'] && headers.referer && headers['x-elastic-internal-origin']
+  );
+}
+
+export interface LogWarnOnExternalRequest {
+  method: string;
+  path: string;
+  request: KibanaRequest;
+  logger: Logger;
+}
+
+/**
+ * Only log a warning when the request is internal
+ * Allows us to silence the logs for development
+ *  @internal
+ */
+export function logWarnOnExternalRequest(params: LogWarnOnExternalRequest) {
+  const { method, path, request, logger } = params;
+  if (!isKibanaRequest(request)) {
+    logger.warn(`The ${method} saved object API ${path} is deprecated.`);
+  }
 }

@@ -21,12 +21,14 @@ import { Settings } from './settings';
 
 jest.mock('../../../supported_renderers');
 
-jest.mock('@elastic/eui/lib/components/portal/portal', () => {
-  // eslint-disable-next-line @typescript-eslint/no-shadow
-  const React = jest.requireActual('react');
-  return {
-    EuiPortal: (props: any) => <div>{props.children}</div>,
-  };
+// @ts-ignore Importing this to mock
+import * as Portal from '@elastic/eui/lib/components/portal/portal';
+
+// Mock the EuiPortal - `insertAdjacentElement is not supported in
+// `jsdom` 12.  We're just going to render a `div` with the children
+// so the `enzyme` tests will be accurate.
+jest.spyOn(Portal, 'EuiPortal').mockImplementation((props: any) => {
+  return <div className="mockedEuiPortal">{props.children}</div>;
 });
 
 describe('<Settings />', () => {
@@ -52,8 +54,8 @@ describe('<Settings />', () => {
     trigger(wrapper).simulate('click');
     expect(portal(wrapper).exists()).toEqual(true);
     expect(popover(wrapper).prop('isOpen')).toEqual(true);
-    expect(menuItems(wrapper).length).toEqual(2);
-    expect(contextMenu(wrapper).text()).toEqual('SettingsAuto PlayToolbar');
+    expect(menuItems(wrapper).length).toEqual(3);
+    expect(contextMenu(wrapper).last().text()).toEqual('SettingsAuto PlayToolbar');
     trigger(wrapper).simulate('click');
     expect(popover(wrapper).prop('isOpen')).toEqual(false);
   });
@@ -62,7 +64,7 @@ describe('<Settings />', () => {
     await openSettings(wrapper);
     expect(takeMountedSnapshot(portal(wrapper))).toMatchSnapshot();
 
-    await selectMenuItem(wrapper, 0);
+    await selectMenuItem(wrapper, 1);
     expect(takeMountedSnapshot(portal(wrapper))).toMatchSnapshot();
   });
 
@@ -70,7 +72,7 @@ describe('<Settings />', () => {
     await openSettings(wrapper);
     expect(takeMountedSnapshot(portal(wrapper))).toMatchSnapshot();
 
-    await selectMenuItem(wrapper, 1);
+    await selectMenuItem(wrapper, 2);
     expect(takeMountedSnapshot(portal(wrapper))).toMatchSnapshot();
 
     // Click the Hide Toolbar switch

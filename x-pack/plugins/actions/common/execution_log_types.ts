@@ -19,6 +19,7 @@ export interface IExecutionLog {
   connector_name: string;
   connector_id: string;
   timed_out: boolean;
+  source: string;
 }
 
 export interface IExecutionLogResult {
@@ -58,4 +59,4 @@ export const executionLogSortableColumns = [
   'schedule_delay',
 ] as const;
 
-export type ExecutionLogSortFields = typeof executionLogSortableColumns[number];
+export type ExecutionLogSortFields = (typeof executionLogSortableColumns)[number];

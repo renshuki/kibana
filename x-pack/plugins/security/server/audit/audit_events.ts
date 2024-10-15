@@ -5,110 +5,16 @@
  * 2.0.
  */
 
+import type { EcsEvent, KibanaRequest } from '@kbn/core/server';
+import type { AuditEvent } from '@kbn/security-plugin-types-server';
+import type { ArrayElement } from '@kbn/utility-types';
+
+import type { AuthenticationProvider } from '../../common';
+import type { AuthenticationResult } from '../authentication/authentication_result';
 import type {
   AuditAction,
   AddAuditEventParams as SavedObjectEventParams,
-} from '@kbn/core-saved-objects-server';
-import type { EcsEventOutcome, EcsEventType, KibanaRequest, LogMeta } from '@kbn/core/server';
-
-import type { AuthenticationProvider } from '../../common/model';
-import type { AuthenticationResult } from '../authentication/authentication_result';
-
-/**
- * Audit kibana schema using ECS format
- */
-export interface AuditKibana {
-  /**
-   * The ID of the space associated with this event.
-   */
-  space_id?: string;
-  /**
-   * The ID of the user session associated with this event. Each login attempt
-   * results in a unique session id.
-   */
-  session_id?: string;
-  /**
-   * Saved object that was created, changed, deleted or accessed as part of this event.
-   */
-  saved_object?: {
-    type: string;
-    id: string;
-  };
-  /**
-   * Name of authentication provider associated with a login event.
-   */
-  authentication_provider?: string;
-  /**
-   * Type of authentication provider associated with a login event.
-   */
-  authentication_type?: string;
-  /**
-   * Name of Elasticsearch realm that has authenticated the user.
-   */
-  authentication_realm?: string;
-  /**
-   * Name of Elasticsearch realm where the user details were retrieved from.
-   */
-  lookup_realm?: string;
-  /**
-   * Set of space IDs that a saved object was shared to.
-   */
-  add_to_spaces?: readonly string[];
-  /**
-   * Set of space IDs that a saved object was removed from.
-   */
-  delete_from_spaces?: readonly string[];
-}
-
-type EcsHttp = Required<LogMeta>['http'];
-type EcsRequest = Required<EcsHttp>['request'];
-
-/**
- * Audit request schema using ECS format
- */
-export interface AuditRequest extends EcsRequest {
-  /**
-   * HTTP request headers
-   */
-  headers?: {
-    'x-forwarded-for'?: string;
-  };
-}
-
-/**
- * Audit http schema using ECS format
- */
-export interface AuditHttp extends EcsHttp {
-  /**
-   * HTTP request details
-   */
-  request?: AuditRequest;
-}
-
-/**
- * Audit event schema using ECS format: https://www.elastic.co/guide/en/ecs/1.12/index.html
- *
- * If you add additional fields to the schema ensure you update the Kibana Filebeat module:
- * https://github.com/elastic/beats/tree/master/filebeat/module/kibana
- *
- * @public
- */
-export interface AuditEvent extends LogMeta {
-  /**
-   * Log message
-   */
-  message: string;
-
-  /**
-   * Kibana specific fields
-   */
-  kibana?: AuditKibana;
-
-  /**
-   * Fields describing an HTTP request
-   */
-  http?: AuditHttp;
-}
+} from '../saved_objects/saved_objects_security_extension';
 
 export interface HttpRequestParams {
   request: KibanaRequest;
@@ -355,7 +261,7 @@ const savedObjectAuditVerbs: Record<AuditAction, VerbsTuple> = {
   ],
 };
 
-const savedObjectAuditTypes: Record<AuditAction, EcsEventType> = {
+const savedObjectAuditTypes: Record<AuditAction, ArrayElement<EcsEvent['type']>> = {
   saved_object_create: 'creation',
   saved_object_get: 'access',
   saved_object_resolve: 'access',
@@ -374,6 +280,8 @@ export function savedObjectEvent({
   savedObject,
   addToSpaces,
   deleteFromSpaces,
+  unauthorizedSpaces,
+  unauthorizedTypes,
   outcome,
   error,
 }: SavedObjectEventParams): AuditEvent | undefined {
@@ -406,6 +314,8 @@ export function savedObjectEvent({
       saved_object: savedObject,
       add_to_spaces: addToSpaces,
       delete_from_spaces: deleteFromSpaces,
+      unauthorized_spaces: unauthorizedSpaces,
+      unauthorized_types: unauthorizedTypes,
     },
     error: error && {
       code: error.name,
@@ -430,7 +340,7 @@ const spaceAuditVerbs: Record<SpaceAuditAction, VerbsTuple> = {
   space_find: ['access', 'accessing', 'accessed'],
 };
 
-const spaceAuditTypes: Record<SpaceAuditAction, EcsEventType> = {
+const spaceAuditTypes: Record<SpaceAuditAction, ArrayElement<EcsEvent['type']>> = {
   space_create: 'creation',
   space_get: 'access',
   space_update: 'change',
@@ -440,7 +350,7 @@ const spaceAuditTypes: Record<SpaceAuditAction, EcsEventType> = {
 
 export interface SpacesAuditEventParams {
   action: SpaceAuditAction;
-  outcome?: EcsEventOutcome;
+  outcome?: EcsEvent['outcome'];
   savedObject?: NonNullable<AuditEvent['kibana']>['saved_object'];
   error?: Error;
 }

@@ -47,6 +47,7 @@ const prettifyFormJson = (policy: SerializedPolicy): PolicyJson => {
       frozen: policy.phases.frozen,
       delete: policy.phases.delete,
     },
+    deprecated: policy?.deprecated,
     _meta: policy._meta,
   };
 };
@@ -89,7 +90,7 @@ export const PolicyJsonFlyout: React.FunctionComponent<Props> = ({ policyName, c
       content = (
         <EuiCallOut
           data-test-subj="policyRequestInvalidAlert"
-          iconType="alert"
+          iconType="warning"
           color="danger"
           title={i18n.translate(
             'xpack.indexLifecycleMgmt.policyJsonFlyout.validationErrorCallout.title',
@@ -142,7 +143,7 @@ export const PolicyJsonFlyout: React.FunctionComponent<Props> = ({ policyName, c
             {policyName ? (
               <FormattedMessage
                 id="xpack.indexLifecycleMgmt.policyJsonFlyout.namedTitle"
-                defaultMessage="Request for '{policyName}'"
+                defaultMessage="Request for ''{policyName}''"
                 values={{ policyName }}
               />
             ) : (

@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
+import type { FC, PropsWithChildren } from 'react';
+import React from 'react';
 import { FormattedMessage } from '@kbn/i18n-react';
 import {
   EuiButton,
@@ -25,7 +26,12 @@ interface Props {
   saveEnabled: boolean;
 }
 
-export const ModalWrapper: FC<Props> = ({ onCreateClick, closeModal, saveEnabled, children }) => {
+export const ModalWrapper: FC<PropsWithChildren<Props>> = ({
+  onCreateClick,
+  closeModal,
+  saveEnabled,
+  children,
+}) => {
   return (
     <EuiModal
       onClose={closeModal}
@@ -34,12 +40,10 @@ export const ModalWrapper: FC<Props> = ({ onCreateClick, closeModal, saveEnabled
     >
       <EuiModalHeader>
         <EuiModalHeaderTitle>
-          <h1>
-            <FormattedMessage
-              id="xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.title"
-              defaultMessage="Create detector"
-            />
-          </h1>
+          <FormattedMessage
+            id="xpack.ml.newJob.wizard.pickFieldsStep.advancedDetectorModal.title"
+            defaultMessage="Create detector"
+          />
         </EuiModalHeaderTitle>
       </EuiModalHeader>
 

@@ -23,7 +23,8 @@ describe('Users filter', () => {
   let history: AppContextTestRender['history'];
   let mockedContext: AppContextTestRender;
 
-  const testPrefix = 'response-actions-list-users-filter';
+  const testPrefix = 'test';
+  const filterPrefix = 'users-filter';
   let onChangeUsersFilter: jest.Mock;
 
   beforeEach(async () => {
@@ -32,7 +33,11 @@ describe('Users filter', () => {
     ({ history } = mockedContext);
     render = (props?: React.ComponentProps<typeof ActionsLogUsersFilter>) =>
       (renderResult = mockedContext.render(
-        <ActionsLogUsersFilter {...{ isFlyout: false, onChangeUsersFilter }} />
+        <ActionsLogUsersFilter
+          data-test-subj={testPrefix}
+          {...{ isFlyout: false, onChangeUsersFilter }}
+          {...(props ?? {})}
+        />
       ));
     reactTestingLibrary.act(() => {
       history.push(`${MANAGEMENT_PATH}/response_actions`);
@@ -42,44 +47,44 @@ describe('Users filter', () => {
   it('should show a search input for users', () => {
     render();
 
-    const searchInput = renderResult.getByTestId(`${testPrefix}-search`);
+    const searchInput = renderResult.getByTestId(`${testPrefix}-${filterPrefix}-search`);
     expect(searchInput).toBeTruthy();
     expect(searchInput.getAttribute('placeholder')).toEqual('Filter by username');
   });
 
-  it('should search on given search string on enter', () => {
+  it('should search on given search string on enter', async () => {
     render();
 
-    const searchInput = renderResult.getByTestId(`${testPrefix}-search`);
-    userEvent.type(searchInput, 'usernameX');
-    userEvent.type(searchInput, '{enter}');
+    const searchInput = renderResult.getByTestId(`${testPrefix}-${filterPrefix}-search`);
+    await userEvent.type(searchInput, 'usernameX');
+    await userEvent.type(searchInput, '{enter}');
     expect(onChangeUsersFilter).toHaveBeenCalledWith(['usernameX']);
   });
 
-  it('should search comma separated strings as multiple users', () => {
+  it('should search comma separated strings as multiple users', async () => {
     render();
 
-    const searchInput = renderResult.getByTestId(`${testPrefix}-search`);
-    userEvent.type(searchInput, 'usernameX,usernameY,usernameZ');
-    userEvent.type(searchInput, '{enter}');
+    const searchInput = renderResult.getByTestId(`${testPrefix}-${filterPrefix}-search`);
+    await userEvent.type(searchInput, 'usernameX,usernameY,usernameZ');
+    await userEvent.type(searchInput, '{enter}');
     expect(onChangeUsersFilter).toHaveBeenCalledWith(['usernameX', 'usernameY', 'usernameZ']);
   });
 
-  it('should ignore white spaces in a given username when updating the API params', () => {
+  it('should ignore white spaces in a given username when updating the API params', async () => {
     render();
 
-    const searchInput = renderResult.getByTestId(`${testPrefix}-search`);
-    userEvent.type(searchInput, '   usernameX   ');
-    userEvent.type(searchInput, '{enter}');
+    const searchInput = renderResult.getByTestId(`${testPrefix}-${filterPrefix}-search`);
+    await userEvent.type(searchInput, '   usernameX   ');
+    await userEvent.type(searchInput, '{enter}');
     expect(onChangeUsersFilter).toHaveBeenCalledWith(['usernameX']);
   });
 
-  it('should ignore white spaces in comma separated usernames when updating the API params', () => {
+  it('should ignore white spaces in comma separated usernames when updating the API params', async () => {
     render();
 
-    const searchInput = renderResult.getByTestId(`${testPrefix}-search`);
-    userEvent.type(searchInput, '   , usernameX ,usernameY    ,       ');
-    userEvent.type(searchInput, '{enter}');
+    const searchInput = renderResult.getByTestId(`${testPrefix}-${filterPrefix}-search`);
+    await userEvent.type(searchInput, '   , usernameX ,usernameY    ,       ');
+    await userEvent.type(searchInput, '{enter}');
     expect(onChangeUsersFilter).toHaveBeenCalledWith(['usernameX', 'usernameY']);
   });
 });

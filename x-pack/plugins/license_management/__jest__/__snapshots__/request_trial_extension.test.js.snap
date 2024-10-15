@@ -33,20 +33,19 @@ exports[`RequestTrialExtension component should display when enterprise license 
               <a
                 class="euiLink emotion-euiLink-primary"
                 href="https://www.elastic.co/subscriptions"
-                rel="noopener"
+                rel="noopener noreferrer"
                 target="_blank"
               >
                 subscription features
                 <span
-                  class="emotion-euiLink__externalIcon"
+                  class="emotion-EuiExternalLinkIcon"
                   data-euiicon-type="popout"
-                >
-                  External link
-                </span>
+                  role="presentation"
+                />
                 <span
-                  class="emotion-euiScreenReaderOnly-euiLink__screenReaderText"
+                  class="emotion-euiScreenReaderOnly"
                 >
-                  (opens in a new tab or window)
+                  (external, opens in a new tab or window)
                 </span>
               </a>
               , request an extension now.
@@ -58,10 +57,10 @@ exports[`RequestTrialExtension component should display when enterprise license 
         class="emotion-euiCard__footer"
       >
         <a
-          class="euiButton emotion-euiButtonDisplay-m-defaultMinWidth-m-base-primary"
+          class="euiButton emotion-euiButtonDisplay-m-defaultMinWidth-base-primary"
           data-test-subj="extendTrialButton"
           href="https://www.elastic.co/trialextension"
-          rel="noopener"
+          rel="noopener noreferrer"
           target="_blank"
         >
           <span
@@ -109,20 +108,19 @@ exports[`RequestTrialExtension component should display when license is active a
               <a
                 class="euiLink emotion-euiLink-primary"
                 href="https://www.elastic.co/subscriptions"
-                rel="noopener"
+                rel="noopener noreferrer"
                 target="_blank"
               >
                 subscription features
                 <span
-                  class="emotion-euiLink__externalIcon"
+                  class="emotion-EuiExternalLinkIcon"
                   data-euiicon-type="popout"
-                >
-                  External link
-                </span>
+                  role="presentation"
+                />
                 <span
-                  class="emotion-euiScreenReaderOnly-euiLink__screenReaderText"
+                  class="emotion-euiScreenReaderOnly"
                 >
-                  (opens in a new tab or window)
+                  (external, opens in a new tab or window)
                 </span>
               </a>
               , request an extension now.
@@ -134,10 +132,10 @@ exports[`RequestTrialExtension component should display when license is active a
         class="emotion-euiCard__footer"
       >
         <a
-          class="euiButton emotion-euiButtonDisplay-m-defaultMinWidth-m-base-primary"
+          class="euiButton emotion-euiButtonDisplay-m-defaultMinWidth-base-primary"
           data-test-subj="extendTrialButton"
           href="https://www.elastic.co/trialextension"
-          rel="noopener"
+          rel="noopener noreferrer"
           target="_blank"
         >
           <span
@@ -185,20 +183,19 @@ exports[`RequestTrialExtension component should display when license is not acti
               <a
                 class="euiLink emotion-euiLink-primary"
                 href="https://www.elastic.co/subscriptions"
-                rel="noopener"
+                rel="noopener noreferrer"
                 target="_blank"
               >
                 subscription features
                 <span
-                  class="emotion-euiLink__externalIcon"
+                  class="emotion-EuiExternalLinkIcon"
                   data-euiicon-type="popout"
-                >
-                  External link
-                </span>
+                  role="presentation"
+                />
                 <span
-                  class="emotion-euiScreenReaderOnly-euiLink__screenReaderText"
+                  class="emotion-euiScreenReaderOnly"
                 >
-                  (opens in a new tab or window)
+                  (external, opens in a new tab or window)
                 </span>
               </a>
               , request an extension now.
@@ -210,10 +207,10 @@ exports[`RequestTrialExtension component should display when license is not acti
         class="emotion-euiCard__footer"
       >
         <a
-          class="euiButton emotion-euiButtonDisplay-m-defaultMinWidth-m-base-primary"
+          class="euiButton emotion-euiButtonDisplay-m-defaultMinWidth-base-primary"
           data-test-subj="extendTrialButton"
           href="https://www.elastic.co/trialextension"
-          rel="noopener"
+          rel="noopener noreferrer"
           target="_blank"
         >
           <span
@@ -261,20 +258,19 @@ exports[`RequestTrialExtension component should display when platinum license is
               <a
                 class="euiLink emotion-euiLink-primary"
                 href="https://www.elastic.co/subscriptions"
-                rel="noopener"
+                rel="noopener noreferrer"
                 target="_blank"
               >
                 subscription features
                 <span
-                  class="emotion-euiLink__externalIcon"
+                  class="emotion-EuiExternalLinkIcon"
                   data-euiicon-type="popout"
-                >
-                  External link
-                </span>
+                  role="presentation"
+                />
                 <span
-                  class="emotion-euiScreenReaderOnly-euiLink__screenReaderText"
+                  class="emotion-euiScreenReaderOnly"
                 >
-                  (opens in a new tab or window)
+                  (external, opens in a new tab or window)
                 </span>
               </a>
               , request an extension now.
@@ -286,10 +282,10 @@ exports[`RequestTrialExtension component should display when platinum license is
         class="emotion-euiCard__footer"
       >
         <a
-          class="euiButton emotion-euiButtonDisplay-m-defaultMinWidth-m-base-primary"
+          class="euiButton emotion-euiButtonDisplay-m-defaultMinWidth-base-primary"
           data-test-subj="extendTrialButton"
           href="https://www.elastic.co/trialextension"
-          rel="noopener"
+          rel="noopener noreferrer"
           target="_blank"
         >
           <span

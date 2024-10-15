@@ -9,7 +9,7 @@ import React, { FunctionComponent, useCallback, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { EuiSwitch, EuiSwitchEvent } from '@elastic/eui';
 import { ExpressionAstExpression } from '@kbn/expressions-plugin/common';
-import { set } from 'lodash';
+import { set } from '@kbn/safer-lodash-set';
 import { defaultExpression } from './default_expression';
 import { getFieldPath, getFieldValue } from './utils';
 
@@ -39,7 +39,7 @@ export const SimpleTemplate: FunctionComponent<Props> = ({ onValueChange, argVal
     [argValue, onValueChange, showValuePath]
   );
 
-  const showLabels = getFieldValue(argValue, SHOW_FIELD, false);
+  const showLabels = getFieldValue(argValue, SHOW_FIELD, false) as boolean;
 
   return (
     <EuiSwitch compressed checked={showLabels} onChange={onToggle} showLabel={false} label="" />

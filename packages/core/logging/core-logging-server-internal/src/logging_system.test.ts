@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { mockStreamWrite, mockGetFlattenedObject } from './logging_system.test.mocks';
 
-const dynamicProps = { process: { pid: expect.any(Number) } };
+const dynamicProps = { process: { pid: expect.any(Number) }, ecs: { version: EcsVersion } };
 
 const timestamp = new Date(Date.UTC(2012, 1, 1, 14, 33, 22, 11));
 let mockConsoleLog: jest.SpyInstance;
@@ -17,16 +18,19 @@ import { createWriteStream } from 'fs';
 const mockCreateWriteStream = createWriteStream as unknown as jest.Mock<typeof createWriteStream>;
 
 import { LoggingSystem, config } from '..';
+import { EcsVersion } from '@elastic/ecs';
+import { unsafeConsole } from '@kbn/security-hardening';
 
 let system: LoggingSystem;
 beforeEach(() => {
-  mockConsoleLog = jest.spyOn(global.console, 'log').mockReturnValue(undefined);
+  mockConsoleLog = jest.spyOn(unsafeConsole, 'log').mockReturnValue(undefined);
   jest.spyOn<any, any>(global, 'Date').mockImplementation(() => timestamp);
+  jest.spyOn(process, 'uptime').mockReturnValue(10);
   system = new LoggingSystem();
 });
 
 afterEach(() => {
-  jest.restoreAllMocks();
+  jest.clearAllMocks();
   mockCreateWriteStream.mockClear();
   mockStreamWrite.mockClear();
   mockGetFlattenedObject.mockClear();

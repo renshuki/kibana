@@ -60,7 +60,7 @@ export const TestConnectorForm = ({
     (async () => {
       const res = (await actionTypeModel?.validateParams(actionParams)).errors as IErrorObject;
       setActionErrors({ ...res });
-      setHasErrors(!!Object.values(res).find((errors) => errors.length > 0));
+      setHasErrors(!!Object.values(res).find((errors) => (errors.length as number) > 0));
     })();
   }, [actionTypeModel, actionParams]);
 
@@ -118,7 +118,7 @@ export const TestConnectorForm = ({
         <>
           {executeEnabled ? null : (
             <>
-              <EuiCallOut iconType="alert" color="warning">
+              <EuiCallOut iconType="warning" color="warning">
                 <p>
                   <FormattedMessage
                     defaultMessage="Save your changes before testing the connector."
@@ -187,7 +187,6 @@ const SuccessfulExecution = () => (
       'xpack.triggersActionsUI.sections.testConnectorForm.executionSuccessfulTitle',
       {
         defaultMessage: 'Test was successful',
-        values: {},
       }
     )}
     color="success"
@@ -247,7 +246,7 @@ const FailedExecussion = ({
       )}
       data-test-subj="executionFailureResult"
       color="danger"
-      iconType="alert"
+      iconType="warning"
     >
       <EuiDescriptionList textStyle="reverse" listItems={items} />
     </EuiCallOut>

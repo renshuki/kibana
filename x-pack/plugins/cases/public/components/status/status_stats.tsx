@@ -6,8 +6,8 @@
  */
 
 import React, { memo, useMemo } from 'react';
-import { EuiDescriptionList, EuiLoadingSpinner } from '@elastic/eui';
-import type { CaseStatuses } from '../../../common/api';
+import { EuiStat, EuiLoadingSpinner } from '@elastic/eui';
+import type { CaseStatuses } from '../../../common/types/domain';
 import { statuses } from './config';
 
 export interface Props {
@@ -23,21 +23,25 @@ const StatusStatsComponent: React.FC<Props> = ({
   isLoading,
   dataTestSubj,
 }) => {
-  const statusStats = useMemo(
-    () => [
-      {
-        title: statuses[caseStatus].stats.title,
-        description: isLoading ? (
-          <EuiLoadingSpinner data-test-subj={`${dataTestSubj}-loading-spinner`} />
-        ) : (
-          caseCount ?? '-'
-        ),
-      },
-    ],
+  const { title, description } = useMemo(
+    () => ({
+      description: statuses[caseStatus].stats.title,
+      title: isLoading ? (
+        <EuiLoadingSpinner data-test-subj={`${dataTestSubj}-loading-spinner`} />
+      ) : (
+        caseCount ?? '-'
+      ),
+    }),
     [caseCount, caseStatus, dataTestSubj, isLoading]
   );
   return (
-    <EuiDescriptionList data-test-subj={dataTestSubj} textStyle="reverse" listItems={statusStats} />
+    <EuiStat
+      data-test-subj={dataTestSubj}
+      description={description}
+      title={title}
+      titleSize="xs"
+      text-align="left"
+    />
   );
 };
 

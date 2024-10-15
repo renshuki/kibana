@@ -6,7 +6,7 @@
  */
 
 import { isObject } from 'lodash';
-import { DOCUMENT_FIELD_NAME } from '../../../../../../common';
+import { DOCUMENT_FIELD_NAME } from '../../../../../../common/constants';
 import {
   FieldBasedIndexPatternColumn,
   GenericOperationDefinition,
@@ -79,7 +79,7 @@ export function generateFormula(
     }
     previousFormula +=
       (previousColumn.filter.language === 'kuery' ? 'kql=' : 'lucene=') +
-      `'${previousColumn.filter.query.replace(/'/g, `\\'`)}'`; // replace all
+      `'${previousColumn.filter.query.replace(/\\/g, '\\\\').replace(/'/g, `\\'`)}'`; // replace all
   }
   if (previousColumn.timeShift) {
     if (

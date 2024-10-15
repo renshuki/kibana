@@ -5,10 +5,12 @@
  * 2.0.
  */
 
-import React, { FC, useCallback, useMemo, useState } from 'react';
+import type { FC } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 
-import { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types';
+import type { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types';
 
+import type { EuiRadioGroupOption } from '@elastic/eui';
 import {
   EuiButton,
   EuiButtonIcon,
@@ -17,7 +19,6 @@ import {
   EuiPanel,
   EuiPopover,
   EuiRadioGroup,
-  EuiRadioGroupOption,
   EuiToolTip,
 } from '@elastic/eui';
 
@@ -26,7 +27,10 @@ import type { DataView } from '@kbn/data-plugin/common';
 import type { TimefilterContract } from '@kbn/data-plugin/public';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { useDatePickerContext } from '../hooks/use_date_picker_context';
-import { setFullTimeRange } from '../services/full_time_range_selector_service';
+import {
+  setFullTimeRange,
+  type SetFullTimeRangeApiPath,
+} from '../services/full_time_range_selector_service';
 import type { GetTimeFieldRangeResponse } from '../services/types';
 import { FROZEN_TIER_PREFERENCE, type FrozenTierPreference } from '../storage';
 
@@ -64,6 +68,11 @@ export interface FullTimeRangeSelectorProps {
    * @param value - The time field range response.
    */
   callback?: (value: GetTimeFieldRangeResponse) => void;
+  /**
+   * Optional API path.
+   * @param value - The time field range response.
+   */
+  apiPath?: SetFullTimeRangeApiPath;
 }
 
 /**
@@ -83,50 +92,63 @@ export const FullTimeRangeSelector: FC<FullTimeRangeSelectorProps> = (props) => 
     query,
     disabled,
     callback,
+    apiPath,
   } = props;
+
   const {
     http,
     notifications: { toasts },
+    showFrozenDataTierChoice,
   } = useDatePickerContext();
 
   // wrapper around setFullTimeRange to allow for the calling of the optional callBack prop
-  const setRange = useCallback(
-    async (i: DataView, q?: QueryDslQueryContainer, excludeFrozenData?: boolean) => {
-      try {
-        const fullTimeRange = await setFullTimeRange(
-          timefilter,
-          i,
-          toasts,
-          http,
-          q,
-          excludeFrozenData
-        );
-        if (typeof callback === 'function') {
-          callback(fullTimeRange);
-        }
-      } catch (e) {
-        toasts.addDanger(
-          i18n.translate(
-            'xpack.ml.datePicker.fullTimeRangeSelector.errorSettingTimeRangeNotification',
-            {
-              defaultMessage: 'An error occurred setting the time range.',
-            }
-          )
-        );
+  const setRange = useCallback(async () => {
+    try {
+      const fullTimeRange = await setFullTimeRange(
+        timefilter,
+        dataView,
+        toasts,
+        http,
+        query,
+        showFrozenDataTierChoice === false
+          ? false
+          : frozenDataPreference === FROZEN_TIER_PREFERENCE.EXCLUDE,
+        apiPath
+      );
+      if (typeof callback === 'function' && fullTimeRange !== undefined) {
+        callback(fullTimeRange);
       }
-    },
-    [callback, http, timefilter, toasts]
-  );
+    } catch (e) {
+      toasts.addError(e, {
+        title: i18n.translate(
+          'xpack.ml.datePicker.fullTimeRangeSelector.errorSettingTimeRangeNotification',
+          {
+            defaultMessage:
+              'An error occurred setting the time range. Please set the desired start and end times.',
+          }
+        ),
+      });
+    }
+  }, [
+    timefilter,
+    dataView,
+    toasts,
+    http,
+    query,
+    showFrozenDataTierChoice,
+    frozenDataPreference,
+    apiPath,
+    callback,
+  ]);
 
   const [isPopoverOpen, setPopover] = useState(false);
 
   const setPreference = useCallback(
     (id: string) => {
       setFrozenDataPreference(id as FrozenTierPreference);
-      setRange(dataView, query, id === FROZEN_TIER_PREFERENCE.EXCLUDE);
       closePopover();
     },
-    [dataView, query, setFrozenDataPreference, setRange]
+    [setFrozenDataPreference]
   );
 
   const onButtonClick = () => {
@@ -174,9 +196,16 @@ export const FullTimeRangeSelector: FC<FullTimeRangeSelectorProps> = (props) => 
     [sortOptions, frozenDataPreference, setPreference]
   );
 
-  const buttonTooltip = useMemo(
-    () =>
-      frozenDataPreference === FROZEN_TIER_PREFERENCE.EXCLUDE ? (
+  const buttonTooltip = useMemo(() => {
+    if (showFrozenDataTierChoice === false) {
+      return (
+        <FormattedMessage
+          id="xpack.ml.datePicker.fullTimeRangeSelector.useFullData"
+          defaultMessage="Use full range of data."
+        />
+      );
+    } else {
+      return frozenDataPreference === FROZEN_TIER_PREFERENCE.EXCLUDE ? (
         <FormattedMessage
           id="xpack.ml.datePicker.fullTimeRangeSelector.useFullDataExcludingFrozenButtonTooltip"
           defaultMessage="Use full range of data excluding frozen data tier."
@@ -186,16 +215,16 @@ export const FullTimeRangeSelector: FC<FullTimeRangeSelectorProps> = (props) => 
           id="xpack.ml.datePicker.fullTimeRangeSelector.useFullDataIncludingFrozenButtonTooltip"
           defaultMessage="Use full range of data including frozen data tier, which might have slower search results."
         />
-      ),
-    [frozenDataPreference]
-  );
+      );
+    }
+  }, [frozenDataPreference, showFrozenDataTierChoice]);
 
   return (
     <EuiFlexGroup responsive={false} gutterSize="xs">
       <EuiToolTip content={buttonTooltip}>
         <EuiButton
           isDisabled={disabled}
-          onClick={() => setRange(dataView, query, true)}
+          onClick={() => setRange()}
           data-test-subj="mlDatePickerButtonUseFullData"
         >
           <FormattedMessage
@@ -204,31 +233,34 @@ export const FullTimeRangeSelector: FC<FullTimeRangeSelectorProps> = (props) => 
           />
         </EuiButton>
       </EuiToolTip>
-      <EuiFlexItem grow={false}>
-        <EuiPopover
-          id={'mlFullTimeRangeSelectorOption'}
-          button={
-            <EuiButtonIcon
-              display="base"
-              size="m"
-              iconType="boxesVertical"
-              aria-label={i18n.translate(
-                'xpack.ml.datePicker.fullTimeRangeSelector.moreOptionsButtonAriaLabel',
-                {
-                  defaultMessage: 'More options',
-                }
-              )}
-              onClick={onButtonClick}
-            />
-          }
-          isOpen={isPopoverOpen}
-          closePopover={closePopover}
-          panelPaddingSize="none"
-          anchorPosition="downRight"
-        >
-          {popoverContent}
-        </EuiPopover>
-      </EuiFlexItem>
+      {showFrozenDataTierChoice === false ? null : (
+        <EuiFlexItem grow={false}>
+          <EuiPopover
+            id={'mlFullTimeRangeSelectorOption'}
+            button={
+              <EuiButtonIcon
+                data-test-subj="mlDatePickerButtonDataTierOptions"
+                display="base"
+                size="m"
+                iconType="boxesVertical"
+                aria-label={i18n.translate(
+                  'xpack.ml.datePicker.fullTimeRangeSelector.moreOptionsButtonAriaLabel',
+                  {
+                    defaultMessage: 'More options',
+                  }
+                )}
+                onClick={onButtonClick}
+              />
+            }
+            isOpen={isPopoverOpen}
+            closePopover={closePopover}
+            panelPaddingSize="none"
+            anchorPosition="downRight"
+          >
+            {popoverContent}
+          </EuiPopover>
+        </EuiFlexItem>
+      )}
     </EuiFlexGroup>
   );
 };

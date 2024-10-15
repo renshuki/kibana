@@ -7,27 +7,24 @@
 import { EuiFlexGroup, EuiIcon } from '@elastic/eui';
 import React from 'react';
 import { FlexItem, MetricItem, StatValue } from './utils';
-import type { MetricStatItem } from './types';
-import { LensEmbeddable } from '../../../common/components/visualization_actions/lens_embeddable';
+import { VisualizationEmbeddable } from '../../../common/components/visualization_actions/visualization_embeddable';
+import type { FieldConfigs } from './types';
 
 export interface MetricEmbeddableProps {
-  fields: MetricStatItem[];
+  fields: FieldConfigs[];
   id: string;
-  timerange: { from: string; to: string };
   inspectTitle?: string;
+  timerange: { from: string; to: string };
 }
+
+const CHART_HEIGHT = 36;
 
 const MetricEmbeddableComponent = ({
   fields,
   id,
-  timerange,
   inspectTitle,
-}: {
-  fields: MetricStatItem[];
-  id: string;
-  timerange: { from: string; to: string };
-  inspectTitle?: string;
-}) => {
+  timerange,
+}: MetricEmbeddableProps) => {
   return (
     <EuiFlexGroup gutterSize="none" className="metricEmbeddable">
       {fields.map((field) => (
@@ -47,10 +44,10 @@ const MetricEmbeddableComponent = ({
             <MetricItem>
               {field.lensAttributes && (
                 <div data-test-subj="stat-title">
-                  <LensEmbeddable
+                  <VisualizationEmbeddable
                     data-test-subj="embeddable-metric"
-                    height="36px"
-                    id={id}
+                    height={CHART_HEIGHT}
+                    id={`${id}-${field.key}-metric-embeddable`}
                     lensAttributes={field.lensAttributes}
                     timerange={timerange}
                     inspectTitle={inspectTitle}

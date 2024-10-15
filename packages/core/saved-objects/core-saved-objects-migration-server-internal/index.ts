@@ -1,15 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export { DocumentMigrator, KibanaMigrator, buildActiveMappings, mergeTypes } from './src';
+export { DocumentMigrator, KibanaMigrator, buildActiveMappings, buildTypesMappings } from './src';
 export type { KibanaMigratorOptions } from './src';
 export { getAggregatedTypesDocuments } from './src/actions/check_for_unknown_docs';
-export { addExcludedTypesToBoolQuery } from './src/model/helpers';
+export {
+  addExcludedTypesToBoolQuery,
+  createBulkIndexOperationTuple,
+  createBulkDeleteOperationBody,
+} from './src/model/helpers';
 
 // these are only used for integration tests
 export {
@@ -20,15 +25,13 @@ export {
   calculateExcludeFilters,
   checkForUnknownDocs,
   waitForIndexStatus,
-  initAction,
   cloneIndex,
   waitForTask,
   updateAndPickupMappings,
-  updateTargetMappingsMeta,
+  updateMappings,
   updateAliases,
   transformDocs,
   setWriteBlock,
-  searchForOutdatedDocuments,
   removeWriteBlock,
   reindex,
   readWithPit,
@@ -37,14 +40,15 @@ export {
   fetchIndices,
   waitForReindexTask,
   waitForPickupUpdatedMappingsTask,
+  checkClusterRoutingAllocationEnabled,
 } from './src/actions';
 export type {
   OpenPitResponse,
   ReadWithPit,
-  SearchResponse,
   ReindexResponse,
   UpdateByQueryResponse,
   UpdateAndPickupMappingsResponse,
+  EsResponseTooLargeError,
 } from './src/actions';
 export {
   isClusterShardLimitExceeded,
@@ -52,10 +56,9 @@ export {
   isWriteBlockException,
   isIndexNotFoundException,
 } from './src/actions/es_errors';
-export { deterministicallyRegenerateObjectId } from './src/core/document_migrator';
 export {
   REMOVED_TYPES,
+  deterministicallyRegenerateObjectId,
   type DocumentsTransformFailed,
   type DocumentsTransformSuccess,
 } from './src/core';
-export { MIGRATION_CLIENT_OPTIONS } from './src/run_resilient_migrator';

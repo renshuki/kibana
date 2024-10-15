@@ -5,6 +5,7 @@
  * 2.0.
  */
 
+import { DATASET_VAR_NAME } from '../constants';
 import type {
   RegistryPolicyTemplate,
   RegistryPolicyInputOnlyTemplate,
@@ -17,7 +18,7 @@ import type {
 } from '../types';
 
 const DATA_STREAM_DATASET_VAR: RegistryVarsEntry = {
-  name: 'data_stream.dataset',
+  name: DATASET_VAR_NAME,
   type: 'text',
   title: 'Dataset name',
   description:
@@ -27,6 +28,17 @@ const DATA_STREAM_DATASET_VAR: RegistryVarsEntry = {
   show_user: true,
 };
 
+export function packageHasNoPolicyTemplates(packageInfo: PackageInfo): boolean {
+  return (
+    !packageInfo.policy_templates ||
+    packageInfo.policy_templates.length === 0 ||
+    !packageInfo.policy_templates.find(
+      (policyTemplate) =>
+        isInputOnlyPolicyTemplate(policyTemplate) ||
+        (policyTemplate.inputs && policyTemplate.inputs.length > 0)
+    )
+  );
+}
 export function isInputOnlyPolicyTemplate(
   policyTemplate: RegistryPolicyTemplate
 ): policyTemplate is RegistryPolicyInputOnlyTemplate {
@@ -68,18 +80,20 @@ export const getNormalizedDataStreams = (
   }
 
   return policyTemplates.map((policyTemplate) => {
+    const dataset = datasetName || createDefaultDatasetName(packageInfo, policyTemplate);
+
     const dataStream: RegistryDataStream = {
       type: policyTemplate.type,
-      dataset: datasetName || createDefaultDatasetName(packageInfo, policyTemplate),
+      dataset,
       title: policyTemplate.title + ' Dataset',
       release: packageInfo.release || 'ga',
       package: packageInfo.name,
-      path: packageInfo.name,
-      elasticsearch: packageInfo.elasticsearch,
+      path: dataset,
+      elasticsearch: packageInfo.elasticsearch || {},
       streams: [
         {
           input: policyTemplate.input,
-          vars: addDatasetVarIfNotPresent(policyTemplate.vars),
+          vars: addDatasetVarIfNotPresent(policyTemplate.vars, policyTemplate.name),
           template_path: policyTemplate.template_path,
           title: policyTemplate.title,
           description: policyTemplate.title,
@@ -88,13 +102,26 @@ export const getNormalizedDataStreams = (
       ],
     };
 
+    if (packageInfo.type === 'input') {
+      dataStream.elasticsearch = {
+        ...dataStream.elasticsearch,
+        ...{
+          dynamic_dataset: true,
+          dynamic_namespace: true,
+        },
+      };
+    }
+
     return dataStream;
   });
 };
 
 // Input only packages must provide a dataset name in order to differentiate their data streams
 // here we add the dataset var if it is not defined in the package already.
-const addDatasetVarIfNotPresent = (vars?: RegistryVarsEntry[]): RegistryVarsEntry[] => {
+const addDatasetVarIfNotPresent = (
+  vars?: RegistryVarsEntry[],
+  datasetName?: string
+): RegistryVarsEntry[] => {
   const newVars = vars ?? [];
 
   const isDatasetAlreadyAdded = newVars.find(
@@ -104,7 +131,10 @@ const addDatasetVarIfNotPresent = (vars?: RegistryVarsEntry[]): RegistryVarsEntr
   if (isDatasetAlreadyAdded) {
     return newVars;
   } else {
-    return [...newVars, DATA_STREAM_DATASET_VAR];
+    return [
+      ...newVars,
+      { ...DATA_STREAM_DATASET_VAR, ...(datasetName && { default: datasetName }) },
+    ];
   }
 };
 

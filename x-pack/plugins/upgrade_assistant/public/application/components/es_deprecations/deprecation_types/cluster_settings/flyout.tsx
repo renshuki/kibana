@@ -121,10 +121,10 @@ export const RemoveClusterSettingsFlyout = ({
             <EuiCallOut
               title={i18nTexts.errorTitle}
               color="danger"
-              iconType="alert"
+              iconType="warning"
               data-test-subj="deleteClusterSettingsError"
             >
-              {statusDetails!.message}
+              {statusDetails!.message as string}
             </EuiCallOut>
             <EuiSpacer />
           </>

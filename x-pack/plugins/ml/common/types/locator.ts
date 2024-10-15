@@ -8,12 +8,12 @@
 import type { SerializableRecord } from '@kbn/utility-types';
 import type { LocatorPublic } from '@kbn/share-plugin/public';
 import type { RefreshInterval, TimeRange } from '@kbn/data-plugin/common/query';
+import type { DataFrameAnalysisConfigType } from '@kbn/ml-data-frame-analytics-utils';
+import type { InfluencersFilterQuery } from '@kbn/ml-anomaly-utils';
+import type { SearchQueryLanguage } from '@kbn/ml-query-utils';
+import type { ListingPageUrlState } from '@kbn/ml-url-state';
 import type { JobId } from './anomaly_detection_jobs/job';
-import type { DataFrameAnalysisConfigType } from './data_frame_analytics';
-import type { SearchQueryLanguage } from '../constants/search';
-import type { ListingPageUrlState } from './common';
-import type { InfluencersFilterQuery } from './es_client';
-import { ML_PAGES } from '../constants/locator';
+import type { ML_PAGES } from '../constants/locator';
 
 type OptionalPageState = object | undefined;
 
@@ -44,34 +44,40 @@ export interface MlGenericUrlPageState extends MlIndexBasedSearchState {
 
 export type MlGenericUrlState = MLPageState<
   | typeof ML_PAGES.DATA_VISUALIZER_INDEX_VIEWER
+  | typeof ML_PAGES.DATA_VISUALIZER_ESQL
   | typeof ML_PAGES.ANOMALY_DETECTION_CREATE_JOB
   | typeof ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_RECOGNIZER
   | typeof ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_ADVANCED
   | typeof ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_FROM_LENS
   | typeof ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_FROM_MAP
+  | typeof ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_FROM_PATTERN_ANALYSIS
   | typeof ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_SELECT_TYPE
   | typeof ML_PAGES.ANOMALY_DETECTION_CREATE_JOB_SELECT_INDEX
   | typeof ML_PAGES.DATA_FRAME_ANALYTICS_CREATE_JOB
   | typeof ML_PAGES.OVERVIEW
   | typeof ML_PAGES.CALENDARS_MANAGE
+  | typeof ML_PAGES.CALENDARS_DST_MANAGE
   | typeof ML_PAGES.CALENDARS_NEW
+  | typeof ML_PAGES.CALENDARS_DST_NEW
   | typeof ML_PAGES.FILTER_LISTS_MANAGE
   | typeof ML_PAGES.FILTER_LISTS_NEW
   | typeof ML_PAGES.SETTINGS
-  | typeof ML_PAGES.ACCESS_DENIED
+  | typeof ML_PAGES.DATA_DRIFT_CUSTOM
+  | typeof ML_PAGES.DATA_DRIFT_INDEX_SELECT
+  | typeof ML_PAGES.DATA_DRIFT
   | typeof ML_PAGES.DATA_VISUALIZER
   | typeof ML_PAGES.DATA_VISUALIZER_FILE
   | typeof ML_PAGES.DATA_VISUALIZER_INDEX_SELECT
   | typeof ML_PAGES.AIOPS
-  | typeof ML_PAGES.AIOPS_EXPLAIN_LOG_RATE_SPIKES
-  | typeof ML_PAGES.AIOPS_EXPLAIN_LOG_RATE_SPIKES_INDEX_SELECT
   | typeof ML_PAGES.AIOPS_LOG_CATEGORIZATION
   | typeof ML_PAGES.AIOPS_LOG_CATEGORIZATION_INDEX_SELECT
+  | typeof ML_PAGES.AIOPS_LOG_RATE_ANALYSIS
+  | typeof ML_PAGES.AIOPS_LOG_RATE_ANALYSIS_INDEX_SELECT
   | typeof ML_PAGES.AIOPS_CHANGE_POINT_DETECTION_INDEX_SELECT
-  | typeof ML_PAGES.AIOPS_CHANGE_POINT_DETECTION,
+  | typeof ML_PAGES.AIOPS_CHANGE_POINT_DETECTION
+  | typeof ML_PAGES.SUPPLIED_CONFIGURATIONS,
   MlGenericUrlPageState | undefined
 >;
-
 export interface AnomalyDetectionQueryState {
   jobId?: JobId | string[];
   groupIds?: string[];
@@ -121,6 +127,7 @@ export interface ExplorerAppState {
   query?: any;
   mlShowCharts?: boolean;
 }
+
 export interface ExplorerGlobalState {
   ml: { jobIds: JobId[] };
   time?: TimeRange;
@@ -203,7 +210,7 @@ export interface TrainedModelsQueryState {
   modelId?: string;
 }
 
-export interface TrainedModelsNodesQueryState {
+export interface MemoryUsageNodesQueryState {
   nodeId?: string;
 }
 
@@ -242,6 +249,14 @@ export type CalendarEditUrlState = MLPageState<
   }
 >;
 
+export type CalendarDstEditUrlState = MLPageState<
+  typeof ML_PAGES.CALENDARS_DST_EDIT,
+  {
+    calendarId: string;
+    globalState?: MlCommonGlobalState;
+  }
+>;
+
 export type FilterEditUrlState = MLPageState<
   typeof ML_PAGES.FILTER_LISTS_EDIT,
   {
@@ -272,11 +287,13 @@ export type MlLocatorState =
   | DataFrameAnalyticsUrlState
   | DataFrameAnalyticsExplorationUrlState
   | CalendarEditUrlState
+  | CalendarDstEditUrlState
   | FilterEditUrlState
   | MlGenericUrlState
   | NotificationsUrlState
   | TrainedModelsUrlState
-  | TrainedModelsNodesUrlState;
+  | MemoryUsageUrlState
+  | ChangePointDetectionUrlState;
 
 export type MlLocatorParams = MlLocatorState & SerializableRecord;
 
@@ -287,9 +304,9 @@ export type TrainedModelsUrlState = MLPageState<
   TrainedModelsQueryState | undefined
 >;
 
-export type TrainedModelsNodesUrlState = MLPageState<
-  typeof ML_PAGES.TRAINED_MODELS_NODES,
-  TrainedModelsNodesQueryState | undefined
+export type MemoryUsageUrlState = MLPageState<
+  typeof ML_PAGES.MEMORY_USAGE,
+  MemoryUsageNodesQueryState | undefined
 >;
 
 export interface NotificationsQueryState {
@@ -299,4 +316,19 @@ export interface NotificationsQueryState {
 export type NotificationsUrlState = MLPageState<
   typeof ML_PAGES.NOTIFICATIONS,
   NotificationsQueryState | undefined
+>;
+
+export interface ChangePointDetectionQueryState {
+  index: string;
+  timeRange?: TimeRange;
+  fieldConfigs: Array<{
+    fn: string;
+    splitField?: string;
+    metricField: string;
+  }>;
+}
+
+export type ChangePointDetectionUrlState = MLPageState<
+  typeof ML_PAGES.AIOPS_CHANGE_POINT_DETECTION,
+  ChangePointDetectionQueryState
 >;

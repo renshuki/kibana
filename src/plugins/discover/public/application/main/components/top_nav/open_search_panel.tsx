@@ -1,13 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
-import rison from '@kbn/rison';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import {
@@ -31,14 +31,8 @@ interface OpenSearchPanelProps {
 }
 
 export function OpenSearchPanel(props: OpenSearchPanelProps) {
-  const {
-    addBasePath,
-    capabilities,
-    core,
-    uiSettings,
-    savedObjectsManagement,
-    savedObjectsTagging,
-  } = useDiscoverServices();
+  const { addBasePath, capabilities, savedObjectsTagging, contentClient, uiSettings } =
+    useDiscoverServices();
   const hasSavedObjectPermission =
     capabilities.savedObjectsManagement?.edit || capabilities.savedObjectsManagement?.delete;
 
@@ -57,10 +51,9 @@ export function OpenSearchPanel(props: OpenSearchPanelProps) {
       <EuiFlyoutBody>
         <SavedObjectFinder
           services={{
-            savedObjects: core.savedObjects,
-            uiSettings,
-            savedObjectsManagement,
             savedObjectsTagging,
+            contentClient,
+            uiSettings,
           }}
           noItemsMessage={
             <FormattedMessage
@@ -94,7 +87,7 @@ export function OpenSearchPanel(props: OpenSearchPanelProps) {
                 onClick={props.onClose}
                 data-test-subj="manageSearchesBtn"
                 href={addBasePath(
-                  `/app/management/kibana/objects?_a=${rison.encode({ tab: SEARCH_OBJECT_TYPE })}`
+                  `/app/management/kibana/objects?initialQuery=type:(${SEARCH_OBJECT_TYPE})`
                 )}
               >
                 <FormattedMessage

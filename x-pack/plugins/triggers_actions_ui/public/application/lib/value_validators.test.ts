@@ -11,9 +11,10 @@ import {
   isValidUrl,
   getConnectorWithInvalidatedFields,
   getRuleWithInvalidatedFields,
+  validateActionFilterQuery,
 } from './value_validators';
 import { v4 as uuidv4 } from 'uuid';
-import { Rule, IErrorObject, UserConfiguredActionConnector } from '../../types';
+import { Rule, IErrorObject, UserConfiguredActionConnector, RuleUiAction } from '../../types';
 
 describe('throwIfAbsent', () => {
   test('throws if value is absent', () => {
@@ -113,6 +114,7 @@ describe('getConnectorWithInvalidatedFields', () => {
       config: {},
       isPreconfigured: false,
       isDeprecated: false,
+      isSystemAction: false,
     };
     const secretsErrors = { webhookUrl: ['Webhook URL is required.'] };
     const configErrors = {};
@@ -130,6 +132,7 @@ describe('getConnectorWithInvalidatedFields', () => {
       config: {} as any,
       isPreconfigured: false,
       isDeprecated: false,
+      isSystemAction: false,
     };
     const secretsErrors = {};
     const configErrors = { apiUrl: ['apiUrl is required'] };
@@ -149,6 +152,7 @@ describe('getConnectorWithInvalidatedFields', () => {
       config: {},
       isPreconfigured: false,
       isDeprecated: false,
+      isSystemAction: false,
     };
     const secretsErrors = { webhookUrl: ['Webhook URL must start with https://.'] };
     const configErrors = {};
@@ -275,6 +279,7 @@ describe('getRuleWithInvalidatedFields', () => {
       throttle: '',
       updatedAt: new Date(),
       updatedBy: '',
+      revision: 0,
     };
     const baseAlertErrors = {};
     const actionsErrors: IErrorObject[] = [];
@@ -313,6 +318,7 @@ describe('getRuleWithInvalidatedFields', () => {
       throttle: '',
       updatedAt: new Date(),
       updatedBy: '',
+      revision: 0,
     };
     const baseAlertErrors = {};
     const actionsErrors: IErrorObject[] = [];
@@ -345,6 +351,7 @@ describe('getRuleWithInvalidatedFields', () => {
               field: {},
             },
           },
+          uuid: '123-456',
         },
       ],
       tags: [],
@@ -362,6 +369,7 @@ describe('getRuleWithInvalidatedFields', () => {
       throttle: '',
       updatedAt: new Date(),
       updatedBy: '',
+      revision: 0,
     };
     const baseAlertErrors = {};
     const actionsErrors = [{ 'incident.field.name': ['Name is required.'] }];
@@ -390,6 +398,7 @@ describe('getRuleWithInvalidatedFields', () => {
               field: {},
             },
           },
+          uuid: '111-111',
         },
         {
           actionTypeId: 'test',
@@ -402,6 +411,7 @@ describe('getRuleWithInvalidatedFields', () => {
               },
             },
           },
+          uuid: '222-222',
         },
       ],
       tags: [],
@@ -419,6 +429,7 @@ describe('getRuleWithInvalidatedFields', () => {
       throttle: '',
       updatedAt: new Date(),
       updatedBy: '',
+      revision: 0,
     };
     const baseAlertErrors = {};
     const actionsErrors = [
@@ -429,5 +440,72 @@ describe('getRuleWithInvalidatedFields', () => {
     getRuleWithInvalidatedFields(rule, paramsErrors, baseAlertErrors, actionsErrors);
     expect((rule.actions[0].params as any).incident.field.name).toBeNull();
     expect((rule.actions[1].params as any).incident.field.name).toEqual('myIncident');
+  });
+});
+
+describe('validateActionFilterQuery', () => {
+  test('does not return an error when kql query exists', () => {
+    const actionItem: RuleUiAction = {
+      actionTypeId: 'test',
+      group: 'qwer',
+      id: '123',
+      params: {
+        incident: {
+          field: {
+            name: 'myIncident',
+          },
+        },
+      },
+      alertsFilter: { query: { kql: 'id: *', filters: [] } },
+    };
+
+    expect(validateActionFilterQuery(actionItem)).toBe(null);
+  });
+
+  test('does not return an error when filter query exists', () => {
+    const actionItem = {
+      actionTypeId: 'test',
+      group: 'qwer',
+      id: '123',
+      params: {
+        incident: {
+          field: {
+            name: 'myIncident',
+          },
+        },
+      },
+      alertsFilter: {
+        query: {
+          kql: undefined,
+          filters: [
+            {
+              $state: { store: 'state' },
+              meta: { key: 'test' },
+              query: { exists: { field: '_id' } },
+            },
+          ],
+        },
+      },
+    };
+
+    expect(validateActionFilterQuery(actionItem)).toBe(null);
+  });
+
+  test('returns an error no kql and no filters', () => {
+    const actionItem = {
+      actionTypeId: 'test',
+      group: 'qwer',
+      id: '123',
+      params: {
+        incident: {
+          field: {
+            name: 'myIncident',
+          },
+        },
+      },
+      alertsFilter: { query: { kql: '', filters: [] } },
+    };
+
+    expect(validateActionFilterQuery(actionItem)).toBe('A custom query is required.');
   });
 });

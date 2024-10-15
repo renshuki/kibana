@@ -20,13 +20,20 @@ const paramSchema = schema.object({
 export const getAlertStateRoute = (
   router: AlertingRouter,
   licenseState: ILicenseState,
-  usageCounter?: UsageCounter
+  usageCounter?: UsageCounter,
+  isServerless?: boolean
 ) => {
   router.get(
     {
       path: `${LEGACY_BASE_ALERT_API_PATH}/alert/{id}/state`,
       validate: {
         params: paramSchema,
+      },
+      options: {
+        access: isServerless ? 'internal' : 'public',
+        summary: 'Get the state of an alert',
+        tags: ['oas-tag:alerting'],
+        deprecated: true,
       },
     },
     router.handleLegacyErrors(async function (context, req, res) {

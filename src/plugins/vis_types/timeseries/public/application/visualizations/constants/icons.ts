@@ -1,10 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import { bombIcon } from '../../components/svg/bomb_icon';
 import { fireIcon } from '../../components/svg/fire_icon';
 
@@ -32,7 +34,7 @@ export const ICON_TYPES_MAP = {
   [ICON_NAMES.BOMB]: bombIcon,
   [ICON_NAMES.BUG]: 'bug',
   [ICON_NAMES.COMMENT]: 'editorComment',
-  [ICON_NAMES.EXCLAMATION_TRIANGLE]: 'alert',
+  [ICON_NAMES.EXCLAMATION_TRIANGLE]: 'warning',
   [ICON_NAMES.FIRE]: fireIcon,
   [ICON_NAMES.FLAG]: 'flag',
   [ICON_NAMES.HEART]: 'heart',

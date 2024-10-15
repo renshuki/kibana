@@ -6,9 +6,9 @@
  */
 
 import { SavedObjectReference } from '@kbn/core/server';
-import { RawRule, RuleTypeParams } from '../../types';
+import { RuleTypeParams } from '../../types';
 import { UntypedNormalizedRuleType } from '../../rule_type_registry';
-import { NormalizedAlertAction } from '../types';
+import { DenormalizedAction, NormalizedAlertActionWithGeneratedValues } from '../types';
 import { extractedSavedObjectParamReferenceNamePrefix } from '../common/constants';
 import { RulesClientContext } from '../types';
 import { denormalizeActions } from './denormalize_actions';
@@ -19,10 +19,10 @@ export async function extractReferences<
 >(
   context: RulesClientContext,
   ruleType: UntypedNormalizedRuleType,
-  ruleActions: NormalizedAlertAction[],
+  ruleActions: NormalizedAlertActionWithGeneratedValues[],
   ruleParams: Params
 ): Promise<{
-  actions: RawRule['actions'];
+  actions: DenormalizedAction[];
   params: ExtractedParams;
   references: SavedObjectReference[];
 }> {

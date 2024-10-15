@@ -5,14 +5,15 @@
  * 2.0.
  */
 
-import { CoreSetup } from '@kbn/core/public';
-import { ManagementAppMountParams } from '@kbn/management-plugin/public';
+import type { CoreSetup } from '@kbn/core/public';
+import type { ManagementAppMountParams } from '@kbn/management-plugin/public';
 import { Storage } from '@kbn/kibana-utils-plugin/public';
 
-import { PluginsDependencies } from '../plugin';
-import { getMlSharedImports } from '../shared_imports';
+import { type TransformEnabledFeatures } from './serverless_context';
+import type { PluginsDependencies } from '../plugin';
 
-import { AppDependencies } from './app_dependencies';
+import type { ExperimentalFeatures } from '../../server/config';
+import type { AppDependencies } from './app_dependencies';
 import { breadcrumbService } from './services/navigation';
 import { docTitleService } from './services/navigation';
 import { textService } from './services/text';
@@ -22,14 +23,41 @@ const localStorage = new Storage(window.localStorage);
 
 export async function mountManagementSection(
   coreSetup: CoreSetup<PluginsDependencies>,
-  params: ManagementAppMountParams
+  params: ManagementAppMountParams,
+  isServerless: boolean,
+  experimentalFeatures: ExperimentalFeatures
 ) {
   const { element, setBreadcrumbs, history } = params;
-  const { http, notifications, getStartServices } = coreSetup;
+  const { http, getStartServices } = coreSetup;
   const startServices = await getStartServices();
   const [core, plugins] = startServices;
-  const { application, chrome, docLinks, i18n, overlays, theme, savedObjects, uiSettings } = core;
-  const { data, dataViews, share, spaces, triggersActionsUi, unifiedSearch } = plugins;
+  const {
+    analytics,
+    application,
+    chrome,
+    docLinks,
+    i18n,
+    overlays,
+    theme,
+    savedObjects,
+    uiSettings,
+    settings,
+    notifications,
+  } = core;
+  const {
+    data,
+    dataViews,
+    dataViewEditor,
+    share,
+    spaces,
+    triggersActionsUi,
+    unifiedSearch,
+    charts,
+    fieldFormats,
+    savedObjectsManagement,
+    savedSearch,
+    contentManagement,
+  } = plugins;
   const { docTitle } = chrome;
 
   // Initialize services
@@ -39,9 +67,11 @@ export async function mountManagementSection(
 
   // AppCore/AppPlugins to be passed on as React context
   const appDependencies: AppDependencies = {
+    analytics,
     application,
     chrome,
     data,
+    dataViewEditor,
     dataViews,
     docLinks,
     http,
@@ -52,16 +82,28 @@ export async function mountManagementSection(
     savedObjects,
     storage: localStorage,
     uiSettings,
+    settings,
     history,
-    savedObjectsPlugin: plugins.savedObjects,
     share,
     spaces,
-    ml: await getMlSharedImports(),
     triggersActionsUi,
     unifiedSearch,
+    charts,
+    fieldFormats,
+    savedObjectsManagement,
+    savedSearch,
+    contentManagement,
   };
 
-  const unmountAppCallback = renderApp(element, appDependencies);
+  const enabledFeatures: TransformEnabledFeatures = {
+    showNodeInfo: !isServerless,
+  };
+  const unmountAppCallback = renderApp(
+    element,
+    appDependencies,
+    enabledFeatures,
+    experimentalFeatures
+  );
 
   return () => {
     docTitle.reset();

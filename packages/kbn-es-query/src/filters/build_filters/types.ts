@@ -1,16 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { ExistsFilter } from './exists_filter';
-import { PhrasesFilter } from './phrases_filter';
-import { PhraseFilter } from './phrase_filter';
-import { RangeFilter } from './range_filter';
-import { MatchAllFilter } from './match_all_filter';
+import { PhrasesFilter, PhrasesFilterMeta } from './phrases_filter';
+import { PhraseFilter, PhraseFilterMeta, PhraseFilterMetaParams } from './phrase_filter';
+import { RangeFilter, RangeFilterMeta, RangeFilterParams } from './range_filter';
+import { MatchAllFilter, MatchAllFilterMeta } from './match_all_filter';
 
 /**
  * A common type for filters supported by this package
@@ -50,6 +51,22 @@ export enum FilterStateStore {
   GLOBAL_STATE = 'globalState',
 }
 
+export type FilterMetaParams =
+  | Filter
+  | Filter[]
+  | RangeFilterMeta
+  | RangeFilterParams
+  | PhraseFilterMeta
+  | PhraseFilterMetaParams
+  | PhrasesFilterMeta
+  | MatchAllFilterMeta
+  | string
+  | string[]
+  | boolean
+  | boolean[]
+  | number
+  | number[];
+
 // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export type FilterMeta = {
   alias?: string | null;
@@ -64,7 +81,7 @@ export type FilterMeta = {
   isMultiIndex?: boolean;
   type?: string;
   key?: string;
-  params?: any;
+  params?: FilterMetaParams;
   value?: string;
 };
 
@@ -83,7 +100,8 @@ export type Query = {
   language: string;
 };
 
-export type AggregateQuery = { sql: string } | { esql: string };
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+export type AggregateQuery = { esql: string };
 
 /**
  * An interface for a latitude-longitude pair

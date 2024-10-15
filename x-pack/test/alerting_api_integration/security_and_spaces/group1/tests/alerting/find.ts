@@ -6,31 +6,66 @@
  */
 
 import expect from '@kbn/expect';
-import { SuperTest, Test } from 'supertest';
+import { Agent as SuperTestAgent } from 'supertest';
 import { chunk, omit } from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
-import { UserAtSpaceScenarios } from '../../../scenarios';
+import { SupertestWithoutAuthProviderType } from '@kbn/ftr-common-functional-services';
+import {
+  ES_QUERY_ID,
+  ML_ANOMALY_DETECTION_RULE_TYPE_ID,
+  OBSERVABILITY_THRESHOLD_RULE_TYPE_ID,
+} from '@kbn/rule-data-utils';
+import { SuperuserAtSpace1, UserAtSpaceScenarios, StackAlertsOnly } from '../../../scenarios';
 import { getUrlPrefix, getTestRuleData, ObjectRemover } from '../../../../common/lib';
 import { FtrProviderContext } from '../../../../common/ftr_provider_context';
 
 const findTestUtils = (
   describeType: 'internal' | 'public',
   objectRemover: ObjectRemover,
-  supertest: SuperTest<Test>,
-  supertestWithoutAuth: any
+  supertest: SuperTestAgent,
+  supertestWithoutAuth: SupertestWithoutAuthProviderType
 ) => {
-  // FLAKY: https://github.com/elastic/kibana/issues/148660
-  describe.skip(describeType, () => {
-    afterEach(() => objectRemover.removeAll());
+  describe(describeType, () => {
+    afterEach(async () => {
+      await objectRemover.removeAll();
+    });
 
     for (const scenario of UserAtSpaceScenarios) {
       const { user, space } = scenario;
       describe(scenario.id, () => {
         it('should handle find alert request appropriately', async () => {
+          const { body: createdAction } = await supertest
+            .post(`${getUrlPrefix(space.id)}/api/actions/connector`)
+            .set('kbn-xsrf', 'foo')
+            .send({
+              name: 'MY action',
+              connector_type_id: 'test.noop',
+              config: {},
+              secrets: {},
+            })
+            .expect(200);
+
           const { body: createdAlert } = await supertest
             .post(`${getUrlPrefix(space.id)}/api/alerting/rule`)
             .set('kbn-xsrf', 'foo')
-            .send(getTestRuleData())
+            .send(
+              getTestRuleData({
+                actions: [
+                  {
+                    group: 'default',
+                    id: createdAction.id,
+                    params: {},
+                    frequency: {
+                      summary: false,
+                      notify_when: 'onThrottleInterval',
+                      throttle: '1m',
+                    },
+                  },
+                ],
+                notify_when: undefined,
+                throttle: undefined,
+              })
+            )
             .expect(200);
           objectRemover.add(space.id, createdAlert.id, 'rule', 'alerting');
 
@@ -69,22 +104,37 @@ const findTestUtils = (
                 name: 'abc',
                 tags: ['foo'],
                 rule_type_id: 'test.noop',
-                running: false,
+                running: match.running ?? false,
                 consumer: 'alertsFixture',
                 schedule: { interval: '1m' },
                 enabled: true,
-                actions: [],
+                actions: [
+                  {
+                    group: 'default',
+                    id: createdAction.id,
+                    connector_type_id: 'test.noop',
+                    params: {},
+                    uuid: match.actions[0].uuid,
+                    frequency: {
+                      summary: false,
+                      notify_when: 'onThrottleInterval',
+                      throttle: '1m',
+                    },
+                  },
+                ],
                 params: {},
                 created_by: 'elastic',
                 scheduled_task_id: match.scheduled_task_id,
                 created_at: match.created_at,
                 updated_at: match.updated_at,
-                throttle: '1m',
-                notify_when: 'onThrottleInterval',
+                throttle: null,
+                notify_when: null,
                 updated_by: 'elastic',
                 api_key_owner: 'elastic',
+                api_key_created_by_user: false,
                 mute_all: false,
                 muted_alert_ids: [],
+                revision: 0,
                 execution_status: match.execution_status,
                 ...(match.next_run ? { next_run: match.next_run } : {}),
                 ...(match.last_run ? { last_run: match.last_run } : {}),
@@ -93,6 +143,7 @@ const findTestUtils = (
                       monitoring: match.monitoring,
                       snooze_schedule: match.snooze_schedule,
                       ...(hasActiveSnoozes && { active_snoozes: activeSnoozes }),
+                      is_snoozed_until: null,
                     }
                   : {}),
               });
@@ -273,7 +324,7 @@ const findTestUtils = (
                 name: 'abc',
                 tags: ['foo'],
                 rule_type_id: 'test.noop',
-                running: false,
+                running: match.running ?? false,
                 consumer: 'alertsFixture',
                 schedule: { interval: '1m' },
                 enabled: false,
@@ -283,11 +334,13 @@ const findTestUtils = (
                     group: 'default',
                     connector_type_id: 'test.noop',
                     params: {},
+                    uuid: createdAlert.actions[0].uuid,
                   },
                 ],
                 params: {},
                 created_by: 'elastic',
                 throttle: '1m',
+                api_key_created_by_user: null,
                 updated_by: 'elastic',
                 api_key_owner: null,
                 mute_all: false,
@@ -296,6 +349,7 @@ const findTestUtils = (
                 created_at: match.created_at,
                 updated_at: match.updated_at,
                 execution_status: match.execution_status,
+                revision: 0,
                 ...(match.next_run ? { next_run: match.next_run } : {}),
                 ...(match.last_run ? { last_run: match.last_run } : {}),
                 ...(describeType === 'internal'
@@ -303,6 +357,7 @@ const findTestUtils = (
                       monitoring: match.monitoring,
                       snooze_schedule: match.snooze_schedule,
                       ...(hasActiveSnoozes && { active_snoozes: activeSnoozes }),
+                      is_snoozed_until: null,
                     }
                   : {}),
               });
@@ -381,6 +436,7 @@ const findTestUtils = (
                 tags: [myTag],
                 ...(describeType === 'internal' && {
                   snooze_schedule: [],
+                  is_snoozed_until: null,
                 }),
               });
               expect(omit(matchSecond, 'updatedAt')).to.eql({
@@ -389,6 +445,7 @@ const findTestUtils = (
                 tags: [myTag],
                 ...(describeType === 'internal' && {
                   snooze_schedule: [],
+                  is_snoozed_until: null,
                 }),
               });
               break;
@@ -465,6 +522,7 @@ const findTestUtils = (
                 execution_status: matchFirst.execution_status,
                 ...(describeType === 'internal' && {
                   snooze_schedule: [],
+                  is_snoozed_until: null,
                 }),
               });
               expect(omit(matchSecond, 'updatedAt')).to.eql({
@@ -474,6 +532,7 @@ const findTestUtils = (
                 execution_status: matchSecond.execution_status,
                 ...(describeType === 'internal' && {
                   snooze_schedule: [],
+                  is_snoozed_until: null,
                 }),
               });
               break;
@@ -528,6 +587,71 @@ const findTestUtils = (
       });
     }
   });
+
+  describe('Actions', () => {
+    const { user, space } = SuperuserAtSpace1;
+
+    it('should return the actions correctly', async () => {
+      const { body: createdAction } = await supertest
+        .post(`${getUrlPrefix(space.id)}/api/actions/connector`)
+        .set('kbn-xsrf', 'foo')
+        .send({
+          name: 'MY action',
+          connector_type_id: 'test.noop',
+          config: {},
+          secrets: {},
+        })
+        .expect(200);
+
+      const { body: createdRule1 } = await supertest
+        .post(`${getUrlPrefix(space.id)}/api/alerting/rule`)
+        .set('kbn-xsrf', 'foo')
+        .send(
+          getTestRuleData({
+            enabled: true,
+            actions: [
+              {
+                id: createdAction.id,
+                group: 'default',
+                params: {},
+              },
+              {
+                id: 'system-connector-test.system-action',
+                params: {},
+              },
+            ],
+          })
+        )
+        .expect(200);
+
+      objectRemover.add(space.id, createdRule1.id, 'rule', 'alerting');
+
+      const response = await supertestWithoutAuth
+        .get(`${getUrlPrefix(space.id)}/api/alerting/rules/_find`)
+        .set('kbn-xsrf', 'foo')
+        .auth(user.username, user.password);
+
+      const action = response.body.data[0].actions[0];
+      const systemAction = response.body.data[0].actions[1];
+      const { uuid, ...restAction } = action;
+      const { uuid: systemActionUuid, ...restSystemAction } = systemAction;
+
+      expect([restAction, restSystemAction]).to.eql([
+        {
+          id: createdAction.id,
+          connector_type_id: 'test.noop',
+          group: 'default',
+          params: {},
+        },
+        {
+          id: 'system-connector-test.system-action',
+          connector_type_id: 'test.system-action',
+          params: {},
+        },
+        ,
+      ]);
+    });
+  });
 };
 
 // eslint-disable-next-line import/no-default-export
@@ -538,9 +662,126 @@ export default function createFindTests({ getService }: FtrProviderContext) {
   describe('find', () => {
     const objectRemover = new ObjectRemover(supertest);
 
-    afterEach(() => objectRemover.removeAll());
+    afterEach(async () => {
+      await objectRemover.removeAll();
+    });
 
     findTestUtils('public', objectRemover, supertest, supertestWithoutAuth);
     findTestUtils('internal', objectRemover, supertest, supertestWithoutAuth);
+
+    describe('stack alerts', () => {
+      const ruleTypes = [
+        [
+          ES_QUERY_ID,
+          {
+            searchType: 'esQuery',
+            timeWindowSize: 5,
+            timeWindowUnit: 'm',
+            threshold: [1000],
+            thresholdComparator: '>',
+            size: 100,
+            esQuery: '{\n    "query":{\n      "match_all" : {}\n    }\n  }',
+            aggType: 'count',
+            groupBy: 'all',
+            termSize: 5,
+            excludeHitsFromPreviousRun: false,
+            sourceFields: [],
+            index: ['.kibana'],
+            timeField: 'created_at',
+          },
+        ],
+        [
+          OBSERVABILITY_THRESHOLD_RULE_TYPE_ID,
+          {
+            criteria: [
+              {
+                comparator: '>',
+                metrics: [
+                  {
+                    name: 'A',
+                    aggType: 'count',
+                  },
+                ],
+                threshold: [100],
+                timeSize: 1,
+                timeUnit: 'm',
+              },
+            ],
+            alertOnNoData: false,
+            alertOnGroupDisappear: false,
+            searchConfiguration: {
+              query: {
+                query: '',
+                language: 'kuery',
+              },
+              index: 'kibana-event-log-data-view',
+            },
+          },
+        ],
+        [
+          ML_ANOMALY_DETECTION_RULE_TYPE_ID,
+          {
+            severity: 75,
+            resultType: 'bucket',
+            includeInterim: false,
+            jobSelection: {
+              jobIds: ['low_request_rate'],
+            },
+          },
+        ],
+      ];
+
+      const createRule = async (rule = {}) => {
+        const { body: createdAlert } = await supertest
+          .post(`${getUrlPrefix('space1')}/api/alerting/rule`)
+          .set('kbn-xsrf', 'foo')
+          .send(getTestRuleData({ ...rule }))
+          .expect(200);
+
+        objectRemover.add('space1', createdAlert.id, 'rule', 'alerting');
+      };
+
+      for (const [ruleTypeId, params] of ruleTypes) {
+        it(`should get rules of ${ruleTypeId} rule type ID and stackAlerts consumer`, async () => {
+          /**
+           * We create two rules. The first one is a test.noop
+           * rule with stackAlerts as consumer. The second rule
+           * is has different rule type ID but with the same consumer as the first rule (stackAlerts).
+           * This way we can verify that the find API call returns only the rules the user is authorized to.
+           * Specifically only the second rule because the StackAlertsOnly user does not have
+           * access to the test.noop rule type.
+           */
+          await createRule({ consumer: 'stackAlerts' });
+          await createRule({ rule_type_id: ruleTypeId, params, consumer: 'stackAlerts' });
+
+          const response = await supertestWithoutAuth
+            .get(`${getUrlPrefix('space1')}/api/alerting/rules/_find`)
+            .auth(StackAlertsOnly.username, StackAlertsOnly.password);
+
+          expect(response.statusCode).to.eql(200);
+          expect(response.body.total).to.equal(1);
+          expect(response.body.data[0].rule_type_id).to.equal(ruleTypeId);
+          expect(response.body.data[0].consumer).to.equal('stackAlerts');
+        });
+      }
+
+      for (const [ruleTypeId, params] of ruleTypes) {
+        it(`should NOT get rules of ${ruleTypeId} rule type ID and NOT stackAlerts consumer`, async () => {
+          /**
+           * We create two rules with logs as consumer. The user is authorized to
+           * access rules only with the stackAlerts consumers.
+           */
+          await createRule({ consumer: 'logs' });
+          await createRule({ rule_type_id: ruleTypeId, params, consumer: 'logs' });
+
+          const response = await supertestWithoutAuth
+            .get(`${getUrlPrefix('space1')}/api/alerting/rules/_find`)
+            .auth(StackAlertsOnly.username, StackAlertsOnly.password);
+
+          expect(response.statusCode).to.eql(200);
+          expect(response.body.total).to.equal(0);
+        });
+      }
+    });
   });
 }

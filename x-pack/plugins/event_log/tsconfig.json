@@ -20,6 +20,8 @@
     "@kbn/utility-types",
     "@kbn/std",
     "@kbn/safer-lodash-set",
+    "@kbn/serverless",
+    "@kbn/core-test-helpers-kbn-server",
   ],
   "exclude": [
     "target/**/*",

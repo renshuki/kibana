@@ -5,12 +5,15 @@
  * 2.0.
  */
 
-import expect from '@kbn/expect';
-import { SuperTest } from 'supertest';
 import type { Client } from '@elastic/elasticsearch';
-import { getAggregatedSpaceData, getTestScenariosForSpace } from '../lib/space_test_utils';
+import type { SuperTest } from 'supertest';
+
+import { ALL_SAVED_OBJECT_INDICES } from '@kbn/core-saved-objects-server';
+import expect from '@kbn/expect';
+
 import { MULTI_NAMESPACE_SAVED_OBJECT_TEST_CASES as CASES } from '../lib/saved_object_test_cases';
-import { DescribeFn, TestDefinitionAuthentication } from '../lib/types';
+import { getAggregatedSpaceData, getTestScenariosForSpace } from '../lib/space_test_utils';
+import type { DescribeFn, TestDefinitionAuthentication } from '../lib/types';
 
 interface DeleteTest {
   statusCode: number;
@@ -61,14 +64,14 @@ export function deleteTestSuiteFactory(es: Client, esArchiver: any, supertest: S
     const expectedBuckets = [
       {
         key: 'default',
-        doc_count: 9,
+        doc_count: 10,
         countByType: {
           doc_count_error_upper_bound: 0,
           sum_other_doc_count: 0,
           buckets: [
+            { key: 'space', doc_count: 3 }, // since space objects are namespace-agnostic, they appear in the "default" agg bucket
             { key: 'visualization', doc_count: 3 },
             { key: 'legacy-url-alias', doc_count: 2 }, // aliases (1)
-            { key: 'space', doc_count: 2 }, // since space objects are namespace-agnostic, they appear in the "default" agg bucket
             { key: 'dashboard', doc_count: 1 },
             { key: 'index-pattern', doc_count: 1 },
           ],
@@ -105,7 +108,7 @@ export function deleteTestSuiteFactory(es: Client, esArchiver: any, supertest: S
     // Since Space 2 was deleted, any multi-namespace objects that existed in that space
     // are updated to remove it, and of those, any that don't exist in any space are deleted.
     const multiNamespaceResponse = await es.search<Record<string, any>>({
-      index: '.kibana',
+      index: ALL_SAVED_OBJECT_INDICES,
       size: 100,
       body: { query: { terms: { type: ['sharedtype'] } } },
     });
@@ -181,7 +184,7 @@ export function deleteTestSuiteFactory(es: Client, esArchiver: any, supertest: S
           describe(`when the space doesn't exist`, () => {
             it(`should return ${tests.doesntExist.statusCode} ${scenario}`, async () => {
               return supertest
-                .delete(`${urlPrefix}/api/spaces/space/space_3`)
+                .delete(`${urlPrefix}/api/spaces/space/space_7`)
                 .auth(user.username, user.password)
                 .expect(tests.doesntExist.statusCode)
                 .then(tests.doesntExist.response);

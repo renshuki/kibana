@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { i18n } from '@kbn/i18n';
@@ -41,6 +42,31 @@ export const LISTS_TOOLTIP_INFO = i18n.translate('autocomplete.listsTooltipWarni
 
 export const SEE_DOCUMENTATION = i18n.translate('autocomplete.seeDocumentation', {
   defaultMessage: 'See Documentation',
+});
+
+export const FIELD_CONFLICT_INDICES_WARNING_TITLE = i18n.translate(
+  'autocomplete.conflictIndicesWarning.title',
+  {
+    defaultMessage: 'Mapping Conflict',
+  }
+);
+
+export const FIELD_CONFLICT_INDICES_WARNING_DESCRIPTION = i18n.translate(
+  'autocomplete.conflictIndicesWarning.description',
+  {
+    defaultMessage:
+      'This field is defined as different types across the following indices or is unmapped. This can cause unexpected query results.',
+  }
+);
+
+export const CONFLICT_MULTIPLE_INDEX_DESCRIPTION = (name: string, count: number): string =>
+  i18n.translate('autocomplete.conflictIndicesWarning.index.description', {
+    defaultMessage: '{name} ({count} indices)',
+    values: { count, name },
+  });
+
+export const SHOW_VALUE_LIST_MODAL = i18n.translate('autocomplete.showValueListModal', {
+  defaultMessage: 'Show value list',
 });
 
 // eslint-disable-next-line import/no-default-export

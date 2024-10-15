@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import * as path from 'path';
-import { writeFileAsync } from '../utils';
+import { writeFile } from 'fs/promises';
 import { TaskContext } from './task_context';
 
 export function writeToFileTask({ roots }: TaskContext) {
@@ -22,7 +23,7 @@ export function writeToFileTask({ roots }: TaskContext) {
           })
         );
         const serializedMapping = JSON.stringify(root.mapping, null, 2).concat('\n');
-        await writeFileAsync(fullPath, serializedMapping);
+        await writeFile(fullPath, serializedMapping);
       }
     },
     title: `Writing mapping for ${root.config.root}`,

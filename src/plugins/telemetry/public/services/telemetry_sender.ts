@@ -1,18 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { Subscription } from 'rxjs';
 import { fromEvent, interval, merge } from 'rxjs';
-import { exhaustMap } from 'rxjs/operators';
+import { exhaustMap } from 'rxjs';
 import { Storage } from '@kbn/kibana-utils-plugin/public';
 import { LOCALSTORAGE_KEY, PAYLOAD_CONTENT_ENCODING } from '../../common/constants';
 import { TelemetryService } from './telemetry_service';
-import type { EncryptedTelemetryPayload } from '../../common/types';
+import type { EncryptedTelemetryPayload } from '../../common/types/latest';
 import { isReportIntervalExpired } from '../../common/is_report_interval_expired';
 
 export class TelemetrySender {

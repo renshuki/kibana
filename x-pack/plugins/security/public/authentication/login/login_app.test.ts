@@ -60,10 +60,11 @@ describe('loginApp', () => {
     const mockRenderApp = jest.requireMock('./login_page').renderLoginPage;
     expect(mockRenderApp).toHaveBeenCalledTimes(1);
     expect(mockRenderApp).toHaveBeenCalledWith(
-      coreStartMock.i18n,
-      { element: appMountParams.element, theme$: appMountParams.theme$ },
+      coreStartMock,
+      { element: appMountParams.element },
       {
         http: coreStartMock.http,
+        customBranding: coreStartMock.customBranding,
         notifications: coreStartMock.notifications,
         fatalErrors: coreStartMock.fatalErrors,
         loginAssistanceMessage: 'some-message',

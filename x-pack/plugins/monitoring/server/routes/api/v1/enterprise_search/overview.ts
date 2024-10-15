@@ -28,12 +28,15 @@ export function entSearchOverviewRoute(server: MonitoringCore) {
       params: validateParams,
       body: validateBody,
     },
+    options: {
+      access: 'internal',
+    },
     async handler(req) {
       const clusterUuid = req.params.clusterUuid;
       try {
         const [stats, metrics] = await Promise.all([
           getStats(req, clusterUuid),
-          getMetrics(req, 'enterprise_search', metricSet, [], {
+          getMetrics(req, 'enterprisesearch', metricSet, [], {
             skipClusterUuidFilter: true,
           }),
         ]);

@@ -6,17 +6,20 @@
  */
 
 import { FilterStateStore } from '@kbn/es-query';
-import type { Rule } from '../../../../rule_management/logic';
 import type {
   AboutStepRule,
   ActionsStepRule,
   DefineStepRule,
   ScheduleStepRule,
 } from '../../../../../detections/pages/detection_engine/rules/types';
-import { DataSourceType } from '../../../../../detections/pages/detection_engine/rules/types';
-import type { FieldValueQueryBar } from '../../../../../detections/components/rules/query_bar';
+import {
+  DataSourceType,
+  GroupByOptions,
+} from '../../../../../detections/pages/detection_engine/rules/types';
+import type { FieldValueQueryBar } from '../../../../rule_creation_ui/components/query_bar';
 import { fillEmptySeverityMappings } from '../../../../../detections/pages/detection_engine/rules/helpers';
 import { getThreatMock } from '../../../../../../common/detection_engine/schemas/types/threat.mock';
+import type { RuleResponse, SavedQueryRule } from '../../../../../../common/api/detection_engine';
 
 export const mockQueryBar: FieldValueQueryBar = {
   query: {
@@ -48,7 +51,7 @@ export const mockQueryBar: FieldValueQueryBar = {
   saved_id: 'test123',
 };
 
-export const mockRule = (id: string): Rule => ({
+export const mockRule = (id: string): SavedQueryRule => ({
   actions: [],
   author: [],
   created_at: '2020-01-10T21:11:45.839Z',
@@ -78,7 +81,7 @@ export const mockRule = (id: string): Rule => ({
   meta: { from: '0m' },
   related_integrations: [],
   required_fields: [],
-  setup: '',
+  setup: '# this is some setup documentation',
   severity: 'low',
   severity_mapping: [],
   updated_by: 'elastic',
@@ -89,9 +92,12 @@ export const mockRule = (id: string): Rule => ({
   throttle: 'no_actions',
   note: '# this is some markdown documentation',
   version: 1,
+  revision: 1,
+  exceptions_list: [],
+  rule_source: { type: 'internal' },
 });
 
-export const mockRuleWithEverything = (id: string): Rule => ({
+export const mockRuleWithEverything = (id: string): RuleResponse => ({
   actions: [],
   author: [],
   created_at: '2020-01-10T21:11:45.839Z',
@@ -144,7 +150,7 @@ export const mockRuleWithEverything = (id: string): Rule => ({
   meta: { from: '0m' },
   related_integrations: [],
   required_fields: [],
-  setup: '',
+  setup: '# this is some setup documentation',
   severity: 'low',
   severity_mapping: [],
   updated_by: 'elastic',
@@ -152,6 +158,7 @@ export const mockRuleWithEverything = (id: string): Rule => ({
   to: 'now',
   type: 'saved_query',
   threat: getThreatMock(),
+  // @ts-expect-error This rule stub contains all the fields making it invalid for the RuleResponse type
   threshold: {
     field: ['host.name'],
     value: 50,
@@ -191,13 +198,15 @@ export const mockAboutStepRule = (): AboutStepRule => ({
   tags: ['tag1', 'tag2'],
   threat: getThreatMock(),
   note: '# this is some markdown documentation',
+  setup: '# this is some setup documentation',
+  investigationFields: ['foo', 'bar'],
+  maxSignals: 100,
 });
 
 export const mockActionsStepRule = (enabled = false): ActionsStepRule => ({
   actions: [],
   kibanaSiemAppUrl: 'http://localhost:5601/app/siem',
   enabled,
-  throttle: 'no_actions',
 });
 
 export const mockDefineStepRule = (): DefineStepRule => ({
@@ -208,8 +217,18 @@ export const mockDefineStepRule = (): DefineStepRule => ({
   dataViewId: undefined,
   queryBar: mockQueryBar,
   threatQueryBar: mockQueryBar,
-  requiredFields: [],
-  relatedIntegrations: [],
+  requiredFields: [{ name: 'host.name', type: 'keyword' }],
+  relatedIntegrations: [
+    {
+      package: 'aws',
+      integration: 'route53',
+      version: '~1.2.3',
+    },
+    {
+      package: 'system',
+      version: '^1.2.3',
+    },
+  ],
   threatMapping: [],
   timeline: {
     id: '86aa74d0-2136-11ea-9864-ebc8cc1cb8c2',
@@ -230,6 +249,12 @@ export const mockDefineStepRule = (): DefineStepRule => ({
   historyWindowSize: '7d',
   shouldLoadQueryDynamically: false,
   groupByFields: [],
+  groupByRadioSelection: GroupByOptions.PerRuleExecution,
+  groupByDuration: {
+    unit: 'm',
+    value: 5,
+  },
+  enableThresholdSuppression: false,
 });
 
 export const mockScheduleStepRule = (): ScheduleStepRule => ({

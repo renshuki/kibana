@@ -6,6 +6,9 @@
  */
 
 import { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
+import { ActionContextVariables, SummaryActionContextVariables } from '@kbn/alerting-types';
+import { AADAlert } from '@kbn/alerts-as-data-utils';
+import { mapKeys, snakeCase } from 'lodash/fp';
 import {
   RuleActionParams,
   AlertInstanceState,
@@ -14,7 +17,7 @@ import {
   SanitizedRule,
 } from '../types';
 
-interface TransformActionParamsOptions {
+export interface TransformActionParamsOptions {
   actionsPlugin: ActionsPluginStartContract;
   alertId: string;
   alertType: string;
@@ -24,6 +27,7 @@ interface TransformActionParamsOptions {
   spaceId: string;
   tags?: string[];
   alertInstanceId: string;
+  alertUuid: string;
   alertActionGroup: string;
   alertActionGroupName: string;
   actionParams: RuleActionParams;
@@ -33,6 +37,8 @@ interface TransformActionParamsOptions {
   context: AlertInstanceContext;
   ruleUrl?: string;
   flapping: boolean;
+  aadAlert?: AADAlert;
+  consecutiveMatches?: number;
 }
 
 interface SummarizedAlertsWithAll {
@@ -64,6 +70,7 @@ export function transformActionParams({
   spaceId,
   tags,
   alertInstanceId,
+  alertUuid,
   alertActionGroup,
   alertActionGroupName,
   context,
@@ -73,11 +80,14 @@ export function transformActionParams({
   alertParams,
   ruleUrl,
   flapping,
+  aadAlert,
+  consecutiveMatches,
 }: TransformActionParamsOptions): RuleActionParams {
   // when the list of variables we pass in here changes,
   // the UI will need to be updated as well; see:
   // x-pack/plugins/triggers_actions_ui/public/application/lib/action_variables.ts
-  const variables = {
+
+  const variables: ActionContextVariables = {
     alertId,
     alertName,
     spaceId,
@@ -101,16 +111,25 @@ export function transformActionParams({
     },
     alert: {
       id: alertInstanceId,
+      uuid: alertUuid,
       actionGroup: alertActionGroup,
       actionGroupName: alertActionGroupName,
       flapping,
+      consecutiveMatches,
     },
   };
+
+  const variablesWithAADFields: Record<string, unknown> = {
+    ...(aadAlert ? { ...aadAlert } : {}),
+    // we do not want the AAD fields to overwrite the base fields
+    ...variables,
+  };
+
   return actionsPlugin.renderActionParameterTemplates(
     actionTypeId,
     actionId,
     actionParams,
-    variables
+    variablesWithAADFields
   );
 }
 
@@ -137,9 +156,42 @@ export function transformSummaryActionParams({
   kibanaBaseUrl?: string;
   ruleUrl?: string;
 }): RuleActionParams {
-  const variables = {
+  // when the list of variables we pass in here changes,
+  // the UI will need to be updated as well; see:
+  // x-pack/plugins/triggers_actions_ui/public/application/lib/action_variables.ts
+
+  const variables: SummaryActionContextVariables = {
+    alertId: rule.id,
+    alertName: rule.name,
+    spaceId,
+    tags: rule.tags,
+    params: rule.params,
+    alertInstanceId: rule.id,
+    alertActionGroup: 'default',
+    alertActionGroupName: 'Default',
+    alert: {
+      id: rule.id,
+      uuid: rule.id,
+      actionGroup: 'default',
+      actionGroupName: 'Default',
+      flapping: false,
+      consecutiveMatches: 0,
+    },
     kibanaBaseUrl,
     date: new Date().toISOString(),
+    // For backwards compatibility with security solutions rules
+    context: {
+      alerts: alerts.all.data ?? [],
+      results_link: ruleUrl,
+      rule: mapKeys(snakeCase, {
+        ...rule.params,
+        name: rule.name,
+        id: rule.id,
+      }),
+    },
+    state: {
+      signals_count: alerts.all.count ?? 0,
+    },
     rule: {
       params: rule.params,
       id: rule.id,
@@ -151,10 +203,8 @@ export function transformSummaryActionParams({
     },
     alerts,
   };
-  return actionsPlugin.renderActionParameterTemplates(
-    actionTypeId,
-    actionId,
-    actionParams,
-    variables
-  );
+
+  return actionsPlugin.renderActionParameterTemplates(actionTypeId, actionId, actionParams, {
+    ...variables,
+  });
 }

@@ -8,61 +8,68 @@
 import { schema, TypeOf } from '@kbn/config-schema';
 
 import { IScopedClusterClient } from '@kbn/core/server';
-import { deserializeDataStream, deserializeDataStreamList } from '../../../../common/lib';
-import { DataStreamFromEs } from '../../../../common/types';
+import {
+  IndicesDataStream,
+  IndicesDataStreamsStatsDataStreamsStatsItem,
+  SecurityHasPrivilegesResponse,
+} from '@elastic/elasticsearch/lib/api/types';
+import type { MeteringStats } from '../../../lib/types';
+import {
+  deserializeDataStream,
+  deserializeDataStreamList,
+} from '../../../lib/data_stream_serialization';
+import { EnhancedDataStreamFromEs } from '../../../../common/types';
 import { RouteDependencies } from '../../../types';
 import { addBasePath } from '..';
 
-interface PrivilegesFromEs {
-  username: string;
-  has_all_requested: boolean;
-  cluster: Record<string, boolean>;
-  index: Record<string, Record<string, boolean>>;
-  application: Record<string, boolean>;
+interface MeteringStatsResponse {
+  datastreams: MeteringStats[];
 }
-
-interface StatsFromEs {
-  data_stream: string;
-  store_size: string;
-  store_size_bytes: number;
-  maximum_timestamp: number;
-}
-
 const enhanceDataStreams = ({
   dataStreams,
   dataStreamsStats,
+  meteringStats,
   dataStreamsPrivileges,
+  globalMaxRetention,
 }: {
-  dataStreams: DataStreamFromEs[];
-  dataStreamsStats?: StatsFromEs[];
-  dataStreamsPrivileges?: PrivilegesFromEs;
-}): DataStreamFromEs[] => {
-  return dataStreams.map((dataStream: DataStreamFromEs) => {
-    let enhancedDataStream = { ...dataStream };
-
-    if (dataStreamsStats) {
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      const { store_size, store_size_bytes, maximum_timestamp } =
-        dataStreamsStats.find(
-          ({ data_stream: statsName }: { data_stream: string }) => statsName === dataStream.name
-        ) || {};
-
-      enhancedDataStream = {
-        ...enhancedDataStream,
-        store_size,
-        store_size_bytes,
-        maximum_timestamp,
-      };
-    }
-
-    enhancedDataStream = {
-      ...enhancedDataStream,
+  dataStreams: IndicesDataStream[];
+  dataStreamsStats?: IndicesDataStreamsStatsDataStreamsStatsItem[];
+  meteringStats?: MeteringStats[];
+  dataStreamsPrivileges?: SecurityHasPrivilegesResponse;
+  globalMaxRetention?: string;
+}): EnhancedDataStreamFromEs[] => {
+  return dataStreams.map((dataStream) => {
+    const enhancedDataStream: EnhancedDataStreamFromEs = {
+      ...dataStream,
+      ...(globalMaxRetention ? { global_max_retention: globalMaxRetention } : {}),
       privileges: {
         delete_index: dataStreamsPrivileges
           ? dataStreamsPrivileges.index[dataStream.name].delete_index
           : true,
+        manage_data_stream_lifecycle: dataStreamsPrivileges
+          ? dataStreamsPrivileges.index[dataStream.name].manage_data_stream_lifecycle
+          : true,
       },
     };
+
+    if (dataStreamsStats) {
+      const currentDataStreamStats: IndicesDataStreamsStatsDataStreamsStatsItem | undefined =
+        dataStreamsStats.find(({ data_stream: statsName }) => statsName === dataStream.name);
+
+      if (currentDataStreamStats) {
+        enhancedDataStream.store_size = currentDataStreamStats.store_size;
+        enhancedDataStream.store_size_bytes = currentDataStreamStats.store_size_bytes;
+        enhancedDataStream.maximum_timestamp = currentDataStreamStats.maximum_timestamp;
+      }
+    }
+
+    if (meteringStats) {
+      const datastreamMeteringStats = meteringStats.find((s) => s.name === dataStream.name);
+      if (datastreamMeteringStats) {
+        enhancedDataStream.metering_size_in_bytes = datastreamMeteringStats.size_in_bytes;
+        enhancedDataStream.metering_doc_count = datastreamMeteringStats.num_docs;
+      }
+    }
 
     return enhancedDataStream;
   });
@@ -75,11 +82,28 @@ const getDataStreams = (client: IScopedClusterClient, name = '*') => {
   });
 };
 
+const getDataStreamLifecycle = (client: IScopedClusterClient, name: string) => {
+  return client.asCurrentUser.indices.getDataLifecycle({
+    name,
+  });
+};
+
 const getDataStreamsStats = (client: IScopedClusterClient, name = '*') => {
   return client.asCurrentUser.indices.dataStreamsStats({
     name,
     expand_wildcards: 'all',
     human: true,
+  });
+};
+
+const getMeteringStats = (client: IScopedClusterClient, name?: string) => {
+  let path = `/_metering/stats`;
+  if (name) {
+    path = `${path}/${name}`;
+  }
+  return client.asSecondaryAuthUser.transport.request<MeteringStatsResponse>({
+    method: 'GET',
+    path,
   });
 };
 
@@ -89,7 +113,7 @@ const getDataStreamsPrivileges = (client: IScopedClusterClient, names: string[])
       index: [
         {
           names,
-          privileges: ['delete_index'],
+          privileges: ['delete_index', 'manage_data_stream_lifecycle'],
         },
       ],
     },
@@ -112,9 +136,13 @@ export function registerGetAllRoute({ router, lib: { handleEsError }, config }: 
 
         let dataStreamsStats;
         let dataStreamsPrivileges;
+        let meteringStats;
 
-        if (includeStats) {
+        if (includeStats && config.isDataStreamStatsEnabled !== false) {
           ({ data_streams: dataStreamsStats } = await getDataStreamsStats(client));
+        }
+        if (includeStats && config.isSizeAndDocCountEnabled !== false) {
+          ({ datastreams: meteringStats } = await getMeteringStats(client));
         }
 
         if (config.isSecurityEnabled() && dataStreams.length > 0) {
@@ -125,11 +153,9 @@ export function registerGetAllRoute({ router, lib: { handleEsError }, config }: 
         }
 
         const enhancedDataStreams = enhanceDataStreams({
-          // @ts-expect-error DataStreamFromEs conflicts with @elastic/elasticsearch IndicesGetDataStreamIndicesGetDataStreamItem
           dataStreams,
-          // @ts-expect-error StatsFromEs conflicts with @elastic/elasticsearch IndicesDataStreamsStatsDataStreamsStatsItem
           dataStreamsStats,
-          // @ts-expect-error PrivilegesFromEs conflicts with @elastic/elasticsearch ApplicationsPrivileges
+          meteringStats,
           dataStreamsPrivileges,
         });
 
@@ -153,23 +179,37 @@ export function registerGetOneRoute({ router, lib: { handleEsError }, config }: 
     async (context, request, response) => {
       const { name } = request.params as TypeOf<typeof paramsSchema>;
       const { client } = (await context.core).elasticsearch;
+      let dataStreamsStats;
+      let meteringStats;
+
       try {
-        const [{ data_streams: dataStreams }, { data_streams: dataStreamsStats }] =
-          await Promise.all([getDataStreams(client, name), getDataStreamsStats(client, name)]);
+        const { data_streams: dataStreams } = await getDataStreams(client, name);
+
+        const lifecycle = await getDataStreamLifecycle(client, name);
+        // @ts-ignore - TS doesn't know about the `global_retention` property yet
+        const globalMaxRetention = lifecycle?.global_retention?.max_retention;
+
+        if (config.isDataStreamStatsEnabled !== false) {
+          ({ data_streams: dataStreamsStats } = await getDataStreamsStats(client, name));
+        }
+
+        if (config.isSizeAndDocCountEnabled !== false) {
+          ({ datastreams: meteringStats } = await getMeteringStats(client, name));
+        }
 
         if (dataStreams[0]) {
           let dataStreamsPrivileges;
+
           if (config.isSecurityEnabled()) {
             dataStreamsPrivileges = await getDataStreamsPrivileges(client, [dataStreams[0].name]);
           }
 
           const enhancedDataStreams = enhanceDataStreams({
-            // @ts-expect-error DataStreamFromEs conflicts with @elastic/elasticsearch IndicesGetDataStreamIndicesGetDataStreamItem
             dataStreams,
-            // @ts-expect-error StatsFromEs conflicts with @elastic/elasticsearch IndicesDataStreamsStatsDataStreamsStatsItem
             dataStreamsStats,
-            // @ts-expect-error PrivilegesFromEs conflicts with @elastic/elasticsearch ApplicationsPrivileges
+            meteringStats,
             dataStreamsPrivileges,
+            globalMaxRetention,
           });
           const body = deserializeDataStream(enhancedDataStreams[0]);
           return response.ok({ body });

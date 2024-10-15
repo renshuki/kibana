@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import './header_logo.scss';
@@ -41,12 +42,6 @@ function onClick(
 ) {
   const anchor = findClosestAnchor((event as any).nativeEvent.target);
   if (!anchor) {
-    return;
-  }
-
-  const navLink = navLinks.find((item) => item.href === anchor.href);
-  if (navLink && navLink.disabled) {
-    event.preventDefault();
     return;
   }
 
@@ -95,19 +90,21 @@ export function HeaderLogo({ href, navigateToApp, loadingCount$, ...observables 
   return (
     <a
       onClick={(e) => onClick(e, forceNavigation, navLinks, navigateToApp)}
-      className="euiHeaderLogo"
+      className="chrHeaderLogo"
       href={href}
       data-test-subj="logo"
       aria-label={i18n.translate('core.ui.chrome.headerGlobalNav.goHomePageIconAriaLabel', {
         defaultMessage: 'Elastic home',
       })}
     >
-      <LoadingIndicator
-        loadingCount$={loadingCount$!}
-        showPlainSpinner={Boolean(logo || customizedLogo)}
-      />
+      <LoadingIndicator loadingCount$={loadingCount$!} customLogo={logo} />
       {customizedLogo ? (
-        <img src={customizedLogo} width="200" height="84" alt="custom mark" />
+        <img
+          src={customizedLogo}
+          className="chrHeaderLogo__mark"
+          style={{ maxWidth: '200px', maxHeight: '84px' }}
+          alt="custom mark"
+        />
       ) : (
         <ElasticMark className="chrHeaderLogo__mark" aria-hidden={true} />
       )}

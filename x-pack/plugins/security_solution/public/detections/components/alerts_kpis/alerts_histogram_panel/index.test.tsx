@@ -5,22 +5,19 @@
  * 2.0.
  */
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { mount } from 'enzyme';
 import type { Filter } from '@kbn/es-query';
 
 import { SecurityPageName } from '../../../../app/types';
-import { CHART_SETTINGS_POPOVER_ARIA_LABEL } from '../../../../common/components/chart_settings_popover/translations';
-import { DEFAULT_WIDTH } from '../../../../common/components/charts/draggable_legend';
-import { MatrixLoader } from '../../../../common/components/matrix_histogram/matrix_loader';
-import { DEFAULT_STACK_BY_FIELD, DEFAULT_STACK_BY_FIELD1 } from '../common/config';
 import { useQueryToggle } from '../../../../common/containers/query_toggle';
 import { TestProviders } from '../../../../common/mock';
-import * as helpers from './helpers';
 import { mockAlertSearchResponse } from './mock_data';
-import { ChartContextMenu } from '../../../pages/detection_engine/chart_panels/chart_context_menu';
-import { AlertsHistogramPanel, LEGEND_WITH_COUNTS_WIDTH } from '.';
+import { VisualizationEmbeddable } from '../../../../common/components/visualization_actions/visualization_embeddable';
+
+import { AlertsHistogramPanel } from '.';
+import { useVisualizationResponse } from '../../../../common/components/visualization_actions/use_visualization_response';
 
 jest.mock('../../../../common/containers/query_toggle');
 
@@ -76,45 +73,64 @@ jest.mock('../../../../common/lib/kibana', () => {
   };
 });
 
-jest.mock('../../../../common/components/navigation/use_get_url_search');
+jest.mock('../../../../common/components/visualization_actions/visualization_embeddable');
 
-const defaultUseQueryAlertsReturn = {
-  loading: true,
-  setQuery: () => undefined,
-  data: null,
-  response: '',
-  request: '',
-  refetch: null,
-};
-const mockUseQueryAlerts = jest.fn().mockReturnValue(defaultUseQueryAlertsReturn);
-
-jest.mock('../../../containers/detection_engine/alerts/use_query', () => {
-  const original = jest.requireActual('../../../containers/detection_engine/alerts/use_query');
+jest.mock('../../../../common/components/visualization_actions/use_visualization_response', () => {
+  const original = jest.requireActual(
+    '../../../../common/components/visualization_actions/use_visualization_response'
+  );
   return {
     ...original,
-    useQueryAlerts: (...props: unknown[]) => mockUseQueryAlerts(...props),
+    useVisualizationResponse: jest.fn().mockReturnValue({ loading: false }),
   };
 });
 
-describe('AlertsHistogramPanel', () => {
-  const defaultProps = {
-    signalIndexName: 'signalIndexName',
-    setQuery: jest.fn(),
-    updateDateRange: jest.fn(),
+jest.mock('../common/hooks', () => {
+  const actual = jest.requireActual('../common/hooks');
+  return {
+    ...actual,
+    useInspectButton: jest.fn(),
   };
+});
 
-  const mockSetToggle = jest.fn();
-  const mockUseQueryToggle = useQueryToggle as jest.Mock;
+jest.mock('../../../hooks/alerts_visualization/use_alert_histogram_count', () => ({
+  useAlertHistogramCount: jest.fn().mockReturnValue(999),
+}));
+
+jest.mock('../../../../common/components/visualization_actions/use_visualization_response', () => ({
+  useVisualizationResponse: jest.fn().mockReturnValue({
+    responses: [
+      {
+        hits: { total: 0 },
+        aggregations: { myAgg: { buckets: [{ key: 'A' }, { key: 'B' }, { key: 'C' }] } },
+      },
+    ],
+    loading: false,
+  }),
+}));
+
+const mockSetIsExpanded = jest.fn();
+const defaultProps = {
+  setQuery: jest.fn(),
+  showBuildingBlockAlerts: false,
+  showOnlyThreatIndicatorAlerts: false,
+  showTotalAlertsCount: true,
+  signalIndexName: 'signalIndexName',
+  updateDateRange: jest.fn(),
+  isExpanded: true,
+  setIsExpanded: mockSetIsExpanded,
+};
+const mockSetToggle = jest.fn();
+const mockUseQueryToggle = useQueryToggle as jest.Mock;
+const mockUseVisualizationResponse = useVisualizationResponse as jest.Mock;
+
+describe('AlertsHistogramPanel', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     mockUseQueryToggle.mockReturnValue({ toggleStatus: true, setToggleStatus: mockSetToggle });
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
-  });
-
-  it('renders correctly', () => {
+  test('renders correctly', () => {
     const wrapper = mount(
       <TestProviders>
         <AlertsHistogramPanel {...defaultProps} />
@@ -126,13 +142,9 @@ describe('AlertsHistogramPanel', () => {
 
   describe('legend counts', () => {
     beforeEach(() => {
-      mockUseQueryAlerts.mockReturnValue({
+      mockUseVisualizationResponse.mockReturnValue({
         loading: false,
-        data: mockAlertSearchResponse,
-        setQuery: () => {},
-        response: '',
-        request: '',
-        refetch: () => {},
+        responses: mockAlertSearchResponse,
       });
     });
 
@@ -144,16 +156,6 @@ describe('AlertsHistogramPanel', () => {
       );
 
       expect(wrapper.find('[data-test-subj="legendItemCount"]').exists()).toBe(false);
-    });
-
-    test('it renders counts in the legend when `showCountsInLegend` is true', () => {
-      const wrapper = mount(
-        <TestProviders>
-          <AlertsHistogramPanel {...defaultProps} showCountsInLegend={true} />
-        </TestProviders>
-      );
-
-      expect(wrapper.find('[data-test-subj="legendItemCount"]').exists()).toBe(true);
     });
   });
 
@@ -167,41 +169,6 @@ describe('AlertsHistogramPanel', () => {
     expect(
       wrapper.find('[data-test-subj="headerSectionInnerFlexGroup"]').last().getDOMNode().className
     ).toContain('flexEnd');
-  });
-
-  describe('inspect button', () => {
-    test('it renders the inspect button by default', () => {
-      const wrapper = mount(
-        <TestProviders>
-          <AlertsHistogramPanel {...defaultProps} />
-        </TestProviders>
-      );
-
-      expect(wrapper.find('[data-test-subj="inspect-icon-button"]').first().exists()).toBe(true);
-    });
-
-    test('it does NOT render the inspect button when a `chartOptionsContextMenu` is provided', async () => {
-      const chartOptionsContextMenu = (queryId: string) => (
-        <ChartContextMenu
-          defaultStackByField={DEFAULT_STACK_BY_FIELD}
-          defaultStackByField1={DEFAULT_STACK_BY_FIELD1}
-          queryId={queryId}
-          setStackBy={jest.fn()}
-          setStackByField1={jest.fn()}
-        />
-      );
-
-      const wrapper = mount(
-        <TestProviders>
-          <AlertsHistogramPanel
-            {...defaultProps}
-            chartOptionsContextMenu={chartOptionsContextMenu}
-          />
-        </TestProviders>
-      );
-
-      expect(wrapper.find('[data-test-subj="inspect-icon-button"]').first().exists()).toBe(false);
-    });
   });
 
   test('it aligns the panel flex group at flex start to ensure the context menu is displayed at the top of the panel', () => {
@@ -220,13 +187,9 @@ describe('AlertsHistogramPanel', () => {
     const onFieldSelected = jest.fn();
     const optionToSelect = 'agent.hostname';
 
-    mockUseQueryAlerts.mockReturnValue({
+    mockUseVisualizationResponse.mockReturnValue({
       loading: false,
-      data: mockAlertSearchResponse,
-      setQuery: () => {},
-      response: '',
-      request: '',
-      refetch: () => {},
+      responses: mockAlertSearchResponse,
     });
 
     render(
@@ -252,9 +215,7 @@ describe('AlertsHistogramPanel', () => {
         </TestProviders>
       );
 
-      expect(wrapper.find('label.euiFormControlLayout__prepend').first().text()).toEqual(
-        'Stack by'
-      );
+      expect(wrapper.find('.euiFormControlLayout__prepend').first().text()).toEqual('Stack by');
     });
 
     test('it prepends a custom stack by label when `stackByLabel` is provided', () => {
@@ -266,9 +227,7 @@ describe('AlertsHistogramPanel', () => {
         </TestProviders>
       );
 
-      expect(wrapper.find('label.euiFormControlLayout__prepend').first().text()).toEqual(
-        stackByLabel
-      );
+      expect(wrapper.find('.euiFormControlLayout__prepend').first().text()).toEqual(stackByLabel);
     });
   });
 
@@ -368,67 +327,6 @@ describe('AlertsHistogramPanel', () => {
     });
   });
 
-  test('it renders the chart options context menu when a `chartOptionsContextMenu` is provided', async () => {
-    const chartOptionsContextMenu = (queryId: string) => (
-      <ChartContextMenu
-        defaultStackByField={DEFAULT_STACK_BY_FIELD}
-        defaultStackByField1={DEFAULT_STACK_BY_FIELD1}
-        queryId={queryId}
-        setStackBy={jest.fn()}
-        setStackByField1={jest.fn()}
-      />
-    );
-
-    render(
-      <TestProviders>
-        <AlertsHistogramPanel {...defaultProps} chartOptionsContextMenu={chartOptionsContextMenu} />
-      </TestProviders>
-    );
-
-    expect(
-      screen.getByRole('button', { name: CHART_SETTINGS_POPOVER_ARIA_LABEL })
-    ).toBeInTheDocument();
-  });
-
-  describe('legend width', () => {
-    beforeEach(() => {
-      mockUseQueryAlerts.mockReturnValue({
-        loading: false,
-        data: mockAlertSearchResponse,
-        setQuery: () => {},
-        response: '',
-        request: '',
-        refetch: () => {},
-      });
-    });
-
-    test('it renders the legend with the expected default min-width', () => {
-      const wrapper = mount(
-        <TestProviders>
-          <AlertsHistogramPanel {...defaultProps} />
-        </TestProviders>
-      );
-
-      expect(wrapper.find('[data-test-subj="draggable-legend"]').first()).toHaveStyleRule(
-        'min-width',
-        `${DEFAULT_WIDTH}px`
-      );
-    });
-
-    test('it renders the legend with the expected min-width when `showCountsInLegend` is true', () => {
-      const wrapper = mount(
-        <TestProviders>
-          <AlertsHistogramPanel {...defaultProps} showCountsInLegend={true} />
-        </TestProviders>
-      );
-
-      expect(wrapper.find('[data-test-subj="draggable-legend"]').first()).toHaveStyleRule(
-        'min-width',
-        `${LEGEND_WITH_COUNTS_WIDTH}px`
-      );
-    });
-  });
-
   describe('Button view alerts', () => {
     it('renders correctly', () => {
       const props = { ...defaultProps, showLinkToAlerts: true };
@@ -467,69 +365,26 @@ describe('AlertsHistogramPanel', () => {
   });
 
   describe('Query', () => {
-    it('it render with a illegal KQL', async () => {
-      await act(async () => {
-        jest.mock('@kbn/es-query', () => ({
-          buildEsQuery: jest.fn().mockImplementation(() => {
-            throw new Error('Something went wrong');
-          }),
-        }));
-        const props = { ...defaultProps, query: { query: 'host.name: "', language: 'kql' } };
-        const wrapper = mount(
-          <TestProviders>
-            <AlertsHistogramPanel {...props} />
-          </TestProviders>
-        );
-
-        await waitFor(() => {
-          expect(wrapper.find('[data-test-subj="alerts-histogram-panel"]').exists()).toBeTruthy();
-        });
-        wrapper.unmount();
-      });
-    });
-  });
-
-  describe('CombinedQueries', () => {
-    it('combinedQueries props is valid, alerts query include combinedQueries', async () => {
-      const mockGetAlertsHistogramQuery = jest.spyOn(helpers, 'getAlertsHistogramQuery');
-
-      const props = {
-        ...defaultProps,
-        query: { query: 'host.name: "', language: 'kql' },
-        combinedQueries:
-          '{"bool":{"must":[],"filter":[{"match_all":{}},{"exists":{"field":"process.name"}}],"should":[],"must_not":[]}}',
-      };
+    it('it render with a illegal KQL', () => {
+      jest.mock('@kbn/es-query', () => ({
+        buildEsQuery: jest.fn().mockImplementation(() => {
+          throw new Error('Something went wrong');
+        }),
+      }));
+      const props = { ...defaultProps, query: { query: 'host.name: "', language: 'kql' } };
       const wrapper = mount(
         <TestProviders>
           <AlertsHistogramPanel {...props} />
         </TestProviders>
       );
 
-      await waitFor(() => {
-        expect(mockGetAlertsHistogramQuery.mock.calls[0]).toEqual([
-          'kibana.alert.rule.name',
-          '2020-07-07T08:20:18.966Z',
-          '2020-07-08T08:20:18.966Z',
-          [
-            {
-              bool: {
-                filter: [{ match_all: {} }, { exists: { field: 'process.name' } }],
-                must: [],
-                must_not: [],
-                should: [],
-              },
-            },
-          ],
-          undefined,
-        ]);
-      });
+      expect(wrapper.find('[data-test-subj="alerts-histogram-panel"]').exists()).toBeTruthy();
       wrapper.unmount();
     });
   });
 
   describe('Filters', () => {
-    it('filters props is valid, alerts query include filter', async () => {
-      const mockGetAlertsHistogramQuery = jest.spyOn(helpers, 'getAlertsHistogramQuery');
+    it('filters props is valid, alerts query include filter', () => {
       const statusFilter: Filter = {
         meta: {
           alias: null,
@@ -550,7 +405,6 @@ describe('AlertsHistogramPanel', () => {
 
       const props = {
         ...defaultProps,
-        query: { query: '', language: 'kql' },
         filters: [statusFilter],
       };
       const wrapper = mount(
@@ -559,143 +413,179 @@ describe('AlertsHistogramPanel', () => {
         </TestProviders>
       );
 
-      await waitFor(() => {
-        expect(mockGetAlertsHistogramQuery.mock.calls[1]).toEqual([
-          'kibana.alert.rule.name',
-          '2020-07-07T08:20:18.966Z',
-          '2020-07-08T08:20:18.966Z',
-          [
-            {
-              bool: {
-                filter: [{ term: { 'kibana.alert.workflow_status': 'open' } }],
-                must: [],
-                must_not: [],
-                should: [],
-              },
-            },
-          ],
-          undefined,
-        ]);
+      expect((VisualizationEmbeddable as unknown as jest.Mock).mock.calls[0][0].timerange).toEqual({
+        from: '2020-07-07T08:20:18.966Z',
+        to: '2020-07-08T08:20:18.966Z',
       });
+      expect(
+        (VisualizationEmbeddable as unknown as jest.Mock).mock.calls[0][0].extraOptions.filters
+      ).toEqual(props.filters);
       wrapper.unmount();
     });
   });
 
-  describe('parseCombinedQueries', () => {
-    it('return empty object when variables is undefined', async () => {
-      expect(helpers.parseCombinedQueries(undefined)).toEqual({});
-    });
-
-    it('return empty object when variables is empty string', async () => {
-      expect(helpers.parseCombinedQueries('')).toEqual({});
-    });
-
-    it('return empty object when variables is NOT a valid stringify json object', async () => {
-      expect(helpers.parseCombinedQueries('hello world')).toEqual({});
-    });
-
-    it('return a valid json object when variables is a valid json stringify', async () => {
-      expect(
-        helpers.parseCombinedQueries(
-          '{"bool":{"must":[],"filter":[{"match_all":{}},{"exists":{"field":"process.name"}}],"should":[],"must_not":[]}}'
-        )
-      ).toMatchInlineSnapshot(`
-          Object {
-            "bool": Object {
-              "filter": Array [
-                Object {
-                  "match_all": Object {},
-                },
-                Object {
-                  "exists": Object {
-                    "field": "process.name",
-                  },
-                },
-              ],
-              "must": Array [],
-              "must_not": Array [],
-              "should": Array [],
-            },
-          }
-      `);
-    });
-  });
-
-  describe('buildCombinedQueries', () => {
-    it('return empty array when variables is undefined', async () => {
-      expect(helpers.buildCombinedQueries(undefined)).toEqual([]);
-    });
-
-    it('return empty array when variables is empty string', async () => {
-      expect(helpers.buildCombinedQueries('')).toEqual([]);
-    });
-
-    it('return array with empty object when variables is NOT a valid stringify json object', async () => {
-      expect(helpers.buildCombinedQueries('hello world')).toEqual([{}]);
-    });
-
-    it('return a valid json object when variables is a valid json stringify', async () => {
-      expect(
-        helpers.buildCombinedQueries(
-          '{"bool":{"must":[],"filter":[{"match_all":{}},{"exists":{"field":"process.name"}}],"should":[],"must_not":[]}}'
-        )
-      ).toMatchInlineSnapshot(`
-        Array [
-          Object {
-            "bool": Object {
-              "filter": Array [
-                Object {
-                  "match_all": Object {},
-                },
-                Object {
-                  "exists": Object {
-                    "field": "process.name",
-                  },
-                },
-              ],
-              "must": Array [],
-              "must_not": Array [],
-              "should": Array [],
-            },
-          },
-        ]
-      `);
-    });
-  });
-
-  describe('toggleQuery', () => {
-    it('toggles', async () => {
-      await act(async () => {
+  describe('toggle button', () => {
+    describe('When setIsExpanded is available', () => {
+      it('toggles', () => {
         const wrapper = mount(
           <TestProviders>
             <AlertsHistogramPanel {...defaultProps} />
+          </TestProviders>
+        );
+
+        wrapper.find('[data-test-subj="query-toggle-header"]').first().simulate('click');
+        expect(mockSetIsExpanded).toBeCalledWith(false);
+        expect(mockSetToggle).not.toBeCalled();
+        wrapper.unmount();
+      });
+
+      it('when isExpanded is true, render histogram panel', async () => {
+        const wrapper = mount(
+          <TestProviders>
+            <AlertsHistogramPanel {...defaultProps} isExpanded={true} />
+          </TestProviders>
+        );
+        expect(wrapper.find('[data-test-subj="panelFlexGroup"]').exists()).toEqual(true);
+        expect(wrapper.find('[data-test-subj="embeddable-matrix-histogram"]').exists()).toEqual(
+          true
+        );
+        wrapper.unmount();
+      });
+
+      it('when isExpanded is false, hide histogram panel', async () => {
+        const wrapper = mount(
+          <TestProviders>
+            <AlertsHistogramPanel {...defaultProps} isExpanded={false} />
+          </TestProviders>
+        );
+        expect(wrapper.find('[data-test-subj="panelFlexGroup"]').exists()).toEqual(false);
+        expect(wrapper.find('[data-test-subj="embeddable-matrix-histogram"]').exists()).toEqual(
+          false
+        );
+        wrapper.unmount();
+      });
+    });
+
+    describe('When setIsExpanded is not available, use toggleQuery', () => {
+      const props = { ...defaultProps, setIsExpanded: undefined };
+
+      it('toggles', async () => {
+        const wrapper = mount(
+          <TestProviders>
+            <AlertsHistogramPanel {...props} />
           </TestProviders>
         );
         wrapper.find('[data-test-subj="query-toggle-header"]').first().simulate('click');
         expect(mockSetToggle).toBeCalledWith(false);
+        wrapper.unmount();
       });
-    });
-    it('toggleStatus=true, render', async () => {
-      await act(async () => {
-        const wrapper = mount(
-          <TestProviders>
-            <AlertsHistogramPanel {...defaultProps} />
-          </TestProviders>
-        );
 
-        expect(wrapper.find(MatrixLoader).exists()).toEqual(true);
-      });
-    });
-    it('toggleStatus=false, hide', async () => {
-      mockUseQueryToggle.mockReturnValue({ toggleStatus: false, setToggleStatus: mockSetToggle });
-      await act(async () => {
+      it('when toggleStatus is true, render', () => {
         const wrapper = mount(
           <TestProviders>
-            <AlertsHistogramPanel {...defaultProps} />
+            <AlertsHistogramPanel {...props} />
           </TestProviders>
         );
-        expect(wrapper.find(MatrixLoader).exists()).toEqual(false);
+        expect(wrapper.find('[data-test-subj="panelFlexGroup"]').exists()).toEqual(true);
+        expect(wrapper.find('[data-test-subj="embeddable-matrix-histogram"]').exists()).toEqual(
+          true
+        );
+        wrapper.unmount();
       });
+
+      it('when toggleStatus is false, hide', async () => {
+        mockUseQueryToggle.mockReturnValue({ toggleStatus: false, setToggleStatus: mockSetToggle });
+        const wrapper = mount(
+          <TestProviders>
+            <AlertsHistogramPanel {...props} />
+          </TestProviders>
+        );
+        expect(wrapper.find('[data-test-subj="panelFlexGroup"]').exists()).toEqual(false);
+        expect(wrapper.find('[data-test-subj="embeddable-matrix-histogram"]').exists()).toEqual(
+          false
+        );
+        wrapper.unmount();
+      });
+    });
+  });
+
+  describe('VisualizationEmbeddable', () => {
+    test('it renders the header with alerts count', () => {
+      const wrapper = mount(
+        <TestProviders>
+          <AlertsHistogramPanel {...defaultProps} alignHeader="flexEnd" />
+        </TestProviders>
+      );
+
+      mockUseVisualizationResponse.mockReturnValue({
+        loading: false,
+        responses: [
+          {
+            hits: { total: 0 },
+            aggregations: { myAgg: { buckets: [{ key: 'A' }, { key: 'B' }, { key: 'C' }] } },
+          },
+        ],
+      });
+
+      wrapper.setProps({ filters: [] });
+      wrapper.update();
+
+      expect(wrapper.find(`[data-test-subj="header-section-subtitle"]`).text()).toContain('999');
+      wrapper.unmount();
+    });
+
+    it('renders LensEmbeddable', () => {
+      const wrapper = mount(
+        <TestProviders>
+          <AlertsHistogramPanel {...defaultProps} />
+        </TestProviders>
+      );
+      expect(wrapper.find('[data-test-subj="embeddable-matrix-histogram"]').exists()).toBeTruthy();
+      wrapper.unmount();
+    });
+
+    it('renders LensEmbeddable with provided height', () => {
+      const wrapper = mount(
+        <TestProviders>
+          <AlertsHistogramPanel {...defaultProps} />
+        </TestProviders>
+      );
+
+      expect((VisualizationEmbeddable as unknown as jest.Mock).mock.calls[0][0].height).toEqual(
+        155
+      );
+      wrapper.unmount();
+    });
+
+    it('should render correct subtitle with alert count', () => {
+      const wrapper = mount(
+        <TestProviders>
+          <AlertsHistogramPanel {...defaultProps} />
+        </TestProviders>
+      );
+
+      expect(wrapper.find(`[data-test-subj="header-section-subtitle"]`).text()).toContain('999');
+      wrapper.unmount();
+    });
+
+    it('should render correct subtitle with empty string', () => {
+      (useVisualizationResponse as jest.Mock).mockReturnValue({
+        responses: [
+          {
+            hits: { total: 0 },
+            aggregations: { myAgg: { buckets: [] } },
+          },
+        ],
+        loading: false,
+      });
+      const wrapper = mount(
+        <TestProviders>
+          <AlertsHistogramPanel {...defaultProps} />
+        </TestProviders>
+      );
+
+      expect(wrapper.find(`[data-test-subj="header-section-subtitle"]`).text()).toEqual('');
+      wrapper.unmount();
     });
   });
 });

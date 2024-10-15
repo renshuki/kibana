@@ -82,7 +82,7 @@ export const IncludeFeatureStatesField: FunctionComponent<Props> = ({ policy, on
       }
       fullWidth
     >
-      <EuiFormRow hasEmptyLabelSpace fullWidth>
+      <EuiFormRow fullWidth>
         <EuiSwitch
           data-test-subj="featureStatesToggle"
           label={
@@ -109,7 +109,7 @@ export const IncludeFeatureStatesField: FunctionComponent<Props> = ({ policy, on
           ) : (
             <EuiCallOut
               color="warning"
-              iconType="alert"
+              iconType="warning"
               title={
                 <FormattedMessage
                   id="xpack.snapshotRestore.errorLoadingFeatureStatesLabel"

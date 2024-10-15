@@ -6,8 +6,13 @@
  */
 
 import { FeatureRegistry } from './feature_registry';
-import { ElasticsearchFeatureConfig, KibanaFeatureConfig } from '../common';
+import {
+  ElasticsearchFeatureConfig,
+  FeatureKibanaPrivilegesReference,
+  KibanaFeatureConfig,
+} from '../common';
 import { licensingMock } from '@kbn/licensing-plugin/server/mocks';
+import { DEFAULT_APP_CATEGORIES } from '@kbn/core/server';
 
 describe('FeatureRegistry', () => {
   describe('Kibana Features', () => {
@@ -22,6 +27,7 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerKibanaFeature(feature);
+      featureRegistry.lockRegistration();
       const result = featureRegistry.getAllKibanaFeatures();
       expect(result).toHaveLength(1);
 
@@ -51,7 +57,7 @@ describe('FeatureRegistry', () => {
             app: ['app1'],
             savedObject: {
               all: ['space', 'etc', 'telemetry'],
-              read: ['canvas', 'config', 'url'],
+              read: ['canvas', 'config', 'config-global', 'url'],
             },
             api: ['someApiEndpointTag', 'anotherEndpointTag'],
             ui: ['allowsFoo', 'showBar', 'showBaz'],
@@ -59,7 +65,7 @@ describe('FeatureRegistry', () => {
           read: {
             savedObject: {
               all: [],
-              read: ['config', 'url', 'telemetry'],
+              read: ['config', 'config-global', 'url', 'telemetry'],
             },
             ui: [],
           },
@@ -124,7 +130,7 @@ describe('FeatureRegistry', () => {
                 app: ['app1'],
                 savedObject: {
                   all: ['space', 'etc', 'telemetry'],
-                  read: ['canvas', 'config', 'url'],
+                  read: ['canvas', 'config', 'config-global', 'url'],
                 },
                 api: ['someApiEndpointTag', 'anotherEndpointTag'],
                 ui: ['allowsFoo', 'showBar', 'showBaz'],
@@ -137,6 +143,7 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerKibanaFeature(feature);
+      featureRegistry.lockRegistration();
       const result = featureRegistry.getAllKibanaFeatures();
       expect(result).toHaveLength(1);
 
@@ -195,6 +202,25 @@ describe('FeatureRegistry', () => {
           `"[category.label]: expected value of type [string] but got [undefined]"`
         );
       });
+    });
+
+    it('requires only a valid scope registered', () => {
+      const feature: KibanaFeatureConfig = {
+        id: 'test-feature',
+        name: 'Test Feature',
+        app: [],
+        category: { id: 'foo', label: 'foo' },
+        privileges: null,
+        // @ts-expect-error
+        scope: ['foo', 'bar'],
+      };
+
+      const featureRegistry = new FeatureRegistry();
+      expect(() =>
+        featureRegistry.registerKibanaFeature(feature)
+      ).toThrowErrorMatchingInlineSnapshot(
+        `"Feature test-feature has unknown scope entries: foo, bar"`
+      );
     });
 
     it(`requires a value for privileges`, () => {
@@ -278,6 +304,7 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerKibanaFeature(feature);
+      featureRegistry.lockRegistration();
       const result = featureRegistry.getAllKibanaFeatures();
 
       expect(result[0].privileges).toHaveProperty('all');
@@ -287,7 +314,7 @@ describe('FeatureRegistry', () => {
       expect(allPrivilege?.savedObject.all).toEqual(['telemetry']);
     });
 
-    it(`automatically grants access to config, url, and telemetry saved objects`, () => {
+    it(`automatically grants access to config, config-global, url, and telemetry saved objects`, () => {
       const feature: KibanaFeatureConfig = {
         id: 'test-feature',
         name: 'Test Feature',
@@ -313,6 +340,7 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerKibanaFeature(feature);
+      featureRegistry.lockRegistration();
       const result = featureRegistry.getAllKibanaFeatures();
 
       expect(result[0].privileges).toHaveProperty('all');
@@ -320,11 +348,16 @@ describe('FeatureRegistry', () => {
 
       const allPrivilege = result[0].privileges?.all;
       const readPrivilege = result[0].privileges?.read;
-      expect(allPrivilege?.savedObject.read).toEqual(['config', 'url']);
-      expect(readPrivilege?.savedObject.read).toEqual(['config', 'telemetry', 'url']);
+      expect(allPrivilege?.savedObject.read).toEqual(['config', 'config-global', 'url']);
+      expect(readPrivilege?.savedObject.read).toEqual([
+        'config',
+        'config-global',
+        'telemetry',
+        'url',
+      ]);
     });
 
-    it(`automatically grants 'all' access to telemetry and 'read' to [config, url] saved objects for the reserved privilege`, () => {
+    it(`automatically grants 'all' access to telemetry and 'read' to [config, config-global, url] saved objects for the reserved privilege`, () => {
       const feature: KibanaFeatureConfig = {
         id: 'test-feature',
         name: 'Test Feature',
@@ -350,11 +383,12 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerKibanaFeature(feature);
+      featureRegistry.lockRegistration();
       const result = featureRegistry.getAllKibanaFeatures();
 
       const reservedPrivilege = result[0]!.reserved!.privileges[0].privilege;
       expect(reservedPrivilege.savedObject.all).toEqual(['telemetry']);
-      expect(reservedPrivilege.savedObject.read).toEqual(['config', 'url']);
+      expect(reservedPrivilege.savedObject.read).toEqual(['config', 'config-global', 'url']);
     });
 
     it(`does not duplicate the automatic grants if specified on the incoming feature`, () => {
@@ -368,14 +402,14 @@ describe('FeatureRegistry', () => {
             ui: [],
             savedObject: {
               all: ['telemetry'],
-              read: ['config', 'url'],
+              read: ['config', 'config-global', 'url'],
             },
           },
           read: {
             ui: [],
             savedObject: {
               all: [],
-              read: ['config', 'url'],
+              read: ['config', 'config-global', 'url'],
             },
           },
         },
@@ -383,6 +417,7 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerKibanaFeature(feature);
+      featureRegistry.lockRegistration();
       const result = featureRegistry.getAllKibanaFeatures();
 
       expect(result[0].privileges).toHaveProperty('all');
@@ -391,8 +426,13 @@ describe('FeatureRegistry', () => {
       const allPrivilege = result[0].privileges!.all;
       const readPrivilege = result[0].privileges!.read;
       expect(allPrivilege?.savedObject.all).toEqual(['telemetry']);
-      expect(allPrivilege?.savedObject.read).toEqual(['config', 'url']);
-      expect(readPrivilege?.savedObject.read).toEqual(['config', 'url', 'telemetry']);
+      expect(allPrivilege?.savedObject.read).toEqual(['config', 'config-global', 'url']);
+      expect(readPrivilege?.savedObject.read).toEqual([
+        'config',
+        'config-global',
+        'url',
+        'telemetry',
+      ]);
     });
 
     it(`does not allow duplicate features to be registered`, () => {
@@ -478,7 +518,7 @@ describe('FeatureRegistry', () => {
             name: 'Foo',
             app: ['app1', 'app2'],
             savedObject: {
-              all: ['config', 'space', 'etc'],
+              all: ['config', 'config-global', 'space', 'etc'],
               read: ['canvas'],
             },
             api: ['someApiEndpointTag', 'anotherEndpointTag'],
@@ -1645,6 +1685,7 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerKibanaFeature(feature);
+      featureRegistry.lockRegistration();
       const result = featureRegistry.getAllKibanaFeatures();
       expect(result).toHaveLength(1);
       expect(result[0].reserved?.privileges).toHaveLength(2);
@@ -1802,7 +1843,7 @@ describe('FeatureRegistry', () => {
       `);
     });
 
-    it('cannot register feature after getAll has been called', () => {
+    it('cannot register kibana feature after lockRegistration has been called', () => {
       const feature1: KibanaFeatureConfig = {
         id: 'test-feature',
         name: 'Test Feature',
@@ -1820,6 +1861,7 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerKibanaFeature(feature1);
+      featureRegistry.lockRegistration();
       featureRegistry.getAllKibanaFeatures();
       expect(() => {
         featureRegistry.registerKibanaFeature(feature2);
@@ -1827,6 +1869,7 @@ describe('FeatureRegistry', () => {
         `"Features are locked, can't register new features. Attempt to register test-feature-2 failed."`
       );
     });
+
     describe('#getAllKibanaFeatures', () => {
       const features: KibanaFeatureConfig[] = [
         {
@@ -1875,14 +1918,39 @@ describe('FeatureRegistry', () => {
             },
           ],
         },
+        {
+          deprecated: { notice: 'It was a mistake.' },
+          id: 'deprecated-feature',
+          name: 'Deprecated Feature',
+          app: [],
+          category: { id: 'deprecated', label: 'deprecated' },
+          privileges: {
+            all: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: [{ feature: 'with-sub-feature', privileges: ['all'] }],
+            },
+            read: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: [{ feature: 'with-sub-feature', privileges: ['all'] }],
+            },
+          },
+        },
       ];
 
       const registry = new FeatureRegistry();
       features.forEach((f) => registry.registerKibanaFeature(f));
+      registry.lockRegistration();
 
       it('returns all features and sub-feature privileges by default', () => {
         const result = registry.getAllKibanaFeatures();
-        expect(result).toHaveLength(3);
+        expect(result.map((f) => f.id)).toEqual([
+          'gold-feature',
+          'unlicensed-feature',
+          'with-sub-feature',
+          'deprecated-feature',
+        ]);
         const [, , withSubFeature] = result;
         expect(withSubFeature.subFeatures).toHaveLength(1);
         expect(withSubFeature.subFeatures[0].privilegeGroups).toHaveLength(1);
@@ -1891,23 +1959,964 @@ describe('FeatureRegistry', () => {
 
       it('returns features which are satisfied by the current license', () => {
         const license = licensingMock.createLicense({ license: { type: 'gold' } });
-        const result = registry.getAllKibanaFeatures(license);
-        expect(result).toHaveLength(2);
-        const ids = result.map((f) => f.id);
-        expect(ids).toEqual(['gold-feature', 'unlicensed-feature']);
+        const result = registry.getAllKibanaFeatures({ license });
+        expect(result.map((f) => f.id)).toEqual([
+          'gold-feature',
+          'unlicensed-feature',
+          'deprecated-feature',
+        ]);
+      });
+
+      it('can omit deprecated features if requested', () => {
+        const result = registry.getAllKibanaFeatures({ omitDeprecated: true });
+        expect(result.map((f) => f.id)).toEqual([
+          'gold-feature',
+          'unlicensed-feature',
+          'with-sub-feature',
+        ]);
       });
 
       it('filters out sub-feature privileges which do not match the current license', () => {
         const license = licensingMock.createLicense({ license: { type: 'platinum' } });
-        const result = registry.getAllKibanaFeatures(license);
-        expect(result).toHaveLength(3);
-        const ids = result.map((f) => f.id);
-        expect(ids).toEqual(['gold-feature', 'unlicensed-feature', 'with-sub-feature']);
+        const result = registry.getAllKibanaFeatures({ license });
+        expect(result.map((f) => f.id)).toEqual([
+          'gold-feature',
+          'unlicensed-feature',
+          'with-sub-feature',
+          'deprecated-feature',
+        ]);
 
         const [, , withSubFeature] = result;
         expect(withSubFeature.subFeatures).toHaveLength(1);
         expect(withSubFeature.subFeatures[0].privilegeGroups).toHaveLength(1);
         expect(withSubFeature.subFeatures[0].privilegeGroups[0].privileges).toHaveLength(0);
+      });
+    });
+
+    describe('#applyOverrides', () => {
+      let registry: FeatureRegistry;
+      beforeEach(() => {
+        registry = new FeatureRegistry();
+        const features: KibanaFeatureConfig[] = [
+          {
+            id: 'featureA',
+            name: 'Feature A',
+            app: [],
+            order: 1,
+            category: { id: 'fooA', label: 'fooA' },
+            privileges: {
+              all: { ui: [], savedObject: { all: [], read: [] } },
+              read: { ui: [], savedObject: { all: [], read: [] } },
+            },
+          },
+          {
+            id: 'featureB',
+            name: 'Feature B',
+            app: [],
+            order: 2,
+            category: { id: 'fooB', label: 'fooB' },
+            privileges: null,
+          },
+          {
+            id: 'featureC',
+            name: 'Feature C',
+            app: [],
+            order: 1,
+            category: { id: 'fooC', label: 'fooC' },
+            privileges: {
+              all: { ui: [], savedObject: { all: [], read: [] } },
+              read: { ui: [], savedObject: { all: [], read: [] } },
+            },
+            subFeatures: [
+              {
+                name: 'subFeatureC',
+                privilegeGroups: [
+                  {
+                    groupType: 'mutually_exclusive',
+                    privileges: [
+                      {
+                        id: 'subFeatureCOne',
+                        name: 'subFeature C One',
+                        includeIn: 'all',
+                        ui: [],
+                        savedObject: { all: [], read: [] },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: 'featureD',
+            name: 'Feature D',
+            app: [],
+            order: 1,
+            category: { id: 'fooD', label: 'fooD' },
+            privileges: {
+              all: { ui: [], savedObject: { all: [], read: [] } },
+              read: { ui: [], savedObject: { all: [], read: [] } },
+            },
+          },
+          {
+            id: 'featureE',
+            name: 'Feature E',
+            app: [],
+            order: 1,
+            category: { id: 'fooE', label: 'fooE' },
+            privileges: {
+              all: {
+                ui: [],
+                savedObject: { all: [], read: [] },
+                alerting: { alert: { all: ['one'] } },
+              },
+              read: { ui: [], savedObject: { all: [], read: [] } },
+            },
+            alerting: ['one'],
+          },
+        ];
+        features.forEach((f) => registry.registerKibanaFeature(f));
+      });
+
+      it('rejects overrides for unknown features', () => {
+        expect(() =>
+          registry.applyOverrides({ unknownFeature: {} })
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot override feature \\"unknownFeature\\" since feature with such ID is not registered."`
+        );
+      });
+
+      it('can override basic feature properties', () => {
+        registry.applyOverrides({
+          featureA: {
+            hidden: true,
+            name: 'Feature A New',
+            category: 'management',
+            order: 123,
+          },
+        });
+        registry.lockRegistration();
+
+        const [featureA, featureB] = registry.getAllKibanaFeatures();
+        expect(featureA.hidden).toBe(true);
+        expect(featureB.hidden).toBeUndefined();
+
+        expect(featureA.name).toBe('Feature A New');
+        expect(featureB.name).toBe('Feature B');
+
+        expect(featureA.category).toEqual(DEFAULT_APP_CATEGORIES.management);
+        expect(featureB.category).toEqual({ id: 'fooB', label: 'fooB' });
+
+        expect(featureA.order).toBe(123);
+        expect(featureB.order).toBe(2);
+      });
+
+      it('rejects overrides for unknown privileges', () => {
+        expect(() =>
+          registry.applyOverrides({ featureB: { privileges: { all: { disabled: true } } } })
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot override privilege \\"all\\" of feature \\"featureB\\" since \\"all\\" privilege is not registered."`
+        );
+      });
+
+      it('rejects overrides for `composedOf` referring to unknown feature', () => {
+        expect(() =>
+          registry.applyOverrides({
+            featureA: {
+              privileges: {
+                all: { composedOf: [{ feature: 'featureF', privileges: ['all'] }] },
+              },
+            },
+          })
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot compose privilege \\"all\\" of feature \\"featureA\\" with privileges of feature \\"featureF\\" since such feature is not registered."`
+        );
+      });
+
+      it('rejects overrides for `composedOf` referring to unknown feature privilege', () => {
+        expect(() =>
+          registry.applyOverrides({
+            featureA: {
+              privileges: {
+                all: { composedOf: [{ feature: 'featureB', privileges: ['none'] }] },
+              },
+            },
+          })
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot compose privilege \\"all\\" of feature \\"featureA\\" with privilege \\"none\\" of feature \\"featureB\\" since such privilege is not registered."`
+        );
+      });
+
+      it('can override `composedOf` referring to both feature and sub-feature privileges', () => {
+        registry.applyOverrides({
+          featureA: {
+            privileges: {
+              all: {
+                composedOf: [
+                  { feature: 'featureC', privileges: ['subFeatureCOne'] },
+                  { feature: 'featureD', privileges: ['all'] },
+                ],
+              },
+              read: { composedOf: [{ feature: 'featureD', privileges: ['read'] }] },
+            },
+          },
+        });
+        registry.lockRegistration();
+
+        const [featureA] = registry.getAllKibanaFeatures();
+        expect(featureA.privileges).toEqual({
+          all: {
+            ui: [],
+            savedObject: { all: ['telemetry'], read: ['config', 'config-global', 'url'] },
+            composedOf: [
+              { feature: 'featureC', privileges: ['subFeatureCOne'] },
+              { feature: 'featureD', privileges: ['all'] },
+            ],
+          },
+          read: {
+            ui: [],
+            savedObject: { all: [], read: ['config', 'config-global', 'telemetry', 'url'] },
+            composedOf: [{ feature: 'featureD', privileges: ['read'] }],
+          },
+        });
+      });
+
+      it('can override `composedOf` referring to a feature that requires custom RBAC', () => {
+        registry.applyOverrides({
+          featureA: {
+            privileges: {
+              all: { composedOf: [{ feature: 'featureE', privileges: ['all'] }] },
+            },
+          },
+        });
+        registry.lockRegistration();
+
+        const [featureA] = registry.getAllKibanaFeatures();
+        expect(featureA.privileges).toEqual({
+          all: {
+            ui: [],
+            savedObject: { all: ['telemetry'], read: ['config', 'config-global', 'url'] },
+            composedOf: [{ feature: 'featureE', privileges: ['all'] }],
+          },
+          read: {
+            ui: [],
+            savedObject: { all: [], read: ['config', 'config-global', 'telemetry', 'url'] },
+          },
+        });
+      });
+
+      it('rejects overrides for unknown sub-feature privileges', () => {
+        expect(() =>
+          registry.applyOverrides({
+            featureC: { subFeatures: { privileges: { all: { disabled: true } } } },
+          })
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot override sub-feature privilege \\"all\\" of feature \\"featureC\\" since \\"all\\" sub-feature privilege is not registered. Known sub-feature privileges are: subFeatureCOne."`
+        );
+
+        expect(() =>
+          registry.applyOverrides({
+            featureA: { subFeatures: { privileges: { subFeatureCOne: { disabled: true } } } },
+          })
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot override sub-feature privileges of feature \\"featureA\\" since it didn't register any."`
+        );
+      });
+
+      it('can override sub-feature privileges', () => {
+        registry.applyOverrides({
+          featureC: {
+            subFeatures: { privileges: { subFeatureCOne: { disabled: true, includeIn: 'none' } } },
+          },
+        });
+        registry.lockRegistration();
+
+        const [, , featureC] = registry.getAllKibanaFeatures();
+        expect(featureC.subFeatures).toEqual([
+          {
+            config: {
+              name: 'subFeatureC',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      disabled: true,
+                      id: 'subFeatureCOne',
+                      includeIn: 'none',
+                      name: 'subFeature C One',
+                      savedObject: { all: [], read: [] },
+                      ui: [],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ]);
+      });
+    });
+
+    describe('#validateFeatures', () => {
+      function createRegistry(...features: KibanaFeatureConfig[]) {
+        const registry = new FeatureRegistry();
+
+        // Non-deprecated feature.
+        const featureBeta: KibanaFeatureConfig = {
+          id: 'feature-beta',
+          name: 'Feature Beta',
+          app: [],
+          category: { id: 'beta', label: 'beta' },
+          privileges: {
+            all: { savedObject: { all: [], read: [] }, ui: [] },
+            read: { savedObject: { all: [], read: [] }, ui: [] },
+          },
+          subFeatures: [
+            {
+              name: 'sub-beta-1',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-beta-1-1',
+                      name: 'Sub Beta 1-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                    },
+                    {
+                      id: 'sub-beta-1-2',
+                      name: 'Sub Beta 1-2',
+                      includeIn: 'read',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: 'sub-beta-2',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-beta-2-1',
+                      name: 'Sub Beta 2-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        };
+
+        // Deprecated feature
+        const featureGamma: KibanaFeatureConfig = {
+          deprecated: { notice: 'It was a mistake.' },
+          id: 'feature-gamma',
+          name: 'Feature Gamma',
+          app: [],
+          category: { id: 'gamma', label: 'gamma' },
+          privileges: {
+            all: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: [{ feature: 'feature-beta', privileges: ['all'] }],
+            },
+            read: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: [{ feature: 'feature-beta', privileges: ['read'] }],
+            },
+          },
+          subFeatures: [
+            {
+              name: 'sub-gamma-1',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-gamma-1-1',
+                      name: 'Sub Gamma 1-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                      replacedBy: [
+                        { feature: 'feature-beta', privileges: ['read', 'sub-beta-2-1'] },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        };
+
+        // Non-deprecated feature with disabled privileges.
+        const featureDelta: KibanaFeatureConfig = {
+          id: 'feature-delta',
+          name: 'Feature Delta',
+          app: [],
+          category: { id: 'delta', label: 'delta' },
+          privileges: {
+            all: { savedObject: { all: [], read: [] }, ui: [] },
+            read: { savedObject: { all: [], read: [] }, ui: [], disabled: true },
+          },
+        };
+
+        for (const feature of [featureBeta, featureGamma, featureDelta, ...features]) {
+          registry.registerKibanaFeature(feature);
+        }
+
+        registry.lockRegistration();
+        return registry;
+      }
+
+      function createDeprecatedFeature({
+        all,
+        read,
+        subAlpha,
+      }: {
+        all?: FeatureKibanaPrivilegesReference[];
+        read?: {
+          minimal: FeatureKibanaPrivilegesReference[];
+          default: FeatureKibanaPrivilegesReference[];
+        };
+        subAlpha?: FeatureKibanaPrivilegesReference[];
+      } = {}): KibanaFeatureConfig {
+        return {
+          deprecated: { notice: 'It was a mistake.' },
+          id: 'feature-alpha',
+          name: 'Feature Alpha',
+          app: [],
+          category: { id: 'alpha', label: 'alpha' },
+          privileges: {
+            all: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: all ?? [{ feature: 'feature-beta', privileges: ['all'] }],
+            },
+            read: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: read ?? {
+                default: [{ feature: 'feature-beta', privileges: ['all'] }],
+                minimal: [{ feature: 'feature-beta', privileges: ['read', 'sub-beta-2-1'] }],
+              },
+            },
+          },
+          subFeatures: [
+            {
+              name: 'sub-alpha-1',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-alpha-1-1',
+                      name: 'Sub Alpha 1-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                      replacedBy: subAlpha ?? [
+                        { feature: 'feature-beta', privileges: ['sub-beta-1-1'] },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        };
+      }
+
+      it('requires feature to be deprecated to define privilege replacements', () => {
+        const featureAlpha: KibanaFeatureConfig = {
+          id: 'feature-alpha',
+          name: 'Feature Alpha',
+          app: [],
+          category: { id: 'alpha', label: 'alpha' },
+          privileges: {
+            all: { savedObject: { all: [], read: [] }, ui: [] },
+            read: { savedObject: { all: [], read: [] }, ui: [] },
+          },
+        };
+
+        // Case 1: some top-level privileges define replacement.
+        let registry = createRegistry({
+          ...featureAlpha,
+          privileges: {
+            all: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: [{ feature: 'feature-beta', privileges: ['all'] }],
+            },
+            read: featureAlpha.privileges?.read!,
+          },
+        });
+        expect(() => registry.validateFeatures()).toThrowErrorMatchingInlineSnapshot(
+          `"Feature \\"feature-alpha\\" is not deprecated and must not define a \\"replacedBy\\" property for privilege \\"all\\"."`
+        );
+
+        // Case 2: some sub-feature privileges define replacement.
+        registry = createRegistry({
+          ...featureAlpha,
+          subFeatures: [
+            {
+              name: 'sub-alpha',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-alpha',
+                      name: 'Sub Alpha',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                      replacedBy: [{ feature: 'feature-beta', privileges: ['sub-alpha'] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+        expect(() => registry.validateFeatures()).toThrowErrorMatchingInlineSnapshot(
+          `"Feature \\"feature-alpha\\" is not deprecated and must not define a \\"replacedBy\\" property for privilege \\"sub-alpha\\"."`
+        );
+
+        // Case 3: none of the privileges define replacement.
+        registry = createRegistry({
+          ...featureAlpha,
+          subFeatures: [
+            {
+              name: 'sub-alpha',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-alpha',
+                      name: 'Sub Alpha',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+        expect(() => registry.validateFeatures()).not.toThrow();
+      });
+
+      it('requires all top-level privileges of the deprecated feature to define replacement', () => {
+        const featureAlphaDeprecated: KibanaFeatureConfig = {
+          deprecated: { notice: 'It was a mistake.' },
+          id: 'feature-alpha',
+          name: 'Feature Alpha',
+          app: [],
+          category: { id: 'alpha', label: 'alpha' },
+          privileges: {
+            all: { savedObject: { all: [], read: [] }, ui: [] },
+            read: { savedObject: { all: [], read: [] }, ui: [] },
+          },
+        };
+
+        // Case 1: all top-level privileges don't define replacement.
+        let registry = createRegistry(featureAlphaDeprecated);
+        expect(() => registry.validateFeatures()).toThrowErrorMatchingInlineSnapshot(
+          `"Feature \\"feature-alpha\\" is deprecated and must define a \\"replacedBy\\" property for privilege \\"all\\"."`
+        );
+
+        // Case 2: some top-level privileges don't define replacement.
+        registry = createRegistry({
+          ...featureAlphaDeprecated,
+          privileges: {
+            all: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: [{ feature: 'feature-beta', privileges: ['all'] }],
+            },
+            read: { savedObject: { all: [], read: [] }, ui: [] },
+          },
+        });
+        expect(() => registry.validateFeatures()).toThrowErrorMatchingInlineSnapshot(
+          `"Feature \\"feature-alpha\\" is deprecated and must define a \\"replacedBy\\" property for privilege \\"read\\"."`
+        );
+
+        // Case 3: all top-level privileges define replacement.
+        registry = createRegistry({
+          ...featureAlphaDeprecated,
+          privileges: {
+            all: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: [{ feature: 'feature-beta', privileges: ['all'] }],
+            },
+            read: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: [{ feature: 'feature-beta', privileges: ['read'] }],
+            },
+          },
+        });
+        expect(() => registry.validateFeatures()).not.toThrow();
+      });
+
+      it('requires all sub-feature privileges of the deprecated feature to define replacement', () => {
+        const featureAlphaDeprecated: KibanaFeatureConfig = {
+          deprecated: { notice: 'It was a mistake.' },
+          id: 'feature-alpha',
+          name: 'Feature Alpha',
+          app: [],
+          category: { id: 'alpha', label: 'alpha' },
+          privileges: {
+            all: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: [{ feature: 'feature-beta', privileges: ['all'] }],
+            },
+            read: {
+              savedObject: { all: [], read: [] },
+              ui: [],
+              replacedBy: {
+                default: [{ feature: 'feature-beta', privileges: ['all'] }],
+                minimal: [{ feature: 'feature-beta', privileges: ['read'] }],
+              },
+            },
+          },
+          subFeatures: [
+            {
+              name: 'sub-alpha-1',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-alpha-1-1',
+                      name: 'Sub Alpha 1-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                    },
+                    {
+                      id: 'sub-alpha-1-2',
+                      name: 'Sub Alpha 1-2',
+                      includeIn: 'read',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: 'sub-alpha-2',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-alpha-2-1',
+                      name: 'Sub Alpha 2-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        };
+
+        // Case 1: all sub-feature privileges don't define replacement.
+        let registry = createRegistry(featureAlphaDeprecated);
+        expect(() => registry.validateFeatures()).toThrowErrorMatchingInlineSnapshot(
+          `"Feature \\"feature-alpha\\" is deprecated and must define a \\"replacedBy\\" property for privilege \\"sub-alpha-1-1\\"."`
+        );
+
+        // Case 2: some sub-feature privileges of some sub-features don't define replacement.
+        registry = createRegistry({
+          ...featureAlphaDeprecated,
+          subFeatures: [
+            {
+              name: 'sub-alpha-1',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-alpha-1-1',
+                      name: 'Sub Alpha 1-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                      replacedBy: [{ feature: 'feature-beta', privileges: ['read'] }],
+                    },
+                    {
+                      id: 'sub-alpha-1-2',
+                      name: 'Sub Alpha 1-2',
+                      includeIn: 'read',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                    },
+                  ],
+                },
+              ],
+            },
+            featureAlphaDeprecated.subFeatures?.[1]!,
+          ],
+        });
+        expect(() => registry.validateFeatures()).toThrowErrorMatchingInlineSnapshot(
+          `"Feature \\"feature-alpha\\" is deprecated and must define a \\"replacedBy\\" property for privilege \\"sub-alpha-1-2\\"."`
+        );
+
+        // Case 3: all sub-feature privileges of some sub-features don't define replacement.
+        registry = createRegistry({
+          ...featureAlphaDeprecated,
+          subFeatures: [
+            {
+              name: 'sub-alpha-1',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-alpha-1-1',
+                      name: 'Sub Alpha 1-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                      replacedBy: [{ feature: 'feature-beta', privileges: ['read'] }],
+                    },
+                    {
+                      id: 'sub-alpha-1-2',
+                      name: 'Sub Alpha 1-2',
+                      includeIn: 'read',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                      replacedBy: [{ feature: 'feature-beta', privileges: ['read'] }],
+                    },
+                  ],
+                },
+              ],
+            },
+            featureAlphaDeprecated.subFeatures?.[1]!,
+          ],
+        });
+        expect(() => registry.validateFeatures()).toThrowErrorMatchingInlineSnapshot(
+          `"Feature \\"feature-alpha\\" is deprecated and must define a \\"replacedBy\\" property for privilege \\"sub-alpha-2-1\\"."`
+        );
+
+        // Case 4: all top-level and sub-feature privileges define replacement.
+        registry = createRegistry({
+          ...featureAlphaDeprecated,
+          subFeatures: [
+            {
+              name: 'sub-alpha-1',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-alpha-1-1',
+                      name: 'Sub Alpha 1-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                      replacedBy: [{ feature: 'feature-beta', privileges: ['read'] }],
+                    },
+                    {
+                      id: 'sub-alpha-1-2',
+                      name: 'Sub Alpha 1-2',
+                      includeIn: 'read',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                      replacedBy: [{ feature: 'feature-beta', privileges: ['read'] }],
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: 'sub-alpha-2',
+              privilegeGroups: [
+                {
+                  groupType: 'mutually_exclusive',
+                  privileges: [
+                    {
+                      id: 'sub-alpha-2-1',
+                      name: 'Sub Alpha 2-1',
+                      includeIn: 'all',
+                      ui: [],
+                      savedObject: { all: [], read: [] },
+                      replacedBy: [{ feature: 'feature-beta', privileges: ['read'] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+        expect(() => registry.validateFeatures()).not.toThrow();
+      });
+
+      it('requires referenced feature to exist', () => {
+        // Case 1: top-level privilege references to a non-existent feature.
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({ all: [{ feature: 'feature-unknown', privileges: ['all'] }] })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"all\\" of deprecated feature \\"feature-alpha\\" with privileges of feature \\"feature-unknown\\" since such feature is not registered."`
+        );
+
+        // Case 2: top-level privilege references to a non-existent feature (extended format).
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({
+              read: {
+                default: [{ feature: 'feature-beta', privileges: ['all'] }],
+                minimal: [{ feature: 'feature-unknown', privileges: ['read', 'sub-beta-2-1'] }],
+              },
+            })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"read\\" of deprecated feature \\"feature-alpha\\" with privileges of feature \\"feature-unknown\\" since such feature is not registered."`
+        );
+
+        // Case 3: sub-feature privilege references to a non-existent feature.
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({
+              subAlpha: [{ feature: 'feature-unknown', privileges: ['sub-beta-1-1'] }],
+            })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"sub-alpha-1-1\\" of deprecated feature \\"feature-alpha\\" with privileges of feature \\"feature-unknown\\" since such feature is not registered."`
+        );
+
+        // Case 4: all top-level and sub-feature privileges define proper replacement.
+        expect(() => createRegistry(createDeprecatedFeature()).validateFeatures()).not.toThrow();
+      });
+
+      it('requires referenced feature to not be deprecated', () => {
+        // Case 1: top-level privilege references to a deprecated feature.
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({ all: [{ feature: 'feature-gamma', privileges: ['all'] }] })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"all\\" of deprecated feature \\"feature-alpha\\" with privileges of feature \\"feature-gamma\\" since the referenced feature is deprecated."`
+        );
+
+        // Case 2: top-level privilege references to a deprecated feature (extended format).
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({
+              read: {
+                default: [{ feature: 'feature-beta', privileges: ['all'] }],
+                minimal: [{ feature: 'feature-gamma', privileges: ['read'] }],
+              },
+            })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"read\\" of deprecated feature \\"feature-alpha\\" with privileges of feature \\"feature-gamma\\" since the referenced feature is deprecated."`
+        );
+
+        // Case 3: sub-feature privilege references to a deprecated feature.
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({
+              subAlpha: [{ feature: 'feature-gamma', privileges: ['sub-gamma-1-1'] }],
+            })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"sub-alpha-1-1\\" of deprecated feature \\"feature-alpha\\" with privileges of feature \\"feature-gamma\\" since the referenced feature is deprecated."`
+        );
+      });
+
+      it('requires referenced privilege to exist', () => {
+        // Case 1: top-level privilege references to a non-existent privilege.
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({ all: [{ feature: 'feature-beta', privileges: ['all_v2'] }] })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"all\\" of deprecated feature \\"feature-alpha\\" with privilege \\"all_v2\\" of feature \\"feature-beta\\" since such privilege is not registered."`
+        );
+
+        // Case 2: top-level privilege references to a non-existent privilege (extended format).
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({
+              read: {
+                default: [{ feature: 'feature-beta', privileges: ['all'] }],
+                minimal: [{ feature: 'feature-beta', privileges: ['read_v2'] }],
+              },
+            })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"read\\" of deprecated feature \\"feature-alpha\\" with privilege \\"read_v2\\" of feature \\"feature-beta\\" since such privilege is not registered."`
+        );
+
+        // Case 3: sub-feature privilege references to a non-existent privilege.
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({
+              subAlpha: [{ feature: 'feature-beta', privileges: ['sub-gamma-1-1_v2'] }],
+            })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"sub-alpha-1-1\\" of deprecated feature \\"feature-alpha\\" with privilege \\"sub-gamma-1-1_v2\\" of feature \\"feature-beta\\" since such privilege is not registered."`
+        );
+      });
+
+      it('requires referenced privilege to not be disabled', () => {
+        // Case 1: top-level privilege references to a disabled privilege.
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({ all: [{ feature: 'feature-delta', privileges: ['read'] }] })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"all\\" of deprecated feature \\"feature-alpha\\" with disabled privilege \\"read\\" of feature \\"feature-delta\\"."`
+        );
+
+        // Case 2: top-level privilege references to a disabled privilege (extended format).
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({
+              read: {
+                default: [{ feature: 'feature-beta', privileges: ['all'] }],
+                minimal: [{ feature: 'feature-delta', privileges: ['all', 'read'] }],
+              },
+            })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"read\\" of deprecated feature \\"feature-alpha\\" with disabled privilege \\"read\\" of feature \\"feature-delta\\"."`
+        );
+
+        // Case 3: sub-feature privilege references to a disabled privilege.
+        expect(() =>
+          createRegistry(
+            createDeprecatedFeature({
+              subAlpha: [{ feature: 'feature-delta', privileges: ['read'] }],
+            })
+          ).validateFeatures()
+        ).toThrowErrorMatchingInlineSnapshot(
+          `"Cannot replace privilege \\"sub-alpha-1-1\\" of deprecated feature \\"feature-alpha\\" with disabled privilege \\"read\\" of feature \\"feature-delta\\"."`
+        );
       });
     });
   });
@@ -1926,6 +2935,7 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerElasticsearchFeature(feature);
+      featureRegistry.lockRegistration();
       const result = featureRegistry.getAllElasticsearchFeatures();
       expect(result).toHaveLength(1);
 
@@ -1962,6 +2972,7 @@ describe('FeatureRegistry', () => {
 
       const featureRegistry = new FeatureRegistry();
       featureRegistry.registerElasticsearchFeature(feature);
+      featureRegistry.lockRegistration();
       const result = featureRegistry.getAllElasticsearchFeatures();
       expect(result).toHaveLength(1);
 
@@ -2014,6 +3025,27 @@ describe('FeatureRegistry', () => {
       expect(() =>
         featureRegistry.registerElasticsearchFeature(feature)
       ).toThrowErrorMatchingInlineSnapshot(`"Feature with id test-feature is already registered."`);
+    });
+
+    it('cannot register elasticsearch feature after lockRegistration has been called', () => {
+      const feature: ElasticsearchFeatureConfig = {
+        id: 'test-feature',
+        privileges: [
+          {
+            requiredClusterPrivileges: ['all'],
+            ui: [],
+          },
+        ],
+      };
+
+      const featureRegistry = new FeatureRegistry();
+      featureRegistry.lockRegistration();
+
+      expect(() =>
+        featureRegistry.registerElasticsearchFeature(feature)
+      ).toThrowErrorMatchingInlineSnapshot(
+        `"Features are locked, can't register new features. Attempt to register test-feature failed."`
+      );
     });
   });
 

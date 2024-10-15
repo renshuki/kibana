@@ -1,13 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { addIdToItem, removeIdFromItem } from '@kbn/securitysolution-utils';
+import {
+  addIdToItem,
+  removeIdFromItem,
+  validateHasWildcardWithWrongOperator,
+} from '@kbn/securitysolution-utils';
 import { validate } from '@kbn/securitysolution-io-ts-utils';
 import {
   CreateExceptionListItemSchema,
@@ -19,7 +24,6 @@ import {
   NamespaceType,
   ListOperatorEnum as OperatorEnum,
   ListOperatorTypeEnum as OperatorTypeEnum,
-  OsTypeArray,
   createExceptionListItemSchema,
   entriesList,
   entriesNested,
@@ -35,6 +39,7 @@ import {
   getDataViewFieldSubtypeNested,
   isDataViewFieldSubtypeNested,
 } from '@kbn/es-query';
+import { castEsToKbnFieldTypeName, KBN_FIELD_TYPES } from '@kbn/field-types';
 
 import {
   ALL_OPERATORS,
@@ -48,17 +53,21 @@ import {
   isNotOneOfOperator,
   isInListOperator,
   isNotInListOperator,
+  matchesOperator,
+  doesNotMatchOperator,
 } from '../autocomplete_operators';
 
 import {
   BuilderEntry,
   CreateExceptionListItemBuilderSchema,
+  DataViewField,
   EmptyEntry,
   EmptyNestedEntry,
   ExceptionsBuilderExceptionItem,
   ExceptionsBuilderReturnExceptionItem,
   FormattedBuilderEntry,
   OperatorOption,
+  SavedObjectType,
 } from '../types';
 
 export const isEntryNested = (item: BuilderEntry): item is EntryNested => {
@@ -299,18 +308,13 @@ export const getUpdatedEntriesOnDelete = (
  */
 export const getFilteredIndexPatterns = (
   patterns: DataViewBase,
-  item: FormattedBuilderEntry,
-  type: ExceptionListType,
-  preFilter?: (i: DataViewBase, t: ExceptionListType, o?: OsTypeArray) => DataViewBase,
-  osTypes?: OsTypeArray
+  item: FormattedBuilderEntry
 ): DataViewBase => {
-  const indexPatterns = preFilter != null ? preFilter(patterns, type, osTypes) : patterns;
-
   if (item.nested === 'child' && item.parent != null) {
     // when user has selected a nested entry, only fields with the common parent are shown
     return {
-      ...indexPatterns,
-      fields: indexPatterns.fields
+      ...patterns,
+      fields: patterns.fields
         .filter((indexField) => {
           const subTypeNested = getDataViewFieldSubtypeNested(indexField);
           const fieldHasCommonParentPath =
@@ -327,15 +331,15 @@ export const getFilteredIndexPatterns = (
     };
   } else if (item.nested === 'parent' && item.field != null) {
     // when user has selected a nested entry, right above it we show the common parent
-    return { ...indexPatterns, fields: [item.field] };
+    return { ...patterns, fields: [item.field] };
   } else if (item.nested === 'parent' && item.field == null) {
     // when user selects to add a nested entry, only nested fields are shown as options
     return {
-      ...indexPatterns,
-      fields: indexPatterns.fields.filter((field) => isDataViewFieldSubtypeNested(field)),
+      ...patterns,
+      fields: patterns.fields.filter((field) => isDataViewFieldSubtypeNested(field)),
     };
   } else {
-    return indexPatterns;
+    return patterns;
   }
 };
 
@@ -674,8 +678,13 @@ export const getEntryOnOperatorChange = (
   }
 };
 
-const fieldSupportsMatches = (field: DataViewFieldBase) => {
-  return field.type === 'string';
+export const isKibanaStringType = (type: string) => {
+  const kbnFieldType = castEsToKbnFieldTypeName(type);
+  return kbnFieldType === KBN_FIELD_TYPES.STRING;
+};
+
+export const fieldSupportsMatches = (field: DataViewFieldBase) => {
+  return field.esTypes?.some(isKibanaStringType);
 };
 
 /**
@@ -694,8 +703,14 @@ export const getOperatorOptions = (
 ): OperatorOption[] => {
   if (item.nested === 'parent' || item.field == null) {
     return [isOperator];
-  } else if ((item.nested != null && listType === 'endpoint') || listType === 'endpoint') {
-    return isBoolean ? [isOperator] : [isOperator, isOneOfOperator];
+  } else if (listType === 'endpoint') {
+    if (isBoolean) {
+      return [isOperator];
+    } else {
+      return fieldSupportsMatches(item.field)
+        ? [isOperator, isOneOfOperator, matchesOperator, doesNotMatchOperator]
+        : [isOperator, isOneOfOperator];
+    }
   } else if (item.nested != null && listType === 'detection') {
     return isBoolean ? [isOperator, existsOperator] : [isOperator, isOneOfOperator, existsOperator];
   } else if (isBoolean) {
@@ -912,3 +927,163 @@ export const getDefaultNestedEmptyEntry = (): EmptyNestedEntry => ({
 
 export const containsValueListEntry = (items: ExceptionsBuilderExceptionItem[]): boolean =>
   items.some((item) => item.entries.some(({ type }) => type === OperatorTypeEnum.LIST));
+
+export const buildShowActiveExceptionsFilter = (savedObjectPrefix: SavedObjectType[]): string => {
+  const now = new Date().toISOString();
+  const filters = savedObjectPrefix.map(
+    (prefix) =>
+      `${prefix}.attributes.expire_time > "${now}" OR NOT ${prefix}.attributes.expire_time: *`
+  );
+  return filters.join(',');
+};
+
+export const buildShowExpiredExceptionsFilter = (savedObjectPrefix: SavedObjectType[]): string => {
+  const now = new Date().toISOString();
+  const filters = savedObjectPrefix.map((prefix) => `${prefix}.attributes.expire_time <= "${now}"`);
+  return filters.join(',');
+};
+
+const getIndexGroupName = (indexName: string): string => {
+  // Check whether it is a Data Stream index
+  const dataStreamExp = /.ds-(.*?)-[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{6}/;
+  let result = indexName.match(dataStreamExp);
+  if (result && result.length === 2) {
+    return result[1];
+  }
+
+  // Check whether it is an old '.siem' index group
+  const siemSignalsExp = /.siem-(.*?)-[0-9]{6}/;
+  result = indexName.match(siemSignalsExp);
+  if (result && result.length === 2) {
+    return `.siem-${result[1]}`;
+  }
+
+  // Otherwise return index name
+  return indexName;
+};
+
+export interface FieldConflictsInfo {
+  /**
+   * Kibana field type
+   */
+  type: string;
+  /**
+   * Total count of the indices of this type
+   */
+  totalIndexCount: number;
+  /**
+   * Grouped indices info
+   */
+  groupedIndices: Array<{
+    /**
+     * Index group name (like '.ds-...' or '.siem-signals-...')
+     */
+    name: string;
+    /**
+     * Count of indices in the group
+     */
+    count: number;
+  }>;
+}
+
+export const getMappingConflictsInfo = (field: DataViewField): FieldConflictsInfo[] | null => {
+  if (!field.conflictDescriptions) {
+    return null;
+  }
+  const conflicts: FieldConflictsInfo[] = [];
+  for (const [key, value] of Object.entries(field.conflictDescriptions)) {
+    const groupedIndices: Array<{
+      name: string;
+      count: number;
+    }> = [];
+
+    // Group indices and calculate count of indices in each group
+    const groupedInfo: { [key: string]: number } = {};
+    value.forEach((index) => {
+      const groupName = getIndexGroupName(index);
+      if (!groupedInfo[groupName]) {
+        groupedInfo[groupName] = 0;
+      }
+      groupedInfo[groupName]++;
+    });
+    for (const [name, count] of Object.entries(groupedInfo)) {
+      groupedIndices.push({
+        name,
+        count,
+      });
+    }
+
+    // Sort groups by the indices count
+    groupedIndices.sort((group1, group2) => {
+      return group2.count - group1.count;
+    });
+
+    conflicts.push({
+      type: key,
+      totalIndexCount: value.length,
+      groupedIndices,
+    });
+  }
+  return conflicts;
+};
+
+/**
+ * Given an exceptions list, determine if any entries have an "IS" operator with a wildcard value
+ */
+export const hasWrongOperatorWithWildcard = (
+  items: ExceptionsBuilderReturnExceptionItem[]
+): boolean => {
+  // flattens array of multiple entries added with OR
+  const multipleEntries = items.flatMap((item) => item.entries);
+  // flattens nested entries
+  const allEntries = multipleEntries.flatMap((item) => {
+    if (item.type === 'nested') {
+      return item.entries;
+    }
+    return item;
+  });
+
+  return allEntries.some((e) => {
+    if (e.type !== 'list' && 'value' in e) {
+      return validateHasWildcardWithWrongOperator({
+        operator: e.type,
+        value: e.value,
+      });
+    }
+  });
+};
+
+/**
+ * Event filters helper where given an exceptions list,
+ * determine if both 'subject_name' and 'trusted' are
+ * included in an entry with 'code_signature'
+ */
+export const hasPartialCodeSignatureEntry = (
+  items: ExceptionsBuilderReturnExceptionItem[]
+): boolean => {
+  const { os_types: os = ['windows'], entries = [] } = items[0] || {};
+  let name = false;
+  let trusted = false;
+
+  for (const e of entries) {
+    if (e.type === 'nested' && e.field === 'process.Ext.code_signature') {
+      const includesNestedName = e.entries.some(
+        (nestedEntry) => nestedEntry.field === 'subject_name'
+      );
+      const includesNestedTrusted = e.entries.some(
+        (nestedEntry) => nestedEntry.field === 'trusted'
+      );
+      if (includesNestedName !== includesNestedTrusted) {
+        return true;
+      }
+    } else if (
+      e.field === 'process.code_signature.subject_name' ||
+      (os.includes('macos') && e.field === 'process.code_signature.team_id')
+    ) {
+      name = true;
+    } else if (e.field === 'process.code_signature.trusted') {
+      trusted = true;
+    }
+  }
+  return name !== trusted;
+};

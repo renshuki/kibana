@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { schema } from '@kbn/config-schema';
@@ -131,6 +132,7 @@ describe('getMigrationHash', () => {
       expect(getMigrationHash(typeA)).not.toEqual(getMigrationHash(typeB));
     });
   });
+
   describe('schemas', () => {
     it('returns same hash if same schema versions are registered', () => {
       const typeA = createType({
@@ -313,6 +315,227 @@ describe('getMigrationHash', () => {
           properties: {
             description: { type: 'text' },
             hits: { type: 'integer', index: false, doc_values: false },
+          },
+        },
+      });
+
+      expect(getMigrationHash(typeA)).not.toEqual(getMigrationHash(typeB));
+    });
+  });
+
+  describe('model versions', () => {
+    it('returns same hash if same model versions versions are registered', () => {
+      const typeA = createType({
+        modelVersions: {
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: { type: 'boolean' },
+                },
+              },
+            ],
+          },
+        },
+      });
+      const typeB = createType({
+        modelVersions: {
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: { type: 'boolean' },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      expect(getMigrationHash(typeA)).toEqual(getMigrationHash(typeB));
+    });
+
+    it('returns same hash if same model versions are registered in different order', () => {
+      const typeA = createType({
+        modelVersions: {
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: { type: 'boolean' },
+                },
+              },
+            ],
+          },
+        },
+      });
+      const typeB = createType({
+        modelVersions: {
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: { type: 'boolean' },
+                },
+              },
+            ],
+          },
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+        },
+      });
+
+      expect(getMigrationHash(typeA)).toEqual(getMigrationHash(typeB));
+    });
+
+    it('returns same hash if same model versions are registered using record + function', () => {
+      const typeA = createType({
+        modelVersions: {
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: { type: 'boolean' },
+                },
+              },
+            ],
+          },
+        },
+      });
+      const typeB = createType({
+        modelVersions: () => ({
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: { type: 'boolean' },
+                },
+              },
+            ],
+          },
+        }),
+      });
+
+      expect(getMigrationHash(typeA)).toEqual(getMigrationHash(typeB));
+    });
+
+    it('returns different hashes if different model versions are registered', () => {
+      const typeA = createType({
+        modelVersions: {
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  foo: { type: 'boolean' },
+                },
+              },
+            ],
+          },
+        },
+      });
+      const typeB = createType({
+        modelVersions: {
+          '1': {
+            changes: [
+              {
+                type: 'data_backfill',
+                backfillFn: jest.fn(),
+              },
+            ],
+          },
+          '2': {
+            changes: [
+              {
+                type: 'mappings_addition',
+                addedMappings: {
+                  bar: { type: 'boolean' },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      expect(getMigrationHash(typeA)).not.toEqual(getMigrationHash(typeB));
+    });
+
+    it('returns different hashes if different schemas are registered', () => {
+      const typeA = createType({
+        modelVersions: {
+          1: {
+            changes: [],
+            schemas: {
+              forwardCompatibility: jest.fn(),
+            },
+          },
+        },
+      });
+      const typeB = createType({
+        modelVersions: {
+          1: {
+            changes: [],
+            schemas: {},
           },
         },
       });

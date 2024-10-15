@@ -8,14 +8,11 @@
 export { ObjectRemover } from './object_remover';
 export { getUrlPrefix } from './space_test_utils';
 export { getTestRuleData } from './get_test_rule_data';
-export {
-  AlertUtils,
-  getConsumerUnauthorizedErrorMessage,
-  getProducerUnauthorizedErrorMessage,
-} from './alert_utils';
+export { AlertUtils, getUnauthorizedErrorMessage } from './alert_utils';
 export type { TaskManagerDoc } from './task_manager_utils';
 export { TaskManagerUtils } from './task_manager_utils';
 export * from './test_assertions';
 export { checkAAD } from './check_aad';
 export { getEventLog } from './get_event_log';
 export { createWaitForExecutionCount } from './wait_for_execution_count';
+export { resetRulesSettings } from './reset_rules_settings';

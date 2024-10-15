@@ -5,19 +5,16 @@
  * 2.0.
  */
 
-import type { EuiSelectableOption } from '@elastic/eui';
+import type { EuiSelectableOption, EuiSelectableProps } from '@elastic/eui';
 import { EuiButtonEmpty, EuiPopover, EuiSelectable, EuiTitle, EuiTextColor } from '@elastic/eui';
 import { Storage } from '@kbn/kibana-utils-plugin/public';
 import { i18n } from '@kbn/i18n';
 import React, { useCallback, useMemo, useState } from 'react';
 import styled from 'styled-components';
-
-/** This local storage key stores the `Grid / Event rendered view` selection */
-export const ALERTS_TABLE_VIEW_SELECTION_KEY = 'securitySolution.alerts.table.view-selection';
+import type { ViewSelection } from '@kbn/securitysolution-data-table';
+import { ALERTS_TABLE_VIEW_SELECTION_KEY } from '../../../../../common/constants';
 
 const storage = new Storage(localStorage);
-
-export type ViewSelection = 'gridView' | 'eventRenderedView';
 
 const ContainerEuiSelectable = styled.div`
   width: 300px;
@@ -82,6 +79,7 @@ const SummaryViewSelectorComponent = ({ viewSelected, onViewChange }: SummaryVie
     () => [
       {
         label: gridView,
+        'data-test-subj': 'gridView',
         key: 'gridView',
         checked: (viewSelected === 'gridView' ? 'on' : undefined) as EuiSelectableOption['checked'],
         meta: [
@@ -98,6 +96,7 @@ const SummaryViewSelectorComponent = ({ viewSelected, onViewChange }: SummaryVie
       },
       {
         label: eventRenderedView,
+        'data-test-subj': 'eventRenderedView',
         key: 'eventRenderedView',
         checked: (viewSelected === 'eventRenderedView'
           ? 'on'
@@ -117,7 +116,9 @@ const SummaryViewSelectorComponent = ({ viewSelected, onViewChange }: SummaryVie
     [viewSelected]
   );
 
-  const renderOption = useCallback((option) => {
+  const renderOption = useCallback<
+    NonNullable<EuiSelectableProps<{ meta: Array<{ text: string }> }>['renderOption']>
+  >((option) => {
     return (
       <>
         <EuiTitle size="xxs">

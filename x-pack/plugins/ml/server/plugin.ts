@@ -17,21 +17,27 @@ import type {
   IClusterClient,
   SavedObjectsServiceStart,
   UiSettingsServiceStart,
+  CoreAuditService,
 } from '@kbn/core/server';
-import type { SecurityPluginSetup } from '@kbn/security-plugin/server';
 import { DEFAULT_APP_CATEGORIES } from '@kbn/core/server';
+import type { SecurityPluginSetup } from '@kbn/security-plugin/server';
 import type { PluginStart as DataViewsPluginStart } from '@kbn/data-views-plugin/server';
 import type { SpacesPluginSetup } from '@kbn/spaces-plugin/server';
-import { FieldFormatsStart } from '@kbn/field-formats-plugin/server';
+import type { FieldFormatsStart } from '@kbn/field-formats-plugin/server';
 import type { HomeServerPluginSetup } from '@kbn/home-plugin/server';
-import { notificationsRoutes } from './routes/notifications';
+import type { CasesServerSetup } from '@kbn/cases-plugin/server';
+import { KibanaFeatureScope } from '@kbn/features-plugin/common';
 import type { PluginsSetup, PluginsStart, RouteInitialization } from './types';
-import { PLUGIN_ID } from '../common/constants/app';
 import type { MlCapabilities } from '../common/types/capabilities';
-
+import { notificationsRoutes } from './routes/notifications';
+import {
+  type MlFeatures,
+  PLUGIN_ID,
+  type ConfigSchema,
+  initEnabledFeatures,
+  type CompatibleModule,
+} from '../common/constants/app';
 import { initMlServerLog } from './lib/log';
-import { initSampleDataSets } from './lib/sample_data_sets';
-
 import { annotationRoutes } from './routes/annotations';
 import { calendars } from './routes/calendars';
 import { dataFeedRoutes } from './routes/datafeeds';
@@ -40,16 +46,17 @@ import { dataRecognizer } from './routes/modules';
 import { dataVisualizerRoutes } from './routes/data_visualizer';
 import { fieldsService } from './routes/fields_service';
 import { filtersRoutes } from './routes/filters';
-import { indicesRoutes } from './routes/indices';
 import { jobAuditMessagesRoutes } from './routes/job_audit_messages';
 import { jobRoutes } from './routes/anomaly_detectors';
 import { jobServiceRoutes } from './routes/job_service';
 import { savedObjectsRoutes } from './routes/saved_objects';
 import { jobValidationRoutes } from './routes/job_validation';
 import { resultsServiceRoutes } from './routes/results_service';
+import { modelManagementRoutes } from './routes/model_management';
 import { systemRoutes } from './routes/system';
 import { MlLicense } from '../common/license';
-import { createSharedServices, SharedServices } from './shared_services';
+import type { SharedServices } from './shared_services';
+import { createSharedServices } from './shared_services';
 import { getPluginPrivileges } from '../common/types/capabilities';
 import { setupCapabilitiesSwitcher } from './lib/capabilities';
 import { registerKibanaSettings } from './lib/register_settings';
@@ -66,6 +73,9 @@ import { ML_ALERT_TYPES } from '../common/constants/alerts';
 import { alertingRoutes } from './routes/alerting';
 import { registerCollector } from './usage';
 import { SavedObjectsSyncService } from './saved_objects/sync_task';
+import { registerCasesPersistableState } from './lib/register_cases';
+import { registerSampleDataSetLinks } from './lib/register_sample_data_set_links';
+import { inferenceModelRoutes } from './routes/inference_models';
 
 export type MlPluginSetup = SharedServices;
 export type MlPluginStart = void;
@@ -83,22 +93,36 @@ export class MlServerPlugin
   private spacesPlugin: SpacesPluginSetup | undefined;
   private security: SecurityPluginSetup | undefined;
   private home: HomeServerPluginSetup | null = null;
+  private cases: CasesServerSetup | null | undefined = null;
   private dataViews: DataViewsPluginStart | null = null;
+  private auditService: CoreAuditService | null = null;
   private isMlReady: Promise<void>;
   private setMlReady: () => void = () => {};
   private savedObjectsSyncService: SavedObjectsSyncService;
+  private enabledFeatures: MlFeatures = {
+    ad: true,
+    dfa: true,
+    nlp: true,
+  };
+  private compatibleModuleType: CompatibleModule | null = null;
 
-  constructor(ctx: PluginInitializerContext) {
+  constructor(ctx: PluginInitializerContext<ConfigSchema>) {
     this.log = ctx.logger.get();
     this.mlLicense = new MlLicense();
     this.isMlReady = new Promise((resolve) => (this.setMlReady = resolve));
     this.savedObjectsSyncService = new SavedObjectsSyncService(this.log);
+
+    const config = ctx.config.get();
+    initEnabledFeatures(this.enabledFeatures, config);
+    this.compatibleModuleType = config.compatibleModuleType ?? null;
+    this.enabledFeatures = Object.freeze(this.enabledFeatures);
   }
 
   public setup(coreSetup: CoreSetup<PluginsStart>, plugins: PluginsSetup): MlPluginSetup {
     this.spacesPlugin = plugins.spaces;
     this.security = plugins.security;
     this.home = plugins.home;
+    this.cases = plugins.cases;
     const { admin, user, apmUser } = getPluginPrivileges();
 
     plugins.features.registerKibanaFeature({
@@ -108,10 +132,15 @@ export class MlServerPlugin
       }),
       order: 500,
       category: DEFAULT_APP_CATEGORIES.kibana,
+      scope: [KibanaFeatureScope.Spaces, KibanaFeatureScope.Security],
       app: [PLUGIN_ID, 'kibana'],
       catalogue: [PLUGIN_ID, `${PLUGIN_ID}_file_data_visualizer`],
+      privilegesTooltip: i18n.translate('xpack.ml.featureRegistry.privilegesTooltip', {
+        defaultMessage:
+          'Granting All or Read feature privilege for Machine Learning will also grant the equivalent feature privileges to certain types of Kibana saved objects, namely index patterns, dashboards, saved searches and visualizations as well as machine learning job, trained model and module saved objects.',
+      }),
       management: {
-        insightsAndAlerting: ['jobsListLink'],
+        insightsAndAlerting: ['jobsListLink', 'triggersActions'],
       },
       alerting: Object.values(ML_ALERT_TYPES),
       privileges: {
@@ -140,10 +169,13 @@ export class MlServerPlugin
       },
     });
 
-    registerKibanaSettings(coreSetup);
-
     // initialize capabilities switcher to add license filter to ml capabilities
-    setupCapabilitiesSwitcher(coreSetup, plugins.licensing.license$, this.log);
+    setupCapabilitiesSwitcher(
+      coreSetup,
+      plugins.licensing.license$,
+      this.enabledFeatures,
+      this.log
+    );
     setupSavedObjects(coreSetup.savedObjects);
     this.savedObjectsSyncService.registerSyncTask(
       plugins.taskManager,
@@ -171,7 +203,9 @@ export class MlServerPlugin
       if (this.capabilities === null) {
         return null;
       }
-      const capabilities = await this.capabilities.resolveCapabilities(request);
+      const capabilities = await this.capabilities.resolveCapabilities(request, {
+        capabilityPath: 'ml.*',
+      });
       return capabilities.ml as MlCapabilities;
     };
 
@@ -186,7 +220,9 @@ export class MlServerPlugin
       () => this.uiSettings,
       () => this.fieldsFormat,
       getDataViews,
-      () => this.isMlReady
+      () => this.auditService,
+      () => this.isMlReady,
+      this.compatibleModuleType
     );
 
     const routeInit: RouteInitialization = {
@@ -202,23 +238,39 @@ export class MlServerPlugin
         coreSetup.getStartServices
       ),
       mlLicense: this.mlLicense,
+      getEnabledFeatures: () => this.enabledFeatures,
     };
 
-    annotationRoutes(routeInit, plugins.security);
-    calendars(routeInit);
-    dataFeedRoutes(routeInit);
-    dataFrameAnalyticsRoutes(routeInit);
-    dataRecognizer(routeInit);
+    // Register Anomaly Detection routes
+    if (this.enabledFeatures.ad) {
+      annotationRoutes(routeInit, plugins.security);
+      calendars(routeInit);
+      dataFeedRoutes(routeInit);
+      dataRecognizer(routeInit, this.compatibleModuleType);
+      filtersRoutes(routeInit);
+      jobAuditMessagesRoutes(routeInit);
+      jobRoutes(routeInit);
+      jobServiceRoutes(routeInit);
+      resultsServiceRoutes(routeInit);
+      jobValidationRoutes(routeInit);
+    }
+
+    // Register Data Frame Analytics routes
+    if (this.enabledFeatures.dfa) {
+      dataFrameAnalyticsRoutes(routeInit, plugins.cloud);
+    }
+
+    // Register Trained Model Management routes
+    if (this.enabledFeatures.dfa || this.enabledFeatures.nlp) {
+      trainedModelsRoutes(routeInit, plugins.cloud);
+    }
+
+    // Register Miscellaneous routes
+    inferenceModelRoutes(routeInit, plugins.cloud);
+    modelManagementRoutes(routeInit);
     dataVisualizerRoutes(routeInit);
     fieldsService(routeInit);
-    filtersRoutes(routeInit);
-    indicesRoutes(routeInit);
-    jobAuditMessagesRoutes(routeInit);
-    jobRoutes(routeInit);
-    jobServiceRoutes(routeInit);
     managementRoutes(routeInit);
-    resultsServiceRoutes(routeInit);
-    jobValidationRoutes(routeInit);
     savedObjectsRoutes(routeInit, {
       getSpaces,
       resolveMlCapabilities,
@@ -228,26 +280,34 @@ export class MlServerPlugin
       cloud: plugins.cloud,
       resolveMlCapabilities,
     });
-    trainedModelsRoutes(routeInit);
     notificationsRoutes(routeInit);
     alertingRoutes(routeInit, sharedServicesProviders);
 
     initMlServerLog({ log: this.log });
 
     if (plugins.alerting) {
-      registerMlAlerts({
-        alerting: plugins.alerting,
-        logger: this.log,
-        mlSharedServices: sharedServicesProviders,
-        mlServicesProviders: internalServicesProviders,
-      });
+      registerMlAlerts(
+        {
+          alerting: plugins.alerting,
+          logger: this.log,
+          mlSharedServices: sharedServicesProviders,
+          mlServicesProviders: internalServicesProviders,
+        },
+        this.enabledFeatures
+      );
     }
+
+    registerKibanaSettings(coreSetup);
 
     if (plugins.usageCollection) {
-      registerCollector(plugins.usageCollection, coreSetup.savedObjects.getKibanaIndex());
+      const getIndexForType = (type: string) =>
+        coreSetup
+          .getStartServices()
+          .then(([coreStart]) => coreStart.savedObjects.getIndexForType(type));
+      registerCollector(plugins.usageCollection, getIndexForType);
     }
 
-    return sharedServicesProviders;
+    return { ...sharedServicesProviders };
   }
 
   public start(coreStart: CoreStart, plugins: PluginsStart): MlPluginStart {
@@ -256,18 +316,27 @@ export class MlServerPlugin
     this.capabilities = coreStart.capabilities;
     this.clusterClient = coreStart.elasticsearch.client;
     this.savedObjectsStart = coreStart.savedObjects;
+    this.auditService = coreStart.security.audit;
     this.dataViews = plugins.dataViews;
 
-    this.mlLicense.setup(plugins.licensing.license$, (mlLicense: MlLicense) => {
+    this.mlLicense.setup(plugins.licensing.license$, async (mlLicense: MlLicense) => {
       if (mlLicense.isMlEnabled() === false || mlLicense.isFullLicense() === false) {
-        this.savedObjectsSyncService.unscheduleSyncTask(plugins.taskManager);
+        try {
+          await this.savedObjectsSyncService.unscheduleSyncTask(plugins.taskManager);
+        } catch (e) {
+          this.log.debug(`Error unscheduling saved objects sync task`, e);
+        }
         return;
       }
 
-      if (this.home) {
-        initSampleDataSets(mlLicense, this.home);
+      if (mlLicense.isMlEnabled() && mlLicense.isFullLicense()) {
+        if (this.cases) {
+          registerCasesPersistableState(this.cases, this.enabledFeatures, this.log);
+        }
+        if (this.home) {
+          registerSampleDataSetLinks(this.home, this.enabledFeatures, this.log);
+        }
       }
-
       // check whether the job saved objects exist
       // and create them if needed.
       const { initializeJobs } = jobSavedObjectsInitializationFactory(
@@ -275,10 +344,16 @@ export class MlServerPlugin
         this.security,
         this.spacesPlugin !== undefined
       );
-      initializeJobs().finally(() => {
-        this.setMlReady();
+      initializeJobs()
+        .catch((err) => {
+          this.log.debug(`Error initializing jobs`, err);
+        })
+        .finally(() => {
+          this.setMlReady();
+        });
+      this.savedObjectsSyncService.scheduleSyncTask(plugins.taskManager, coreStart).catch((err) => {
+        this.log.debug(`Error scheduling saved objects sync task`, err);
       });
-      this.savedObjectsSyncService.scheduleSyncTask(plugins.taskManager, coreStart);
     });
   }
 

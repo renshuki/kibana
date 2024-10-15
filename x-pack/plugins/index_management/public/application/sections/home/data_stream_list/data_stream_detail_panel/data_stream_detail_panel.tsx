@@ -5,8 +5,10 @@
  * 2.0.
  */
 
-import React, { useState } from 'react';
+import React, { useState, Fragment } from 'react';
 import { i18n } from '@kbn/i18n';
+import { FormattedMessage } from '@kbn/i18n-react';
+import { omit } from 'lodash';
 import {
   EuiButton,
   EuiButtonEmpty,
@@ -21,43 +23,51 @@ import {
   EuiFlyoutHeader,
   EuiIconTip,
   EuiLink,
+  EuiTextColor,
   EuiTitle,
+  EuiIcon,
+  EuiToolTip,
+  EuiPopover,
+  EuiContextMenu,
+  EuiContextMenuPanelDescriptor,
+  EuiCallOut,
+  EuiSpacer,
 } from '@elastic/eui';
 
+import { DiscoverLink } from '../../../../lib/discover_link';
+import { getLifecycleValue } from '../../../../lib/data_streams';
 import { SectionLoading, reactRouterNavigate } from '../../../../../shared_imports';
 import { SectionError, Error, DataHealth } from '../../../../components';
 import { useLoadDataStream } from '../../../../services/api';
 import { DeleteDataStreamConfirmationModal } from '../delete_data_stream_confirmation_modal';
+import { EditDataRetentionModal } from '../edit_data_retention_modal';
 import { humanizeTimeStamp } from '../humanize_time_stamp';
 import { getIndexListUri, getTemplateDetailsLink } from '../../../../services/routing';
 import { ILM_PAGES_POLICY_EDIT } from '../../../../constants';
+import {
+  isDataStreamFullyManagedByILM,
+  isDataStreamFullyManagedByDSL,
+} from '../../../../lib/data_streams';
 import { useAppContext } from '../../../../app_context';
 import { DataStreamsBadges } from '../data_stream_badges';
 import { useIlmLocator } from '../../../../services/use_ilm_locator';
 
+interface Detail {
+  name: string;
+  toolTip: string;
+  content: any;
+  dataTestSubj: string;
+}
 interface DetailsListProps {
-  details: Array<{
-    name: string;
-    toolTip: string;
-    content: any;
-  }>;
+  details: Detail[];
 }
 
 const DetailsList: React.FunctionComponent<DetailsListProps> = ({ details }) => {
-  const groups: any[] = [];
-  let items: any[];
+  const descriptionListItems = details.map((detail, index) => {
+    const { name, toolTip, content, dataTestSubj } = detail;
 
-  details.forEach((detail, index) => {
-    const { name, toolTip, content } = detail;
-
-    if (index % 2 === 0) {
-      items = [];
-
-      groups.push(<EuiFlexGroup key={groups.length}>{items}</EuiFlexGroup>);
-    }
-
-    items.push(
-      <EuiFlexItem key={name}>
+    return (
+      <Fragment key={`${name}-${index}`}>
         <EuiDescriptionListTitle>
           <EuiFlexGroup alignItems="center" gutterSize="s">
             <EuiFlexItem grow={false}>{name}</EuiFlexItem>
@@ -68,12 +78,30 @@ const DetailsList: React.FunctionComponent<DetailsListProps> = ({ details }) => 
           </EuiFlexGroup>
         </EuiDescriptionListTitle>
 
-        <EuiDescriptionListDescription>{content}</EuiDescriptionListDescription>
-      </EuiFlexItem>
+        <EuiDescriptionListDescription data-test-subj={dataTestSubj}>
+          {content}
+        </EuiDescriptionListDescription>
+      </Fragment>
     );
   });
 
-  return <EuiDescriptionList textStyle="reverse">{groups}</EuiDescriptionList>;
+  const midpoint = Math.ceil(descriptionListItems.length / 2);
+  const descriptionListColumnOne = descriptionListItems.slice(0, midpoint);
+  const descriptionListColumnTwo = descriptionListItems.slice(
+    midpoint,
+    descriptionListItems.length
+  );
+
+  return (
+    <EuiFlexGroup>
+      <EuiFlexItem>
+        <EuiDescriptionList textStyle="reverse">{descriptionListColumnOne}</EuiDescriptionList>
+      </EuiFlexItem>
+      <EuiFlexItem>
+        <EuiDescriptionList textStyle="reverse">{descriptionListColumnTwo}</EuiDescriptionList>
+      </EuiFlexItem>
+    </EuiFlexGroup>
+  );
 };
 
 interface Props {
@@ -81,16 +109,29 @@ interface Props {
   onClose: (shouldReload?: boolean) => void;
 }
 
+export const ConditionalWrap = ({
+  condition,
+  wrap,
+  children,
+}: {
+  condition: boolean;
+  wrap: (wrappedChildren: React.ReactNode) => JSX.Element;
+  children: JSX.Element;
+}): JSX.Element => (condition ? wrap(children) : children);
+
 export const DataStreamDetailPanel: React.FunctionComponent<Props> = ({
   dataStreamName,
   onClose,
 }) => {
+  const [isManagePopOverOpen, setManagePopOver] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isEditingDataRetention, setIsEditingDataRetention] = useState<boolean>(false);
+
   const { error, data: dataStream, isLoading } = useLoadDataStream(dataStreamName);
 
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
-
   const ilmPolicyLink = useIlmLocator(ILM_PAGES_POLICY_EDIT, dataStream?.ilmPolicyName);
-  const { history } = useAppContext();
+  const { history, config } = useAppContext();
+  let indicesLink;
 
   let content;
 
@@ -122,78 +163,169 @@ export const DataStreamDetailPanel: React.FunctionComponent<Props> = ({
       ilmPolicyName,
       storageSize,
       maxTimeStamp,
+      meteringStorageSize,
+      meteringDocsCount,
+      lifecycle,
     } = dataStream;
-    const details = [
+
+    const getManagementDetails = () => {
+      const managementDetails = [];
+
+      if (ilmPolicyName) {
+        managementDetails.push({
+          name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.ilmPolicyTitle', {
+            defaultMessage: 'Index lifecycle policy',
+          }),
+          toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.ilmPolicyToolTip', {
+            defaultMessage: `The index lifecycle policy that manages the data in the data stream. `,
+          }),
+          content: isDataStreamFullyManagedByDSL(dataStream) ? (
+            <EuiToolTip
+              position="top"
+              content={i18n.translate(
+                'xpack.idxMgmt.dataStreamDetailPanel.ilmPolicyToolTipWarning',
+                {
+                  defaultMessage: `This data stream is not currently being managed by the ILM policy.`,
+                }
+              )}
+            >
+              <>
+                {ilmPolicyLink ? (
+                  <EuiLink data-test-subj={'ilmPolicyLink'} href={ilmPolicyLink}>
+                    <EuiTextColor color="subdued">{ilmPolicyName}</EuiTextColor>
+                  </EuiLink>
+                ) : (
+                  ilmPolicyName
+                )}
+              </>
+            </EuiToolTip>
+          ) : (
+            <>
+              {ilmPolicyLink ? (
+                <EuiLink data-test-subj={'ilmPolicyLink'} href={ilmPolicyLink}>
+                  {ilmPolicyName}
+                </EuiLink>
+              ) : (
+                ilmPolicyName
+              )}
+            </>
+          ),
+          dataTestSubj: 'ilmPolicyDetail',
+        });
+      }
+
+      return managementDetails;
+    };
+
+    indicesLink = (
+      <EuiLink
+        {...reactRouterNavigate(history, getIndexListUri(`data_stream="${dataStreamName}"`, true))}
+      >
+        {indices.length}
+      </EuiLink>
+    );
+
+    const defaultDetails: Detail[] = [
       {
         name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.healthTitle', {
           defaultMessage: 'Health',
         }),
         toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.healthToolTip', {
-          defaultMessage: `The health of the data stream's current backing indices`,
+          defaultMessage: `The health of the data stream's current backing indices.`,
         }),
         content: <DataHealth health={health} />,
+        dataTestSubj: 'healthDetail',
       },
-      {
-        name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.maxTimeStampTitle', {
-          defaultMessage: 'Last updated',
-        }),
-        toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.maxTimeStampToolTip', {
-          defaultMessage: 'The most recent document to be added to the data stream',
-        }),
-        content: maxTimeStamp ? (
-          humanizeTimeStamp(maxTimeStamp)
-        ) : (
-          <em>
-            {i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.maxTimeStampNoneMessage', {
-              defaultMessage: `Never`,
-            })}
-          </em>
-        ),
-      },
-      {
-        name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.storageSizeTitle', {
-          defaultMessage: 'Storage size',
-        }),
-        toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.storageSizeToolTip', {
-          defaultMessage: `Total size of all shards in the data stream’s backing indices`,
-        }),
-        content: storageSize,
-      },
+    ];
+
+    // add either documents count and size or last updated and size
+    if (config.enableSizeAndDocCount) {
+      defaultDetails.push(
+        {
+          name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.meteringDocsCountTitle', {
+            defaultMessage: 'Documents count',
+          }),
+          toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.meteringDocsCountToolTip', {
+            defaultMessage: 'The number of documents in this data stream.',
+          }),
+          content: meteringDocsCount,
+          dataTestSubj: 'docsCountDetail',
+        },
+        {
+          name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.storageSizeTitle', {
+            defaultMessage: 'Storage size',
+          }),
+          toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.storageSizeToolTip', {
+            defaultMessage: `The total size of all shards in the data stream’s backing indices.`,
+          }),
+          content: meteringStorageSize,
+          dataTestSubj: 'meteringStorageSizeDetail',
+        }
+      );
+    }
+    if (config.enableDataStreamStats) {
+      defaultDetails.push(
+        {
+          name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.maxTimeStampTitle', {
+            defaultMessage: 'Last updated',
+          }),
+          toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.maxTimeStampToolTip', {
+            defaultMessage: 'The most recent document to be added to the data stream.',
+          }),
+          content: maxTimeStamp ? (
+            humanizeTimeStamp(maxTimeStamp)
+          ) : (
+            <em>
+              {i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.maxTimeStampNoneMessage', {
+                defaultMessage: `Never`,
+              })}
+            </em>
+          ),
+          dataTestSubj: 'lastUpdatedDetail',
+        },
+        {
+          name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.storageSizeTitle', {
+            defaultMessage: 'Storage size',
+          }),
+          toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.storageSizeToolTip', {
+            defaultMessage: `The total size of all shards in the data stream’s backing indices.`,
+          }),
+          content: storageSize,
+          dataTestSubj: 'storageSizeDetail',
+        }
+      );
+    }
+
+    defaultDetails.push(
       {
         name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.indicesTitle', {
           defaultMessage: 'Indices',
         }),
         toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.indicesToolTip', {
-          defaultMessage: `The data stream's current backing indices`,
+          defaultMessage: `The data stream's current backing indices.`,
         }),
-        content: (
-          <EuiLink
-            {...reactRouterNavigate(
-              history,
-              getIndexListUri(`data_stream="${dataStreamName}"`, true)
-            )}
-          >
-            {indices.length}
-          </EuiLink>
-        ),
+        content: indicesLink,
+        dataTestSubj: 'indicesDetail',
       },
       {
         name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.timestampFieldTitle', {
           defaultMessage: 'Timestamp field',
         }),
         toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.timestampFieldToolTip', {
-          defaultMessage: 'Timestamp field shared by all documents in the data stream',
+          defaultMessage: 'The timestamp field shared by all documents in the data stream.',
         }),
         content: timeStampField.name,
+        dataTestSubj: 'timestampDetail',
       },
       {
         name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.generationTitle', {
           defaultMessage: 'Generation',
         }),
         toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.generationToolTip', {
-          defaultMessage: 'Cumulative count of backing indices created for the data stream',
+          defaultMessage: 'The number of backing indices generated for the data stream.',
         }),
         content: generation,
+        dataTestSubj: 'generationDetail',
       },
       {
         name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.indexTemplateTitle', {
@@ -201,7 +333,7 @@ export const DataStreamDetailPanel: React.FunctionComponent<Props> = ({
         }),
         toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.indexTemplateToolTip', {
           defaultMessage:
-            'The index template that configured the data stream and configures its backing indices',
+            'The index template that configured the data stream and configures its backing indices.',
         }),
         content: (
           <EuiLink
@@ -211,37 +343,169 @@ export const DataStreamDetailPanel: React.FunctionComponent<Props> = ({
             {indexTemplateName}
           </EuiLink>
         ),
+        dataTestSubj: 'indexTemplateDetail',
       },
       {
-        name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.ilmPolicyTitle', {
-          defaultMessage: 'Index lifecycle policy',
+        name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.dataRetentionTitle', {
+          defaultMessage: 'Effective data retention',
         }),
-        toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.ilmPolicyToolTip', {
-          defaultMessage: `The index lifecycle policy that manages the data stream's data`,
+        toolTip: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.dataRetentionToolTip', {
+          defaultMessage: `Data is kept at least this long before being automatically deleted. The data retention value only applies to the data managed directly by the data stream. {canEnableDataRetention, plural, one {If some data is subject to an index lifecycle management policy, then the data retention value set for the data stream doesn't apply to that data.} other {}}`,
+          values: {
+            canEnableDataRetention: config.enableTogglingDataRetention ? 1 : 0,
+          },
         }),
-        content:
-          ilmPolicyName && ilmPolicyLink ? (
-            <EuiLink data-test-subj={'ilmPolicyLink'} href={ilmPolicyLink}>
-              {ilmPolicyName}
-            </EuiLink>
-          ) : (
-            ilmPolicyName || (
-              <em>
-                {i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.ilmPolicyContentNoneMessage', {
-                  defaultMessage: `None`,
-                })}
-              </em>
-            )
-          ),
-      },
-    ];
+        content: (
+          <ConditionalWrap
+            condition={isDataStreamFullyManagedByILM(dataStream)}
+            wrap={(children) => <EuiTextColor color="subdued">{children}</EuiTextColor>}
+          >
+            <>{getLifecycleValue(lifecycle)}</>
+          </ConditionalWrap>
+        ),
+        dataTestSubj: 'dataRetentionDetail',
+      }
+    );
 
-    content = <DetailsList details={details} />;
+    // If both rentention types are available, we wanna surface to the user both
+    if (lifecycle?.effective_retention && lifecycle?.data_retention) {
+      defaultDetails.push({
+        name: i18n.translate(
+          'xpack.idxMgmt.dataStreamDetailPanel.customerDefinedDataRetentionTitle',
+          {
+            defaultMessage: 'Data retention',
+          }
+        ),
+        toolTip: i18n.translate(
+          'xpack.idxMgmt.dataStreamDetailPanel.customerDefinedDataRetentionTooltip',
+          {
+            defaultMessage:
+              "This is the data retention that you defined. Because of other system constraints or settings, the data retention that is effectively applied may be different from the value you set. You can find the value retained and applied by the system under 'Effective data retention'.",
+          }
+        ),
+        content: (
+          <ConditionalWrap
+            condition={isDataStreamFullyManagedByILM(dataStream)}
+            wrap={(children) => <EuiTextColor color="subdued">{children}</EuiTextColor>}
+          >
+            <>{getLifecycleValue(omit(lifecycle, ['effective_retention']))}</>
+          </ConditionalWrap>
+        ),
+        dataTestSubj: 'dataRetentionDetail',
+      });
+    }
+
+    const managementDetails = getManagementDetails();
+    const details = [...defaultDetails, ...managementDetails];
+
+    content = (
+      <>
+        {isDataStreamFullyManagedByILM(dataStream) && (
+          <>
+            <EuiCallOut
+              title={i18n.translate(
+                'xpack.idxMgmt.dataStreamsDetailsPanel.editDataRetentionModal.fullyManagedByILMTitle',
+                { defaultMessage: 'This data stream and its associated indices are managed by ILM' }
+              )}
+              iconType="pin"
+              data-test-subj="dsIsFullyManagedByILM"
+            >
+              <p>
+                <FormattedMessage
+                  id="xpack.idxMgmt.dataStreamsDetailsPanel.editDataRetentionModal.fullyManagedByILMDescription"
+                  defaultMessage="To edit data retention for this data stream, you must edit its associated {link}."
+                  values={{
+                    link: (
+                      <EuiLink href={ilmPolicyLink}>
+                        <FormattedMessage
+                          id="xpack.idxMgmt.dataStreamsDetailsPanel.editDataRetentionModal.fullyManagedByILMButtonLabel"
+                          defaultMessage="ILM policy"
+                        />
+                      </EuiLink>
+                    ),
+                  }}
+                />
+              </p>
+            </EuiCallOut>
+
+            <EuiSpacer />
+          </>
+        )}
+
+        <DetailsList details={details} />
+      </>
+    );
   }
+
+  const closePopover = () => {
+    setManagePopOver(false);
+  };
+
+  const button = (
+    <EuiButton
+      fill
+      iconType="arrowDown"
+      iconSide="right"
+      data-test-subj="manageDataStreamButton"
+      onClick={() => setManagePopOver(!isManagePopOverOpen)}
+    >
+      <FormattedMessage
+        id="xpack.idxMgmt.dataStreamsDetailsPanel.manageButtonLabel"
+        defaultMessage="Manage"
+      />
+    </EuiButton>
+  );
+
+  const panels: EuiContextMenuPanelDescriptor[] = [
+    {
+      id: 0,
+      title: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.managePanelTitle', {
+        defaultMessage: 'Data stream options',
+      }),
+      items: [
+        ...(!isDataStreamFullyManagedByILM(dataStream) &&
+        dataStream?.privileges?.manage_data_stream_lifecycle
+          ? [
+              {
+                key: 'editDataRetention',
+                name: i18n.translate(
+                  'xpack.idxMgmt.dataStreamDetailPanel.managePanelEditDataRetention',
+                  {
+                    defaultMessage: 'Edit data retention',
+                  }
+                ),
+                'data-test-subj': 'editDataRetentionButton',
+                icon: <EuiIcon type="pencil" size="m" />,
+                onClick: () => {
+                  closePopover();
+                  setIsEditingDataRetention(true);
+                },
+              },
+            ]
+          : []),
+        ...(dataStream?.privileges?.delete_index
+          ? [
+              {
+                key: 'deleteDataStream',
+                name: i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.managePanelDelete', {
+                  defaultMessage: 'Delete',
+                }),
+                'data-test-subj': 'deleteDataStreamButton',
+                icon: <EuiIcon type="trash" size="m" color="danger" />,
+                onClick: () => {
+                  closePopover();
+                  setIsDeleting(true);
+                },
+              },
+            ]
+          : []),
+      ],
+    },
+  ];
 
   return (
     <>
-      {isDeleting ? (
+      {isDeleting && (
         <DeleteDataStreamConfirmationModal
           onClose={(data) => {
             if (data && data.hasDeletedDataStreams) {
@@ -252,7 +516,22 @@ export const DataStreamDetailPanel: React.FunctionComponent<Props> = ({
           }}
           dataStreams={[dataStreamName]}
         />
-      ) : null}
+      )}
+
+      {isEditingDataRetention && dataStream && (
+        <EditDataRetentionModal
+          onClose={(data) => {
+            if (data && data?.hasUpdatedDataRetention) {
+              onClose(true);
+            } else {
+              setIsEditingDataRetention(false);
+            }
+          }}
+          ilmPolicyName={dataStream?.ilmPolicyName}
+          ilmPolicyLink={ilmPolicyLink}
+          dataStream={dataStream}
+        />
+      )}
 
       <EuiFlyout
         onClose={() => onClose()}
@@ -265,6 +544,7 @@ export const DataStreamDetailPanel: React.FunctionComponent<Props> = ({
           <EuiTitle size="m">
             <h2 id="dataStreamDetailPanelTitle" data-test-subj="dataStreamDetailPanelTitle">
               {dataStreamName}
+              <DiscoverLink indexName={dataStreamName} />
               {dataStream && <DataStreamsBadges dataStream={dataStream} />}
             </h2>
           </EuiTitle>
@@ -287,20 +567,19 @@ export const DataStreamDetailPanel: React.FunctionComponent<Props> = ({
               </EuiButtonEmpty>
             </EuiFlexItem>
 
-            {!isLoading && !error && dataStream?.privileges.delete_index ? (
+            {!isLoading && !error && panels[0].items?.length && (
               <EuiFlexItem grow={false}>
-                <EuiButton
-                  color="danger"
-                  iconType="trash"
-                  onClick={() => setIsDeleting(true)}
-                  data-test-subj="deleteDataStreamButton"
+                <EuiPopover
+                  button={button}
+                  isOpen={isManagePopOverOpen}
+                  closePopover={closePopover}
+                  panelPaddingSize="none"
+                  anchorPosition="downLeft"
                 >
-                  {i18n.translate('xpack.idxMgmt.dataStreamDetailPanel.deleteButtonLabel', {
-                    defaultMessage: 'Delete data stream',
-                  })}
-                </EuiButton>
+                  <EuiContextMenu initialPanelId={0} panels={panels} />
+                </EuiPopover>
               </EuiFlexItem>
-            ) : null}
+            )}
           </EuiFlexGroup>
         </EuiFlyoutFooter>
       </EuiFlyout>

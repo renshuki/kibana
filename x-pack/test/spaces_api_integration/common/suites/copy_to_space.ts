@@ -5,17 +5,20 @@
  * 2.0.
  */
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+import type { SuperTest } from 'supertest';
+
+import type {
+  SavedObjectsImportAmbiguousConflictError,
+  SavedObjectsImportFailure,
+} from '@kbn/core/server';
 import expect from '@kbn/expect';
 import { DEFAULT_SPACE_ID } from '@kbn/spaces-plugin/common/constants';
-import { CopyResponse } from '@kbn/spaces-plugin/server/lib/copy_to_spaces';
-import {
-  SavedObjectsImportFailure,
-  SavedObjectsImportAmbiguousConflictError,
-} from '@kbn/core/server';
-import { getAggregatedSpaceData, getUrlPrefix } from '../lib/space_test_utils';
-import { DescribeFn, TestDefinitionAuthentication } from '../lib/types';
+import type { CopyResponse } from '@kbn/spaces-plugin/server/lib/copy_to_spaces';
+
 import { getTestDataLoader, SPACE_1, SPACE_2 } from '../../../common/lib/test_data_loader';
 import type { FtrProviderContext } from '../ftr_provider_context';
+import { getAggregatedSpaceData, getUrlPrefix } from '../lib/space_test_utils';
+import type { DescribeFn, TestDefinitionAuthentication } from '../lib/types';
 
 type TestResponse = Record<string, any>;
 
@@ -98,7 +101,9 @@ interface Aggs extends estypes.AggregationsMultiBucketAggregateBase {
 }
 export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
   const testDataLoader = getTestDataLoader(context);
-  const supertestWithoutAuth = context.getService('supertestWithoutAuth');
+  const supertestWithoutAuth = context.getService(
+    'supertestWithoutAuth'
+  ) as unknown as SuperTest<any>;
   const es = context.getService('es');
 
   const collectSpaceContents = async () => {
@@ -182,6 +187,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 icon: 'dashboardApp',
               },
               destinationId: dashboardDestinationId,
+              managed: false,
             },
           ],
         },
@@ -229,24 +235,28 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 title: `Copy to Space index pattern 1 from ${spaceId} space`,
               },
               destinationId: indexPatternDestinationId,
+              managed: false,
             },
             {
               id: `cts_vis_1_${spaceId}`,
               type: 'visualization',
               meta: { icon: 'visualizeApp', title: `CTS vis 1 from ${spaceId} space` },
               destinationId: vis1DestinationId,
+              managed: false,
             },
             {
               id: `cts_vis_2_${spaceId}`,
               type: 'visualization',
               meta: { icon: 'visualizeApp', title: `CTS vis 2 from ${spaceId} space` },
               destinationId: vis2DestinationId,
+              managed: false,
             },
             {
               id: `cts_vis_3_${spaceId}`,
               type: 'visualization',
               meta: { icon: 'visualizeApp', title: `CTS vis 3 from ${spaceId} space` },
               destinationId: vis3DestinationId,
+              managed: false,
             },
             {
               id: `cts_dashboard_${spaceId}`,
@@ -256,6 +266,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 title: `This is the ${spaceId} test space CTS dashboard`,
               },
               destinationId: dashboardDestinationId,
+              managed: false,
             },
           ],
         },
@@ -357,18 +368,21 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
               },
               overwrite: true,
               destinationId: `cts_ip_1_${destination}`, // this conflicted with another index pattern in the destination space because of a shared originId
+              managed: false,
             },
             {
               id: `cts_vis_1_${spaceId}`,
               type: 'visualization',
               meta: { icon: 'visualizeApp', title: `CTS vis 1 from ${spaceId} space` },
               destinationId: vis1DestinationId,
+              managed: false,
             },
             {
               id: `cts_vis_2_${spaceId}`,
               type: 'visualization',
               meta: { icon: 'visualizeApp', title: `CTS vis 2 from ${spaceId} space` },
               destinationId: vis2DestinationId,
+              managed: false,
             },
             {
               id: `cts_vis_3_${spaceId}`,
@@ -376,6 +390,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
               meta: { icon: 'visualizeApp', title: `CTS vis 3 from ${spaceId} space` },
               overwrite: true,
               destinationId: `cts_vis_3_${destination}`, // this conflicted with another visualization in the destination space because of a shared originId
+              managed: false,
             },
             {
               id: `cts_dashboard_${spaceId}`,
@@ -386,6 +401,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
               },
               overwrite: true,
               destinationId: `cts_dashboard_${destination}`, // this conflicted with another dashboard in the destination space because of a shared originId
+              managed: false,
             },
           ],
         },
@@ -419,12 +435,14 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
           type: 'visualization',
           meta: { icon: 'visualizeApp', title: `CTS vis 1 from ${spaceId} space` },
           destinationId: vis1DestinationId,
+          managed: false,
         },
         {
           id: `cts_vis_2_${spaceId}`,
           type: 'visualization',
           meta: { icon: 'visualizeApp', title: `CTS vis 2 from ${spaceId} space` },
           destinationId: vis2DestinationId,
+          managed: false,
         },
       ];
       const expectedErrors = [
@@ -522,7 +540,8 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
         const destinationId = successResults![0].destinationId;
         expect(destinationId).to.match(UUID_PATTERN);
         const meta = { title, icon: 'beaker' };
-        expect(successResults).to.eql([{ type, id: sourceId, meta, destinationId }]);
+        const managed = false; // default added By `create`
+        expect(successResults).to.eql([{ type, id: sourceId, meta, destinationId, managed }]);
         expect(errors).to.be(undefined);
       };
 
@@ -538,7 +557,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
               // Note: if createNewCopies is disabled, the new object will have an originId property that matches the source ID, but this is not included in the HTTP response.
               expectNewCopyResponse(response, noConflictId, title);
             } else if (outcome === 'noAccess') {
-              expectRouteForbiddenResponse(response);
+              await expectRouteForbiddenResponse(response);
             } else {
               // unauthorized read/write
               expectSavedObjectForbiddenResponse(response);
@@ -569,7 +588,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 expect(errors).to.be(undefined);
               }
             } else if (outcome === 'noAccess') {
-              expectRouteForbiddenResponse(response);
+              await expectRouteForbiddenResponse(response);
             } else {
               // unauthorized read/write
               expectSavedObjectForbiddenResponse(response);
@@ -594,7 +613,14 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 expect(success).to.eql(true);
                 expect(successCount).to.eql(1);
                 expect(successResults).to.eql([
-                  { type, id: inexactMatchIdA, meta, overwrite: true, destinationId },
+                  {
+                    type,
+                    id: inexactMatchIdA,
+                    meta,
+                    overwrite: true,
+                    destinationId,
+                    managed: false,
+                  },
                 ]);
                 expect(errors).to.be(undefined);
               } else {
@@ -611,7 +637,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 ]);
               }
             } else if (outcome === 'noAccess') {
-              expectRouteForbiddenResponse(response);
+              await expectRouteForbiddenResponse(response);
             } else {
               // unauthorized read/write
               expectSavedObjectForbiddenResponse(response);
@@ -635,7 +661,14 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 expect(success).to.eql(true);
                 expect(successCount).to.eql(1);
                 expect(successResults).to.eql([
-                  { type, id: inexactMatchIdB, meta, overwrite: true, destinationId },
+                  {
+                    type,
+                    id: inexactMatchIdB,
+                    meta,
+                    overwrite: true,
+                    destinationId,
+                    managed: false,
+                  },
                 ]);
                 expect(errors).to.be(undefined);
               } else {
@@ -652,7 +685,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 ]);
               }
             } else if (outcome === 'noAccess') {
-              expectRouteForbiddenResponse(response);
+              await expectRouteForbiddenResponse(response);
             } else {
               // unauthorized read/write
               expectSavedObjectForbiddenResponse(response);
@@ -676,7 +709,14 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 expect(success).to.eql(true);
                 expect(successCount).to.eql(1);
                 expect(successResults).to.eql([
-                  { type, id: inexactMatchIdC, meta, overwrite: true, destinationId },
+                  {
+                    type,
+                    id: inexactMatchIdC,
+                    meta,
+                    overwrite: true,
+                    destinationId,
+                    managed: false,
+                  },
                 ]);
                 expect(errors).to.be(undefined);
               } else {
@@ -693,7 +733,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 ]);
               }
             } else if (outcome === 'noAccess') {
-              expectRouteForbiddenResponse(response);
+              await expectRouteForbiddenResponse(response);
             } else {
               // unauthorized read/write
               expectSavedObjectForbiddenResponse(response);
@@ -742,7 +782,7 @@ export function copyToSpaceTestSuiteFactory(context: FtrProviderContext) {
                 ]);
               }
             } else if (outcome === 'noAccess') {
-              expectRouteForbiddenResponse(response);
+              await expectRouteForbiddenResponse(response);
             } else {
               // unauthorized read/write
               expectSavedObjectForbiddenResponse(response);

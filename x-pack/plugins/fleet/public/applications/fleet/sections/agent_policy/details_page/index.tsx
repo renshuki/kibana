@@ -6,7 +6,9 @@
  */
 
 import React, { useMemo, useState, useCallback } from 'react';
-import { Redirect, useRouteMatch, Switch, Route, useLocation } from 'react-router-dom';
+import { Redirect, useRouteMatch, useLocation } from 'react-router-dom';
+import { Routes, Route } from '@kbn/shared-ux-router';
+
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { EuiPortal } from '@elastic/eui';
@@ -26,7 +28,6 @@ import {
 import { Loading, Error, AgentEnrollmentFlyout } from '../../../components';
 import { WithHeaderLayout } from '../../../layouts';
 
-import { useGetAgentStatus, AgentStatusRefreshContext } from './hooks';
 import {
   PackagePoliciesView,
   SettingsView,
@@ -53,13 +54,10 @@ export const AgentPolicyDetailsPage: React.FunctionComponent = () => {
     openAddAgentHelpPopoverOpenByDefault
   );
 
-  const agentStatusRequest = useGetAgentStatus(policyId);
-  const { refreshAgentStatus } = agentStatusRequest;
   const {
     application: { navigateToApp },
   } = useStartServices();
   const routeState = useIntraAppState<AgentPolicyDetailsDeployAgentAction>();
-  const agentStatus = agentStatusRequest.data?.results;
 
   const { isReady: isFleetReady } = useFleetStatus();
 
@@ -92,6 +90,7 @@ export const AgentPolicyDetailsPage: React.FunctionComponent = () => {
         name: i18n.translate('xpack.fleet.policyDetails.subTabs.settingsTabText', {
           defaultMessage: 'Settings',
         }),
+        'data-test-subj': 'agentPolicySettingsTab',
         href: getHref('policy_details', { policyId, tabId: 'settings' }),
         isSelected: tabId === 'settings',
       },
@@ -131,7 +130,7 @@ export const AgentPolicyDetailsPage: React.FunctionComponent = () => {
             />
           }
           error={i18n.translate('xpack.fleet.policyDetails.policyNotFoundErrorTitle', {
-            defaultMessage: "Policy '{id}' not found",
+            defaultMessage: "Policy ''{id}'' not found",
             values: {
               id: policyId,
             },
@@ -168,8 +167,6 @@ export const AgentPolicyDetailsPage: React.FunctionComponent = () => {
   const headerRightContent = (
     <HeaderRightContent
       agentPolicy={agentPolicy}
-      agentStatus={agentStatus}
-      policyId={policyId}
       onCancelEnrollment={onCancelEnrollment}
       isLoading={isLoading}
       isAddAgentHelpPopoverOpen={isAddAgentHelpPopoverOpen}
@@ -180,15 +177,13 @@ export const AgentPolicyDetailsPage: React.FunctionComponent = () => {
 
   return (
     <AgentPolicyRefreshContext.Provider value={{ refresh: refreshAgentPolicy }}>
-      <AgentStatusRefreshContext.Provider value={{ refresh: refreshAgentStatus }}>
-        <WithHeaderLayout
-          leftColumn={headerLeftContent}
-          rightColumn={headerRightContent}
-          tabs={headerTabs as unknown as EuiTabProps[]}
-        >
-          {content}
-        </WithHeaderLayout>
-      </AgentStatusRefreshContext.Provider>
+      <WithHeaderLayout
+        leftColumn={headerLeftContent}
+        rightColumn={headerRightContent}
+        tabs={headerTabs as unknown as EuiTabProps[]}
+      >
+        {content}
+      </WithHeaderLayout>
     </AgentPolicyRefreshContext.Provider>
   );
 };
@@ -198,7 +193,7 @@ const AgentPolicyDetailsContent: React.FunctionComponent<{ agentPolicy: AgentPol
 }) => {
   useBreadcrumbs('policy_details', { policyName: agentPolicy.name });
   return (
-    <Switch>
+    <Routes>
       <Route
         path={FLEET_ROUTING_PATHS.policy_details_settings}
         render={() => {
@@ -211,6 +206,6 @@ const AgentPolicyDetailsContent: React.FunctionComponent<{ agentPolicy: AgentPol
           return <PackagePoliciesView agentPolicy={agentPolicy} />;
         }}
       />
-    </Switch>
+    </Routes>
   );
 };

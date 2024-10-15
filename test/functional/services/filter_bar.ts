@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { $Values } from '@kbn/utility-types';
@@ -33,7 +34,7 @@ interface BasicFilter {
 
 interface FilterWithMultipleValues extends BasicFilter {
   operation: typeof Operation.IS_ONE_OF | typeof Operation.IS_NOT_ONE_OF;
-  value: string[];
+  value: string[] | string;
 }
 
 interface FilterWithRange extends BasicFilter {
@@ -65,6 +66,7 @@ type Filter = FilterLeaf | FilterNode;
 
 export class FilterBarService extends FtrService {
   private readonly comboBox = this.ctx.getService('comboBox');
+  private readonly monacoEditor = this.ctx.getService('monacoEditor');
   private readonly testSubjects = this.ctx.getService('testSubjects');
   private readonly common = this.ctx.getPageObject('common');
   private readonly header = this.ctx.getPageObject('header');
@@ -132,10 +134,11 @@ export class FilterBarService extends FtrService {
    * @param key field name
    */
   public async removeFilter(key: string): Promise<void> {
-    await this.retry.try(async () => {
+    await this.retry.waitFor('filter pill context menu is open', async () => {
       await this.testSubjects.click(`~filter & ~filter-key-${key}`);
-      await this.testSubjects.click(`deleteFilter`);
+      return await this.testSubjects.exists('deleteFilter');
     });
+    await this.testSubjects.click(`deleteFilter`);
     await this.header.awaitGlobalLoadingIndicatorHidden();
   }
 
@@ -174,7 +177,12 @@ export class FilterBarService extends FtrService {
 
   public async isFilterPinned(key: string): Promise<boolean> {
     const filter = await this.testSubjects.find(`~filter & ~filter-key-${key}`);
-    return (await filter.getAttribute('data-test-subj')).includes('filter-pinned');
+    return ((await filter.getAttribute('data-test-subj')) ?? '').includes('filter-pinned');
+  }
+
+  public async isFilterNegated(key: string): Promise<boolean> {
+    const filter = await this.testSubjects.find(`~filter & ~filter-key-${key}`);
+    return ((await filter.getAttribute('data-test-subj')) ?? '').includes('filter-negated');
   }
 
   public async getFilterCount(): Promise<number> {
@@ -208,7 +216,7 @@ export class FilterBarService extends FtrService {
     await addOrBtn.click();
   }
 
-  private async addAndFilter(path: string) {
+  public async addAndFilter(path: string) {
     const filterForm = await this.testSubjects.find(`filter-${path}`);
     const addAndBtn = await filterForm.findByTestSubject('add-and-filter');
     await addAndBtn.click();
@@ -273,7 +281,7 @@ export class FilterBarService extends FtrService {
     return 'filters' in filter && 'condition' in filter;
   }
 
-  private async createFilter(filter: Filter, path: string = '0'): Promise<unknown> {
+  public async createFilter(filter: Filter, path: string = '0'): Promise<unknown> {
     if (this.isFilterNode(filter)) {
       let startedAdding = false;
       for (const [index, f] of filter.filters.entries()) {
@@ -302,13 +310,32 @@ export class FilterBarService extends FtrService {
 
       await this.createFilter(filter);
 
-      await this.testSubjects.clickWhenNotDisabledWithoutRetry('saveFilter');
+      await this.testSubjects.scrollIntoView('saveFilter');
+      await this.testSubjects.clickWhenNotDisabled('saveFilter');
+    });
+    await this.retry.try(async () => {
+      await this.testSubjects.waitForDeleted('saveFilter');
     });
     await this.header.awaitGlobalLoadingIndicatorHidden();
   }
 
   public async addFilter(filter: Filter): Promise<void> {
     await this.addFilterAndSelectDataView(null, filter);
+  }
+
+  public async addDslFilter(value: string, waitUntilLoadingHasFinished = true) {
+    await this.testSubjects.click('addFilter');
+    await this.testSubjects.click('editQueryDSL');
+    await this.monacoEditor.waitCodeEditorReady('addFilterPopover');
+    await this.monacoEditor.setCodeEditorValue(value);
+    await this.testSubjects.scrollIntoView('saveFilter');
+    await this.testSubjects.clickWhenNotDisabled('saveFilter');
+    await this.retry.try(async () => {
+      await this.testSubjects.waitForDeleted('saveFilter');
+    });
+    if (waitUntilLoadingHasFinished) {
+      await this.header.waitUntilLoadingHasFinished();
+    }
   }
 
   /**
@@ -352,7 +379,9 @@ export class FilterBarService extends FtrService {
    * Closes field editor modal window
    */
   public async ensureFieldEditorModalIsClosed(): Promise<void> {
-    const cancelSaveFilterModalButtonExists = await this.testSubjects.exists('cancelSaveFilter');
+    const cancelSaveFilterModalButtonExists = await this.testSubjects.exists('cancelSaveFilter', {
+      timeout: 1000,
+    });
     if (cancelSaveFilterModalButtonExists) {
       await this.testSubjects.click('cancelSaveFilter');
     }

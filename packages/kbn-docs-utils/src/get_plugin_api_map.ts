@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { ToolingLog } from '@kbn/tooling-log';
@@ -37,14 +38,8 @@ export function getPluginApiMap(
   const pluginApiMap: { [key: string]: PluginApi } = {};
   plugins.forEach((plugin) => {
     const captureReferences =
-      collectReferences && (!pluginFilter || pluginFilter.indexOf(plugin.manifest.id) >= 0);
-    pluginApiMap[plugin.manifest.id] = getPluginApi(
-      project,
-      plugin,
-      plugins,
-      log,
-      captureReferences
-    );
+      collectReferences && (!pluginFilter || pluginFilter.indexOf(plugin.id) >= 0);
+    pluginApiMap[plugin.id] = getPluginApi(project, plugin, plugins, log, captureReferences);
   });
 
   // Mapping of plugin id to the missing source API id to all the plugin API items that referenced this item.
@@ -54,7 +49,7 @@ export function getPluginApiMap(
   const adoptionTrackedAPIs: AdoptionTrackedAPIsByPlugin = {};
 
   plugins.forEach((plugin) => {
-    const id = plugin.manifest.id;
+    const id = plugin.id;
     const pluginApi = pluginApiMap[id];
     removeBrokenLinks(pluginApi, missingApiItems, pluginApiMap, log);
     collectDeprecations(pluginApi, referencedDeprecations, unreferencedDeprecations);

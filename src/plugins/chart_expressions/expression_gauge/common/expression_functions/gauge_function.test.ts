@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { gaugeFunction } from './gauge_function';
@@ -11,6 +12,7 @@ import { GaugeArguments, GaugeShapes } from '..';
 import { functionWrapper } from '@kbn/expressions-plugin/common/expression_functions/specs/tests/utils';
 import { Datatable } from '@kbn/expressions-plugin/common/expression_types/specs';
 import {
+  EXPRESSION_GAUGE_NAME,
   GaugeCentralMajorModes,
   GaugeColorModes,
   GaugeLabelMajorModes,
@@ -64,32 +66,11 @@ describe('interpreter/functions#gauge', () => {
   it(`returns an object with the correct structure for the arc if centralMajor and centralMajorMode are passed`, () => {
     const actual = fn(context, {
       ...args,
-      shape: GaugeShapes.ARC,
+      shape: GaugeShapes.SEMI_CIRCLE,
       centralMajor: 'Some label',
       centralMajorMode: GaugeCentralMajorModes.CUSTOM,
     });
     expect(actual).toMatchSnapshot();
-  });
-
-  it(`throws error if centralMajor or centralMajorMode are provided for the horizontalBullet shape`, () => {
-    const actual = () =>
-      fn(context, {
-        ...args,
-        centralMajor: 'Some label',
-        centralMajorMode: GaugeCentralMajorModes.CUSTOM,
-      });
-    expect(actual).toThrowErrorMatchingSnapshot();
-  });
-
-  it(`throws error if centralMajor or centralMajorMode are provided for the vertical shape`, () => {
-    const actual = () =>
-      fn(context, {
-        ...args,
-        shape: GaugeShapes.VERTICAL_BULLET,
-        centralMajor: 'Some label',
-        centralMajorMode: GaugeCentralMajorModes.CUSTOM,
-      });
-    expect(actual).toThrowErrorMatchingSnapshot();
   });
 
   it('logs correct datatable to inspector', async () => {
@@ -109,5 +90,24 @@ describe('interpreter/functions#gauge', () => {
     await fn(context, args, handlers);
 
     expect(loggedTable!).toMatchSnapshot();
+  });
+
+  it('should pass over overrides from variables', async () => {
+    const overrides = {
+      settings: {
+        onBrushEnd: 'ignore',
+      },
+    };
+    const handlers = {
+      variables: { overrides },
+      getExecutionContext: jest.fn(),
+    } as unknown as ExecutionContext;
+    const result = await fn(context, args, handlers);
+
+    expect(result).toEqual({
+      type: 'render',
+      as: EXPRESSION_GAUGE_NAME,
+      value: expect.objectContaining({ overrides }),
+    });
   });
 });

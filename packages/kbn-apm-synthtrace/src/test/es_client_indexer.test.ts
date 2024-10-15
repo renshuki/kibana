@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { apm, timerange } from '@kbn/apm-synthtrace-client';
@@ -33,6 +34,13 @@ describe('Synthtrace ES Client indexer', () => {
       target: '',
       version: '',
       client: {
+        cluster: {
+          getComponentTemplate: async () => {
+            return {
+              component_templates: [],
+            };
+          },
+        },
         helpers: {
           bulk: async (options: any) => {
             datasource = options.datasource;
@@ -65,7 +73,7 @@ describe('Synthtrace ES Client indexer', () => {
 
     const events = await toArray(datasource);
 
-    expect(events.length).toBe(9);
+    expect(events.length).toMatchInlineSnapshot(`33`);
 
     const mapped = events.map((event) =>
       pick(event, '@timestamp', 'processor.event', 'metricset.name')
@@ -155,7 +163,9 @@ describe('Synthtrace ES Client indexer', () => {
 
     expect(transactions.length).toBe(RATE * CARDINALITY * MINUTES);
 
-    const txMetrics = events.filter((event) => event.metricset?.name === 'transaction');
+    const txMetrics = events.filter(
+      (event) => event.metricset?.name === 'transaction' && event.metricset?.interval === '1m'
+    );
 
     expect(txMetrics.length).toBe(MINUTES * CARDINALITY);
 

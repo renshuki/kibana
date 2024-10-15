@@ -11,18 +11,10 @@
   "server": {
     "classes": [],
     "functions": [],
-    "interfaces": [],
-    "enums": [],
-    "misc": [],
-    "objects": []
-  },
-  "common": {
-    "classes": [],
-    "functions": [],
     "interfaces": [
       {
         "parentPluginId": "@kbn/core-custom-branding-server",
-        "id": "def-common.CustomBrandingSetup",
+        "id": "def-server.CustomBrandingSetup",
         "type": "Interface",
         "tags": [],
         "label": "CustomBrandingSetup",
@@ -33,7 +25,7 @@
         "children": [
           {
             "parentPluginId": "@kbn/core-custom-branding-server",
-            "id": "def-common.CustomBrandingSetup.register",
+            "id": "def-server.CustomBrandingSetup.register",
             "type": "Function",
             "tags": [],
             "label": "register",
@@ -42,9 +34,9 @@
               "(fetchFn: ",
               {
                 "pluginId": "@kbn/core-custom-branding-server",
-                "scope": "common",
+                "scope": "server",
                 "docId": "kibKbnCoreCustomBrandingServerPluginApi",
-                "section": "def-common.CustomBrandingFetchFn",
+                "section": "def-server.CustomBrandingFetchFn",
                 "text": "CustomBrandingFetchFn"
               },
               ") => void"
@@ -55,7 +47,7 @@
             "children": [
               {
                 "parentPluginId": "@kbn/core-custom-branding-server",
-                "id": "def-common.CustomBrandingSetup.register.$1",
+                "id": "def-server.CustomBrandingSetup.register.$1",
                 "type": "Function",
                 "tags": [],
                 "label": "fetchFn",
@@ -63,9 +55,9 @@
                 "signature": [
                   {
                     "pluginId": "@kbn/core-custom-branding-server",
-                    "scope": "common",
+                    "scope": "server",
                     "docId": "kibKbnCoreCustomBrandingServerPluginApi",
-                    "section": "def-common.CustomBrandingFetchFn",
+                    "section": "def-server.CustomBrandingFetchFn",
                     "text": "CustomBrandingFetchFn"
                   }
                 ],
@@ -76,13 +68,95 @@
               }
             ],
             "returnComment": []
+          },
+          {
+            "parentPluginId": "@kbn/core-custom-branding-server",
+            "id": "def-server.CustomBrandingSetup.getBrandingFor",
+            "type": "Function",
+            "tags": [],
+            "label": "getBrandingFor",
+            "description": [],
+            "signature": [
+              "(request: ",
+              {
+                "pluginId": "@kbn/core-http-server",
+                "scope": "server",
+                "docId": "kibKbnCoreHttpServerPluginApi",
+                "section": "def-server.KibanaRequest",
+                "text": "KibanaRequest"
+              },
+              "<unknown, unknown, unknown, any>, options: { unauthenticated?: boolean | undefined; }) => Promise<",
+              {
+                "pluginId": "@kbn/core-custom-branding-common",
+                "scope": "common",
+                "docId": "kibKbnCoreCustomBrandingCommonPluginApi",
+                "section": "def-common.CustomBranding",
+                "text": "CustomBranding"
+              },
+              ">"
+            ],
+            "path": "packages/core/custom-branding/core-custom-branding-server/types.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "children": [
+              {
+                "parentPluginId": "@kbn/core-custom-branding-server",
+                "id": "def-server.CustomBrandingSetup.getBrandingFor.$1",
+                "type": "Object",
+                "tags": [],
+                "label": "request",
+                "description": [],
+                "signature": [
+                  {
+                    "pluginId": "@kbn/core-http-server",
+                    "scope": "server",
+                    "docId": "kibKbnCoreHttpServerPluginApi",
+                    "section": "def-server.KibanaRequest",
+                    "text": "KibanaRequest"
+                  },
+                  "<unknown, unknown, unknown, any>"
+                ],
+                "path": "packages/core/custom-branding/core-custom-branding-server/types.ts",
+                "deprecated": false,
+                "trackAdoption": false,
+                "isRequired": true
+              },
+              {
+                "parentPluginId": "@kbn/core-custom-branding-server",
+                "id": "def-server.CustomBrandingSetup.getBrandingFor.$2",
+                "type": "Object",
+                "tags": [],
+                "label": "options",
+                "description": [],
+                "path": "packages/core/custom-branding/core-custom-branding-server/types.ts",
+                "deprecated": false,
+                "trackAdoption": false,
+                "children": [
+                  {
+                    "parentPluginId": "@kbn/core-custom-branding-server",
+                    "id": "def-server.CustomBrandingSetup.getBrandingFor.$2.unauthenticated",
+                    "type": "CompoundType",
+                    "tags": [],
+                    "label": "unauthenticated",
+                    "description": [],
+                    "signature": [
+                      "boolean | undefined"
+                    ],
+                    "path": "packages/core/custom-branding/core-custom-branding-server/types.ts",
+                    "deprecated": false,
+                    "trackAdoption": false
+                  }
+                ]
+              }
+            ],
+            "returnComment": []
           }
         ],
         "initialIsOpen": false
       },
       {
         "parentPluginId": "@kbn/core-custom-branding-server",
-        "id": "def-common.CustomBrandingStart",
+        "id": "def-server.CustomBrandingStart",
         "type": "Interface",
         "tags": [],
         "label": "CustomBrandingStart",
@@ -98,7 +172,7 @@
     "misc": [
       {
         "parentPluginId": "@kbn/core-custom-branding-server",
-        "id": "def-common.CustomBrandingFetchFn",
+        "id": "def-server.CustomBrandingFetchFn",
         "type": "Type",
         "tags": [],
         "label": "CustomBrandingFetchFn",
@@ -107,12 +181,12 @@
           "(request: ",
           {
             "pluginId": "@kbn/core-http-server",
-            "scope": "common",
+            "scope": "server",
             "docId": "kibKbnCoreHttpServerPluginApi",
-            "section": "def-common.KibanaRequest",
+            "section": "def-server.KibanaRequest",
             "text": "KibanaRequest"
           },
-          "<unknown, unknown, unknown, any>) => ",
+          "<unknown, unknown, unknown, any>, unauthenticated: boolean) => ",
           {
             "pluginId": "@kbn/utility-types",
             "scope": "common",
@@ -137,7 +211,7 @@
         "children": [
           {
             "parentPluginId": "@kbn/core-custom-branding-server",
-            "id": "def-common.CustomBrandingFetchFn.$1",
+            "id": "def-server.CustomBrandingFetchFn.$1",
             "type": "Object",
             "tags": [],
             "label": "request",
@@ -145,13 +219,24 @@
             "signature": [
               {
                 "pluginId": "@kbn/core-http-server",
-                "scope": "common",
+                "scope": "server",
                 "docId": "kibKbnCoreHttpServerPluginApi",
-                "section": "def-common.KibanaRequest",
+                "section": "def-server.KibanaRequest",
                 "text": "KibanaRequest"
               },
               "<unknown, unknown, unknown, any>"
             ],
+            "path": "packages/core/custom-branding/core-custom-branding-server/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/core-custom-branding-server",
+            "id": "def-server.CustomBrandingFetchFn.$2",
+            "type": "boolean",
+            "tags": [],
+            "label": "unauthenticated",
+            "description": [],
             "path": "packages/core/custom-branding/core-custom-branding-server/types.ts",
             "deprecated": false,
             "trackAdoption": false
@@ -160,6 +245,14 @@
         "initialIsOpen": false
       }
     ],
+    "objects": []
+  },
+  "common": {
+    "classes": [],
+    "functions": [],
+    "interfaces": [],
+    "enums": [],
+    "misc": [],
     "objects": []
   }
 }

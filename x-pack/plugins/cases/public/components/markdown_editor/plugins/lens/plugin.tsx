@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { first } from 'rxjs/operators';
+import { first } from 'rxjs';
 import type { EuiMarkdownEditorUiPlugin, EuiMarkdownAstNodePosition } from '@elastic/eui';
 import {
   EuiCodeBlock,
@@ -14,38 +14,32 @@ import {
   EuiModalHeaderTitle,
   EuiMarkdownContext,
   EuiModalFooter,
-  EuiButtonEmpty,
   EuiButton,
   EuiFlexItem,
   EuiFlexGroup,
   EuiBetaBadge,
+  useEuiTheme,
 } from '@elastic/eui';
 import React, { useCallback, useContext, useMemo, useEffect, useState } from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { useLocation } from 'react-router-dom';
-import styled from 'styled-components';
+import { css } from '@emotion/react';
 
-import type { TypedLensByValueInput } from '@kbn/lens-plugin/public';
+import type { TypedLensByValueInput, LensSavedObjectAttributes } from '@kbn/lens-plugin/public';
 import type { EmbeddablePackageState } from '@kbn/embeddable-plugin/public';
+import { SavedObjectFinder } from '@kbn/saved-objects-finder-plugin/public';
+import type { SavedObjectCommon } from '@kbn/saved-objects-finder-plugin/common';
+import type { TimeRange } from '@kbn/data-plugin/common';
 import { useKibana } from '../../../../common/lib/kibana';
 import { DRAFT_COMMENT_STORAGE_ID, ID } from './constants';
 import { CommentEditorContext } from '../../context';
-import { ModalContainer } from './modal_container';
-import { SavedObjectFinderUi } from './saved_objects_finder';
 import { useLensDraftComment } from './use_lens_draft_comment';
 import { VISUALIZATION } from './translations';
 import { useIsMainApplication } from '../../../../common/hooks';
+import { convertToAbsoluteTimeRange } from '../../../visualizations/actions/convert_to_absolute_time_range';
 
-const BetaBadgeWrapper = styled.span`
-  display: inline-flex;
-
-  .euiToolTipAnchor {
-    display: inline-flex;
-  }
-`;
-
-const DEFAULT_TIMERANGE = {
+const DEFAULT_TIMERANGE: TimeRange = {
   from: 'now-7d',
   to: 'now',
   mode: 'relative',
@@ -72,7 +66,7 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
     embeddable,
     lens,
     storage,
-    savedObjects,
+    contentManagement,
     uiSettings,
     data: {
       query: {
@@ -85,7 +79,7 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
   const commentEditorContext = useContext(CommentEditorContext);
   const markdownContext = useContext(EuiMarkdownContext);
   const isMainApplication = useIsMainApplication();
-
+  const { euiTheme } = useEuiTheme();
   const handleClose = useCallback(() => {
     if (currentAppId) {
       embeddable?.getStateTransfer().getIncomingEmbeddablePackage(currentAppId, true);
@@ -95,10 +89,10 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
   }, [clearDraftComment, currentAppId, embeddable, onCancel]);
 
   const handleAdd = useCallback(
-    (attributes, timerange) => {
+    (attributes: Record<string, unknown>, timeRange?: TimeRange) => {
       onSave(
         `!{${ID}${JSON.stringify({
-          timeRange: timerange,
+          timeRange: convertToAbsoluteTimeRange(timeRange),
           attributes,
         })}}`,
         {
@@ -112,11 +106,15 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
   );
 
   const handleUpdate = useCallback(
-    (attributes, timerange, position) => {
+    (
+      attributes: Record<string, unknown>,
+      timeRange: TimeRange | undefined,
+      position: EuiMarkdownAstNodePosition
+    ) => {
       markdownContext.replaceNode(
         position,
         `!{${ID}${JSON.stringify({
-          timeRange: timerange,
+          timeRange: convertToAbsoluteTimeRange(timeRange),
           attributes,
         })}}`
       );
@@ -160,7 +158,7 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
   ]);
 
   const handleEditInLensClick = useCallback(
-    (lensAttributes?, timeRange = DEFAULT_TIMERANGE) => {
+    (lensAttributes?: Record<string, unknown>, timeRange: TimeRange = DEFAULT_TIMERANGE) => {
       storage.set(DRAFT_COMMENT_STORAGE_ID, {
         commentId: commentEditorContext?.editorId,
         comment: commentEditorContext?.value,
@@ -174,7 +172,7 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
           ? {
               id: '',
               timeRange,
-              attributes: lensAttributes || node?.attributes,
+              attributes: (lensAttributes || node?.attributes) as LensSavedObjectAttributes,
             }
           : undefined,
         {
@@ -198,7 +196,12 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
   );
 
   const handleChooseLensSO = useCallback(
-    (savedObjectId, savedObjectType, fullName, savedObject) => {
+    (
+      savedObjectId: string,
+      savedObjectType: string,
+      fullName: string,
+      savedObject: SavedObjectCommon
+    ) => {
       handleEditInLensClick({
         ...savedObject.attributes,
         title: '',
@@ -223,45 +226,6 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
       },
     ],
     []
-  );
-
-  const euiFieldSearchProps = useMemo(
-    () => ({
-      prepend: i18n.translate(
-        'xpack.cases.markdownEditor.plugins.lens.savedObjects.finder.searchInputPrependLabel',
-        {
-          defaultMessage: 'Template',
-        }
-      ),
-    }),
-    []
-  );
-
-  const euiFormRowProps = useMemo(
-    () => ({
-      label: i18n.translate(
-        'xpack.cases.markdownEditor.plugins.lens.savedObjects.finder.searchInputLabel',
-        {
-          defaultMessage: 'Select lens',
-        }
-      ),
-      labelAppend: (
-        <EuiButtonEmpty onClick={handleCreateInLensClick} color="primary" size="xs">
-          <FormattedMessage
-            id="xpack.cases.markdownEditor.plugins.lens.createVisualizationButtonLabel"
-            defaultMessage="Create visualization"
-          />
-        </EuiButtonEmpty>
-      ),
-      helpText: i18n.translate(
-        'xpack.cases.markdownEditor.plugins.lens.savedObjects.finder.searchInputHelpText',
-        {
-          defaultMessage:
-            'Insert lens from existing templates or creating a new one. You will only create lens for this comment and won’t change Visualize Library.',
-        }
-      ),
-    }),
-    [handleCreateInLensClick]
   );
 
   useEffect(() => {
@@ -318,38 +282,66 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
     }
   }, [embeddable, storage, timefilter, currentAppId, handleAdd, handleUpdate, draftComment]);
 
+  const createLensButton = (
+    <EuiButton onClick={handleCreateInLensClick} iconType="plusInCircle">
+      <FormattedMessage
+        id="xpack.cases.markdownEditor.plugins.lens.createVisualizationButtonLabel"
+        defaultMessage="Create new"
+      />
+    </EuiButton>
+  );
+
   return (
-    <ModalContainer direction="column" gutterSize="none">
+    <EuiFlexGroup
+      css={css`
+        width: ${euiTheme.breakpoint.m};
+        height: 100%;
+
+        .euiModalBody {
+          min-height: 300px;
+        }
+      `}
+      direction="column"
+      gutterSize="none"
+    >
       <EuiModalHeader>
-        <EuiModalHeaderTitle>
-          <EuiFlexGroup gutterSize="s" alignItems="center">
-            <EuiFlexItem grow={false}>
+        <EuiFlexGroup gutterSize="s" alignItems="center">
+          <EuiFlexItem grow={false}>
+            <EuiModalHeaderTitle>
               <FormattedMessage
                 id="xpack.cases.markdownEditor.plugins.lens.addVisualizationModalTitle"
                 defaultMessage="Add visualization"
               />
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <BetaBadgeWrapper>
-                <EuiBetaBadge
-                  label={i18n.translate('xpack.cases.markdownEditor.plugins.lens.betaLabel', {
-                    defaultMessage: 'Beta',
-                  })}
-                  tooltipContent={i18n.translate(
-                    'xpack.cases.markdownEditor.plugins.lens.betaDescription',
-                    {
-                      defaultMessage:
-                        'This module is not GA. You can only insert one lens per comment for now. Please help us by reporting bugs.',
-                    }
-                  )}
-                />
-              </BetaBadgeWrapper>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-        </EuiModalHeaderTitle>
+            </EuiModalHeaderTitle>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <span
+              css={css`
+                display: inline-flex;
+
+                .euiToolTipAnchor {
+                  display: inline-flex;
+                }
+              `}
+            >
+              <EuiBetaBadge
+                label={i18n.translate('xpack.cases.markdownEditor.plugins.lens.betaLabel', {
+                  defaultMessage: 'Beta',
+                })}
+                tooltipContent={i18n.translate(
+                  'xpack.cases.markdownEditor.plugins.lens.betaDescription',
+                  {
+                    defaultMessage:
+                      'This module is not GA. You can only insert one lens per comment for now. Please help us by reporting bugs.',
+                  }
+                )}
+              />
+            </span>
+          </EuiFlexItem>
+        </EuiFlexGroup>
       </EuiModalHeader>
       <EuiModalBody>
-        <SavedObjectFinderUi
+        <SavedObjectFinder
           key="searchSavedObjectFinder"
           onChoose={handleChooseLensSO}
           showFilter={false}
@@ -361,11 +353,18 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
           }
           savedObjectMetaData={savedObjectMetaData}
           fixedPageSize={10}
-          uiSettings={uiSettings}
-          savedObjects={savedObjects}
-          euiFieldSearchProps={euiFieldSearchProps}
-          // @ts-expect-error update types
-          euiFormRowProps={euiFormRowProps}
+          services={{
+            contentClient: contentManagement.client,
+            uiSettings,
+          }}
+          leftChildren={createLensButton}
+          helpText={i18n.translate(
+            'xpack.cases.markdownEditor.plugins.lens.savedObjects.finder.searchInputHelpText',
+            {
+              defaultMessage:
+                'Insert an existing lens visualization or create a new one. Any changes or new visualizations will only apply to this comment.',
+            }
+          )}
         />
       </EuiModalBody>
       <EuiModalFooter>
@@ -376,7 +375,7 @@ const LensEditorComponent: LensEuiMarkdownEditorUiPlugin['editor'] = ({
           />
         </EuiButton>
       </EuiModalFooter>
-    </ModalContainer>
+    </EuiFlexGroup>
   );
 };
 LensEditorComponent.displayName = 'LensEditor';

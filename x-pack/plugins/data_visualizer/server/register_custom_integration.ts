@@ -6,7 +6,7 @@
  */
 
 import { i18n } from '@kbn/i18n';
-import { CustomIntegrationsPluginSetup } from '@kbn/custom-integrations-plugin/server';
+import type { CustomIntegrationsPluginSetup } from '@kbn/custom-integrations-plugin/server';
 import { applicationPath, featureId, featureTitle } from '../common/constants';
 
 export function registerWithCustomIntegrations(customIntegrations: CustomIntegrationsPluginSetup) {
@@ -25,7 +25,7 @@ export function registerWithCustomIntegrations(customIntegrations: CustomIntegra
         src: 'addDataApp',
       },
     ],
-    categories: ['upload_file'],
+    categories: ['custom'],
     shipper: 'other',
   });
 }

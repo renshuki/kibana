@@ -7,86 +7,237 @@
 
 import type { FleetAuthzRouter } from '../../services/security';
 
+import { API_VERSIONS } from '../../../common/constants';
+
 import { OUTPUT_API_ROUTES } from '../../constants';
 import {
   DeleteOutputRequestSchema,
+  DeleteOutputResponseSchema,
+  GenerateLogstashApiKeyResponseSchema,
+  GetLatestOutputHealthRequestSchema,
+  GetLatestOutputHealthResponseSchema,
   GetOneOutputRequestSchema,
   GetOutputsRequestSchema,
+  GetOutputsResponseSchema,
+  OutputResponseSchema,
   PostOutputRequestSchema,
   PutOutputRequestSchema,
 } from '../../types';
+
+import { genericErrorResponse } from '../schema/errors';
 
 import {
   deleteOutputHandler,
   getOneOuputHandler,
   getOutputsHandler,
-  postOuputHandler,
-  putOuputHandler,
+  postOutputHandler,
+  putOutputHandler,
   postLogstashApiKeyHandler,
+  getLatestOutputHealth,
 } from './handler';
 
 export const registerRoutes = (router: FleetAuthzRouter) => {
-  router.get(
-    {
+  router.versioned
+    .get({
       path: OUTPUT_API_ROUTES.LIST_PATTERN,
-      validate: GetOutputsRequestSchema,
-      fleetAuthz: {
-        fleet: { all: true },
+      fleetAuthz: (authz) => {
+        return authz.fleet.readSettings || authz.fleet.readAgentPolicies;
       },
-    },
-    getOutputsHandler
-  );
-  router.get(
-    {
+      description: 'List outputs',
+      options: {
+        tags: ['oas-tag:Fleet outputs'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetOutputsRequestSchema,
+          response: {
+            200: {
+              body: () => GetOutputsResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getOutputsHandler
+    );
+  router.versioned
+    .get({
       path: OUTPUT_API_ROUTES.INFO_PATTERN,
-      validate: GetOneOutputRequestSchema,
-      fleetAuthz: {
-        fleet: { all: true },
+      fleetAuthz: (authz) => {
+        return authz.fleet.readSettings || authz.fleet.readAgentPolicies;
       },
-    },
-    getOneOuputHandler
-  );
-  router.put(
-    {
+      description: 'Get output by ID',
+      options: {
+        tags: ['oas-tag:Fleet outputs'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetOneOutputRequestSchema,
+          response: {
+            200: {
+              body: () => OutputResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getOneOuputHandler
+    );
+  router.versioned
+    .put({
       path: OUTPUT_API_ROUTES.UPDATE_PATTERN,
-      validate: PutOutputRequestSchema,
-      fleetAuthz: {
-        fleet: { all: true },
+      fleetAuthz: (authz) => {
+        return authz.fleet.allSettings || authz.fleet.allAgentPolicies;
       },
-    },
-    putOuputHandler
-  );
+      description: 'Update output by ID',
+      options: {
+        tags: ['oas-tag:Fleet outputs'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PutOutputRequestSchema,
+          response: {
+            200: {
+              body: () => OutputResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      putOutputHandler
+    );
 
-  router.post(
-    {
+  router.versioned
+    .post({
       path: OUTPUT_API_ROUTES.CREATE_PATTERN,
-      validate: PostOutputRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allSettings: true },
       },
-    },
-    postOuputHandler
-  );
+      description: 'Create output',
+      options: {
+        tags: ['oas-tag:Fleet outputs'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: PostOutputRequestSchema,
+          response: {
+            200: {
+              body: () => OutputResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postOutputHandler
+    );
 
-  router.delete(
-    {
+  router.versioned
+    .delete({
       path: OUTPUT_API_ROUTES.DELETE_PATTERN,
-      validate: DeleteOutputRequestSchema,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allSettings: true },
       },
-    },
-    deleteOutputHandler
-  );
+      description: 'Delete output by ID',
+      options: {
+        tags: ['oas-tag:Fleet outputs'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: DeleteOutputRequestSchema,
+          response: {
+            200: {
+              body: () => DeleteOutputResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+            404: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      deleteOutputHandler
+    );
 
-  router.post(
-    {
+  router.versioned
+    .post({
       path: OUTPUT_API_ROUTES.LOGSTASH_API_KEY_PATTERN,
-      validate: false,
       fleetAuthz: {
-        fleet: { all: true },
+        fleet: { allSettings: true },
       },
-    },
-    postLogstashApiKeyHandler
-  );
+      description: 'Generate Logstash API key',
+      options: {
+        tags: ['oas-tag:Fleet outputs'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: {},
+          response: {
+            200: {
+              body: () => GenerateLogstashApiKeyResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      postLogstashApiKeyHandler
+    );
+
+  router.versioned
+    .get({
+      path: OUTPUT_API_ROUTES.GET_OUTPUT_HEALTH_PATTERN,
+      fleetAuthz: {
+        fleet: { readSettings: true },
+      },
+      description: 'Get latest output health',
+      options: {
+        tags: ['oas-tag:Fleet outputs'],
+      },
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.public.v1,
+        validate: {
+          request: GetLatestOutputHealthRequestSchema,
+          response: {
+            200: {
+              body: () => GetLatestOutputHealthResponseSchema,
+            },
+            400: {
+              body: genericErrorResponse,
+            },
+          },
+        },
+      },
+      getLatestOutputHealth
+    );
 };

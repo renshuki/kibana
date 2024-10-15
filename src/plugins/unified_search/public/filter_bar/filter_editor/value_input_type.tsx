@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { EuiFieldNumber, EuiFieldText, EuiSelect } from '@elastic/eui';
@@ -50,6 +51,7 @@ class ValueInputTypeUI extends Component<Props> {
             disabled={this.props.disabled}
             fullWidth={this.props.fullWidth}
             placeholder={this.props.placeholder}
+            aria-label={this.props.placeholder}
             value={value}
             onChange={this.onChange}
             isInvalid={!validateParams(value, this.props.field)}
@@ -67,6 +69,7 @@ class ValueInputTypeUI extends Component<Props> {
             disabled={this.props.disabled}
             fullWidth={this.props.fullWidth}
             placeholder={this.props.placeholder}
+            aria-label={this.props.placeholder}
             value={this.getValueForNumberField(value)}
             onChange={this.onChange}
             controlOnly={this.props.controlOnly}
@@ -83,6 +86,7 @@ class ValueInputTypeUI extends Component<Props> {
             disabled={this.props.disabled}
             fullWidth={this.props.fullWidth}
             placeholder={this.props.placeholder}
+            aria-label={this.props.placeholder}
             value={value}
             onChange={this.onChange}
             onBlur={this.onBlur}
@@ -100,6 +104,7 @@ class ValueInputTypeUI extends Component<Props> {
             fullWidth={this.props.fullWidth}
             disabled={this.props.disabled}
             placeholder={this.props.placeholder}
+            aria-label={this.props.placeholder}
             value={value}
             onChange={this.onChange}
             isInvalid={!isEmpty(value) && !validateParams(value, this.props.field)}
@@ -132,6 +137,7 @@ class ValueInputTypeUI extends Component<Props> {
             ]}
             value={value}
             onChange={this.onBoolChange}
+            aria-label={this.props.placeholder}
             className={this.props.className}
             fullWidth={this.props.fullWidth}
             compressed={this.props.compressed}

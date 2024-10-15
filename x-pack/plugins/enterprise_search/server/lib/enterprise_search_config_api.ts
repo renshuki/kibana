@@ -5,7 +5,6 @@
  * 2.0.
  */
 
-import AbortController from 'abort-controller';
 import fetch from 'node-fetch';
 
 import { KibanaRequest, Logger } from '@kbn/core/server';
@@ -43,7 +42,23 @@ export const callEnterpriseSearchConfigAPI = async ({
   log,
   request,
 }: Params): Promise<Return | ResponseError> => {
-  if (!config.host) return {};
+  if (!config.host)
+    // Return Access and Features for when running without `ent-search`
+    return {
+      access: {
+        hasAppSearchAccess: false,
+        hasWorkplaceSearchAccess: false,
+      },
+      features: {
+        hasConnectors: config.hasConnectors,
+        hasDefaultIngestPipeline: config.hasDefaultIngestPipeline,
+        hasDocumentLevelSecurityEnabled: config.hasDocumentLevelSecurityEnabled,
+        hasIncrementalSyncEnabled: config.hasIncrementalSyncEnabled,
+        hasNativeConnectors: config.hasNativeConnectors,
+        hasWebCrawler: config.hasWebCrawler,
+      },
+      kibanaVersion: kibanaPackageJson.version,
+    };
 
   const TIMEOUT_WARNING = `Enterprise Search access check took over ${config.accessCheckTimeoutWarning}ms. Please ensure your Enterprise Search server is responding normally and not adversely impacting Kibana load speeds.`;
   const TIMEOUT_MESSAGE = `Exceeded ${config.accessCheckTimeout}ms timeout while checking ${config.host}. Please consider increasing your enterpriseSearch.accessCheckTimeout value so that users aren't prevented from accessing Enterprise Search plugins due to slow responses.`;
@@ -89,6 +104,14 @@ export const callEnterpriseSearchConfigAPI = async ({
         hasAppSearchAccess: !!data?.current_user?.access?.app_search,
         hasWorkplaceSearchAccess: !!data?.current_user?.access?.workplace_search,
       },
+      features: {
+        hasConnectors: config.hasConnectors,
+        hasDefaultIngestPipeline: config.hasDefaultIngestPipeline,
+        hasDocumentLevelSecurityEnabled: config.hasDocumentLevelSecurityEnabled,
+        hasIncrementalSyncEnabled: config.hasIncrementalSyncEnabled,
+        hasNativeConnectors: config.hasNativeConnectors,
+        hasWebCrawler: config.hasWebCrawler,
+      },
       publicUrl: stripTrailingSlash(data?.settings?.external_url),
       readOnlyMode: !!data?.settings?.read_only_mode,
       searchOAuth: {
@@ -116,6 +139,7 @@ export const callEnterpriseSearchConfigAPI = async ({
       },
       appSearch: {
         accountId: data?.current_user?.app_search?.account?.id,
+        kibanaUIsEnabled: data?.current_user?.app_search?.account?.kibana_uis_enabled || false,
         onboardingComplete: !!data?.current_user?.app_search?.account?.onboarding_complete,
         role: {
           id: data?.current_user?.app_search?.role?.id,
@@ -135,6 +159,8 @@ export const callEnterpriseSearchConfigAPI = async ({
         organization: {
           name: data?.current_user?.workplace_search?.organization?.name,
           defaultOrgName: data?.current_user?.workplace_search?.organization?.default_org_name,
+          kibanaUIsEnabled:
+            data?.current_user?.workplace_search?.organization?.kibana_uis_enabled || false,
         },
         account: {
           id: data?.current_user?.workplace_search?.account?.id,

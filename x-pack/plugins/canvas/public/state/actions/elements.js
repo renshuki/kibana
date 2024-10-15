@@ -7,7 +7,7 @@
 
 import { createAction } from 'redux-actions';
 import immutable from 'object-path-immutable';
-import { get, pick, cloneDeep, without, last, debounce } from 'lodash';
+import { get, pick, cloneDeep, without, last } from 'lodash';
 import { toExpression, safeElementFromExpression } from '@kbn/interpreter';
 import { createThunk } from '../../lib/create_thunk';
 import { isGroupId } from '../../lib/workpad';
@@ -23,9 +23,11 @@ import { getValue as getResolvedArgsValue } from '../selectors/resolved_args';
 import { getDefaultElement } from '../defaults';
 import { ErrorStrings } from '../../../i18n';
 import { subMultitree } from '../../lib/aeroelastic/functional';
-import { pluginServices } from '../../services';
+import { getCanvasExpressionService } from '../../services/canvas_expressions_service';
+import { getCanvasNotifyService } from '../../services/canvas_notify_service';
 import { selectToplevelNodes } from './transient';
 import * as args from './resolved_args';
+import { setFilter } from './filters';
 
 const { actionsElements: strings } = ErrorStrings;
 
@@ -101,7 +103,7 @@ const fetchContextFn = ({ dispatch, getState }, index, element, fullRefresh = fa
 
   const variables = getWorkpadVariablesAsObject(getState());
 
-  const { expressions } = pluginServices.getServices();
+  const expressions = getCanvasExpressionService();
   const elementWithNewAst = set(element, pathToTarget, astChain);
 
   // get context data from a partial AST
@@ -112,13 +114,7 @@ const fetchContextFn = ({ dispatch, getState }, index, element, fullRefresh = fa
     });
 };
 
-// It is necessary to debounce fetching of the context in the situations
-// when the components of the arguments update the expression. For example, suppose there are
-// multiple datacolumns that change the column to the first one from the list after datasource update.
-// In that case, it is necessary to fetch the context only for the last version of the expression.
-const fetchContextFnDebounced = debounce(fetchContextFn, 100);
-
-export const fetchContext = createThunk('fetchContext', fetchContextFnDebounced);
+export const fetchContext = createThunk('fetchContext', fetchContextFn);
 
 const fetchRenderableWithContextFn = ({ dispatch, getState }, element, ast, context) => {
   const argumentPath = [element.id, 'expressionRenderable'];
@@ -135,7 +131,8 @@ const fetchRenderableWithContextFn = ({ dispatch, getState }, element, ast, cont
     });
 
   const variables = getWorkpadVariablesAsObject(getState());
-  const { expressions, notify } = pluginServices.getServices();
+  const expressions = getCanvasExpressionService();
+  const notify = getCanvasNotifyService();
 
   return expressions
     .runInterpreter(ast, context, variables, { castToRender: true })
@@ -148,15 +145,9 @@ const fetchRenderableWithContextFn = ({ dispatch, getState }, element, ast, cont
     });
 };
 
-// It is necessary to debounce fetching of the renderable with the context in the situations
-// when the components of the arguments update the expression. For example, suppose there are
-// multiple datacolumns that change the column to the first one from the list after datasource update.
-// In that case, it is necessary to fetch the context only for the last version of the expression.
-const fetchRenderableWithContextFnDebounced = debounce(fetchRenderableWithContextFn, 100);
-
 export const fetchRenderableWithContext = createThunk(
   'fetchRenderableWithContext',
-  fetchRenderableWithContextFnDebounced
+  fetchRenderableWithContextFn
 );
 
 export const fetchRenderable = createThunk('fetchRenderable', ({ dispatch }, element) => {
@@ -189,7 +180,8 @@ export const fetchAllRenderables = createThunk(
         const argumentPath = [element.id, 'expressionRenderable'];
 
         const variables = getWorkpadVariablesAsObject(getState());
-        const { expressions, notify } = pluginServices.getServices();
+        const expressions = getCanvasExpressionService();
+        const notify = getCanvasNotifyService();
 
         return expressions
           .runInterpreter(ast, null, variables, { castToRender: true })
@@ -272,18 +264,6 @@ export const removeElements = createThunk(
   }
 );
 
-export const setFilter = createThunk(
-  'setFilter',
-  ({ dispatch }, filter, elementId, doRender = true) => {
-    const _setFilter = createAction('setFilter');
-    dispatch(_setFilter({ filter, elementId }));
-
-    if (doRender === true) {
-      dispatch(fetchAllRenderables());
-    }
-  }
-);
-
 export const setExpression = createThunk('setExpression', setExpressionFn);
 function setExpressionFn({ dispatch, getState }, expression, elementId, pageId, doRender = true) {
   // dispatch action to update the element in state
@@ -302,7 +282,11 @@ function setExpressionFn({ dispatch, getState }, expression, elementId, pageId, 
     )
   ) {
     const filter = '';
-    dispatch(setFilter(filter, elementId, pageId, doRender));
+    dispatch(setFilter(filter, elementId, pageId));
+
+    if (doRender) {
+      dispatch(fetchAllRenderables(updatedElement));
+    }
     // setFilter will trigger a re-render so we can skip the fetch here
   } else if (doRender === true) {
     dispatch(fetchRenderable(updatedElement));
@@ -314,7 +298,7 @@ const setAst = createThunk('setAst', ({ dispatch }, ast, element, pageId, doRend
     const expression = toExpression(ast);
     dispatch(setExpression(expression, element.id, pageId, doRender));
   } catch (err) {
-    const notifyService = pluginServices.getServices().notify;
+    const notifyService = getCanvasNotifyService();
     notifyService.error(err);
 
     // TODO: remove this, may have been added just to cause a re-render, but why?

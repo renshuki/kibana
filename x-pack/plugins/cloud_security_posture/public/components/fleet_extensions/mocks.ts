@@ -5,165 +5,179 @@
  * 2.0.
  */
 import type { NewPackagePolicy } from '@kbn/fleet-plugin/public';
-import type { PackagePolicy } from '@kbn/fleet-plugin/common';
+import type { PackageInfo, PackagePolicyConfigRecord } from '@kbn/fleet-plugin/common';
 import { createNewPackagePolicyMock } from '@kbn/fleet-plugin/common/mocks';
-import { BenchmarkId } from '../../../common/types';
-import { CLOUDBEAT_EKS, CLOUDBEAT_VANILLA } from '../../../common/constants';
-import type { PostureInput } from '../../../common/types';
+import { RegistryRelease, RegistryVarType } from '@kbn/fleet-plugin/common/types';
+import {
+  CLOUDBEAT_GCP,
+  CLOUDBEAT_AZURE,
+  CLOUDBEAT_EKS,
+  CLOUDBEAT_VANILLA,
+  CLOUDBEAT_AWS,
+  CLOUDBEAT_VULN_MGMT_AWS,
+} from '../../../common/constants';
+import type { PostureInput } from '../../../common/types_old';
 
-export const getCspNewPolicyMock = (type: BenchmarkId = 'cis_k8s'): NewPackagePolicy => ({
-  name: 'some-cloud_security_posture-policy',
-  description: '',
-  namespace: 'default',
-  policy_id: '',
-  enabled: true,
-  inputs: [
-    {
-      type: CLOUDBEAT_VANILLA,
-      policy_template: 'kspm',
-      enabled: type === 'cis_k8s',
-      streams: [
-        {
-          enabled: type === 'cis_k8s',
-          data_stream: {
-            type: 'logs',
-            dataset: 'cloud_security_posture.findings',
-          },
-        },
-      ],
-    },
-    {
-      type: CLOUDBEAT_EKS,
-      policy_template: 'kspm',
-      enabled: type === 'cis_eks',
-      streams: [
-        {
-          enabled: type === 'cis_eks',
-          data_stream: {
-            type: 'logs',
-            dataset: 'cloud_security_posture.findings',
-          },
-          vars: {
-            access_key_id: {
-              type: 'text',
-            },
-            secret_access_key: {
-              type: 'text',
-            },
-            session_token: {
-              type: 'text',
-            },
-            shared_credential_file: {
-              type: 'text',
-            },
-            credential_profile_name: {
-              type: 'text',
-            },
-            role_arn: {
-              type: 'text',
-            },
-          },
-        },
-      ],
-    },
-  ],
-  package: {
-    name: 'cloud_security_posture',
-    title: 'Kubernetes Security Posture Management',
-    version: '0.0.21',
-  },
-  vars: {
-    runtimeCfg: {
-      type: 'yaml',
-    },
-  },
-});
+export const getMockPolicyAWS = (vars?: PackagePolicyConfigRecord) =>
+  getPolicyMock(CLOUDBEAT_AWS, 'cspm', 'aws', vars);
+export const getMockPolicyGCP = (vars?: PackagePolicyConfigRecord) =>
+  getPolicyMock(CLOUDBEAT_GCP, 'cspm', 'gcp', vars);
+export const getMockPolicyAzure = (vars?: PackagePolicyConfigRecord) =>
+  getPolicyMock(CLOUDBEAT_AZURE, 'cspm', 'azure', vars);
+export const getMockPolicyK8s = () => getPolicyMock(CLOUDBEAT_VANILLA, 'kspm', 'self_managed');
+export const getMockPolicyEKS = (vars?: PackagePolicyConfigRecord) =>
+  getPolicyMock(CLOUDBEAT_EKS, 'kspm', 'eks', vars);
+export const getMockPolicyVulnMgmtAWS = () =>
+  getPolicyMock(CLOUDBEAT_VULN_MGMT_AWS, 'vuln_mgmt', 'aws');
+export const getMockPackageInfo = () => getPackageInfoMock();
 
-export const getCspPolicyMock = (type: BenchmarkId = 'cis_k8s'): PackagePolicy => ({
-  ...getCspNewPolicyMock(type),
-  id: 'c6d16e42-c32d-4dce-8a88-113cfe276ad1',
-  version: 'abcd',
-  revision: 1,
-  updated_at: '2020-06-25T16:03:38.159292',
-  updated_by: 'kibana',
-  created_at: '2020-06-25T16:03:38.159292',
-  created_by: 'kibana',
-  inputs: [
-    {
-      policy_template: 'kspm',
-      streams: [
-        {
-          compiled_stream: {
-            data_yaml: {
-              activated_rules: {
-                cis_k8s: [],
-                cis_eks: ['cis_3_1_4'],
+export const getMockPackageInfoVulnMgmtAWS = () => {
+  return {
+    policy_templates: [
+      {
+        title: '',
+        description: '',
+        name: 'vuln_mgmt',
+        inputs: [
+          {
+            type: 'cloudbeat/vuln_mgmt_aws',
+            title: '',
+            description: '',
+            vars: [
+              {
+                type: 'text',
+                name: 'cloud_formation_template',
+                default: 's3_url',
+                show_user: false,
               },
-            },
-            name: 'Findings',
-            processors: [{ add_cluster_id: null }],
+            ],
           },
-          data_stream: {
-            type: 'logs',
-            dataset: 'cloud_security_posture.findings',
-          },
-          id: 'cloudbeat/vanilla-cloud_security_posture.findings-de97ed6f-5024-46af-a4f9-9acd7bd012d8',
-          enabled: true,
-        },
-      ],
-      type: CLOUDBEAT_VANILLA,
-      enabled: type === 'cis_k8s',
-    },
-    {
-      policy_template: 'kspm',
-      streams: [
-        {
-          data_stream: {
-            type: 'logs',
-            dataset: 'cloud_security_posture.findings',
-          },
-          vars: {
-            access_key_id: {
-              type: 'text',
-            },
-            session_token: {
-              type: 'text',
-            },
-            secret_access_key: {
-              type: 'text',
-            },
-          },
-          id: 'cloudbeat/eks-cloud_security_posture.findings-de97ed6f-5024-46af-a4f9-9acd7bd012d8',
-          enabled: false,
-        },
-      ],
-      type: CLOUDBEAT_EKS,
-      enabled: type === 'cis_eks',
-    },
-  ],
-  vars: {
-    dataYaml: {
-      type: 'yaml',
-      value: 'data_yaml:\n  activated_rules:\n    cis_k8s: []\n    cis_eks:\n      - cis_3_1_4\n ',
-    },
-  },
-});
+        ],
+      },
+    ],
+  } as PackageInfo;
+};
 
-export const getMockPolicyAWS = () => getPolicyMock('cloudbeat/cis_aws');
-export const getMockPolicyK8s = () => getPolicyMock('cloudbeat/cis_k8s');
-export const getMockPolicyEKS = () => getPolicyMock('cloudbeat/cis_eks');
+export const getMockPackageInfoCspmAWS = (packageVersion = '1.5.0') => {
+  return {
+    version: packageVersion,
+    name: 'cspm',
+    policy_templates: [
+      {
+        title: '',
+        description: '',
+        name: 'cspm',
+        inputs: [
+          {
+            type: CLOUDBEAT_AWS,
+            title: '',
+            description: '',
+            vars: [
+              {
+                type: 'text',
+                name: 'cloud_formation_template',
+                default: 's3_url',
+                show_user: false,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  } as PackageInfo;
+};
 
-const getPolicyMock = (type: PostureInput): NewPackagePolicy => {
+export const getMockPackageInfoCspmGCP = (packageVersion = '1.5.2') => {
+  return {
+    version: packageVersion,
+    name: 'cspm',
+    policy_templates: [
+      {
+        title: '',
+        description: '',
+        name: 'cspm',
+        inputs: [
+          {
+            type: CLOUDBEAT_GCP,
+            title: 'GCP',
+            description: '',
+            vars: [{}],
+          },
+        ],
+      },
+    ],
+  } as PackageInfo;
+};
+
+export const getMockPackageInfoCspmAzure = (packageVersion = '1.6.0') => {
+  return {
+    version: packageVersion,
+    name: 'cspm',
+    policy_templates: [
+      {
+        title: '',
+        description: '',
+        name: 'cspm',
+        inputs: [
+          {
+            type: CLOUDBEAT_AZURE,
+            title: 'Azure',
+            description: '',
+            vars: [{}],
+          },
+        ],
+      },
+    ],
+  } as PackageInfo;
+};
+
+const getPolicyMock = (
+  type: PostureInput,
+  posture: string,
+  deployment: string,
+  vars: object = {}
+): NewPackagePolicy => {
   const mockPackagePolicy = createNewPackagePolicyMock();
 
   const awsVarsMock = {
     access_key_id: { type: 'text' },
-    secret_access_key: { type: 'text' },
+    secret_access_key: { type: 'password', isSecret: true },
+    session_token: { type: 'text' },
+    shared_credential_file: { type: 'text' },
+    credential_profile_name: { type: 'text' },
+    role_arn: { type: 'text' },
+    'aws.credentials.type': { value: 'cloud_formation', type: 'text' },
+  };
+
+  const eksVarsMock = {
+    access_key_id: { type: 'text' },
+    secret_access_key: { type: 'password', isSecret: true },
     session_token: { type: 'text' },
     shared_credential_file: { type: 'text' },
     credential_profile_name: { type: 'text' },
     role_arn: { type: 'text' },
     'aws.credentials.type': { value: 'assume_role', type: 'text' },
+  };
+
+  const gcpVarsMock = {
+    'gcp.project_id': { type: 'text' },
+    'gcp.organization_id': { type: 'text' },
+    'gcp.credentials.file': { type: 'text' },
+    'gcp.credentials.json': { type: 'text' },
+    'gcp.credentials.type': { type: 'text' },
+    'gcp.account_type': { value: 'organization-account', type: 'text' },
+  };
+
+  const azureVarsMock = {
+    'azure.credentials.type': { value: 'arm_template', type: 'text' },
+    'azure.account_type': { type: 'text' },
+    'azure.credentials.tenant_id': { type: 'text' },
+    'azure.credentials.client_id': { type: 'text' },
+    'azure.credentials.client_secret': { type: 'text' },
+    'azure.credentials.client_certificate_path': { type: 'text' },
+    'azure.credentials.client_certificate_password': { type: 'text' },
+    'azure.credentials.client_username': { type: 'text' },
+    'azure.credentials.client_password': { type: 'text' },
   };
 
   const dataStream = { type: 'logs', dataset: 'cloud_security_posture.findings' };
@@ -178,46 +192,164 @@ const getPolicyMock = (type: PostureInput): NewPackagePolicy => {
     },
     vars: {
       posture: {
-        value: type === 'cloudbeat/cis_k8s' || type === 'cloudbeat/cis_eks' ? 'kspm' : 'cspm',
+        value: posture,
         type: 'text',
       },
-      deployment: { value: type, type: 'text' },
+      deployment: { value: deployment, type: 'text' },
     },
     inputs: [
       {
-        type: 'cloudbeat/cis_k8s',
+        type: CLOUDBEAT_VANILLA,
         policy_template: 'kspm',
-        enabled: type === 'cloudbeat/cis_k8s',
-        streams: [{ enabled: type === 'cloudbeat/cis_k8s', data_stream: dataStream }],
+        enabled: type === CLOUDBEAT_VANILLA,
+        streams: [{ enabled: type === CLOUDBEAT_VANILLA, data_stream: dataStream }],
       },
       {
-        type: 'cloudbeat/cis_eks',
+        type: CLOUDBEAT_EKS,
         policy_template: 'kspm',
-        enabled: type === 'cloudbeat/cis_eks',
+        enabled: type === CLOUDBEAT_EKS,
         streams: [
-          { enabled: type === 'cloudbeat/cis_eks', data_stream: dataStream, vars: awsVarsMock },
+          {
+            enabled: type === CLOUDBEAT_EKS,
+            data_stream: dataStream,
+            vars: { ...eksVarsMock, ...vars },
+          },
         ],
       },
       {
-        type: 'cloudbeat/cis_aws',
+        type: CLOUDBEAT_AWS,
         policy_template: 'cspm',
-        enabled: type === 'cloudbeat/cis_aws',
+        enabled: type === CLOUDBEAT_AWS,
         streams: [
-          { enabled: type === 'cloudbeat/cis_aws', data_stream: dataStream, vars: awsVarsMock },
+          {
+            enabled: type === CLOUDBEAT_AWS,
+            data_stream: dataStream,
+            vars: { ...awsVarsMock, ...vars },
+          },
         ],
       },
       {
-        type: 'cloudbeat/cis_gcp',
+        type: CLOUDBEAT_GCP,
         policy_template: 'cspm',
-        enabled: false,
-        streams: [{ enabled: false, data_stream: dataStream }],
+        enabled: type === CLOUDBEAT_GCP,
+        streams: [
+          {
+            enabled: type === CLOUDBEAT_GCP,
+            data_stream: dataStream,
+            vars: { ...gcpVarsMock, ...vars },
+          },
+        ],
       },
       {
-        type: 'cloudbeat/cis_azure',
+        type: CLOUDBEAT_AZURE,
         policy_template: 'cspm',
-        enabled: false,
-        streams: [{ enabled: false, data_stream: dataStream }],
+        enabled: type === CLOUDBEAT_AZURE,
+        streams: [
+          {
+            enabled: type === CLOUDBEAT_AZURE,
+            data_stream: dataStream,
+            vars: { ...azureVarsMock, ...vars },
+          },
+        ],
+      },
+      {
+        type: CLOUDBEAT_VULN_MGMT_AWS,
+        policy_template: 'vuln_mgmt',
+        enabled: type === CLOUDBEAT_VULN_MGMT_AWS,
+        streams: [{ enabled: type === CLOUDBEAT_VULN_MGMT_AWS, data_stream: dataStream }],
       },
     ],
+  };
+};
+
+export const getPackageInfoMock = () => {
+  return {
+    data_streams: [
+      {
+        dataset: 'cloud_security_posture.findings',
+        type: 'logs',
+
+        package: 'cloud_security_posture',
+        path: 'findings',
+        release: 'ga' as RegistryRelease,
+
+        title: 'Cloud Security Posture Findings',
+        streams: [
+          {
+            input: 'cloudbeat/cis_aws',
+            template_path: 'aws.yml.hbs',
+            title: 'CIS AWS Benchmark',
+            vars: [
+              {
+                name: 'secret_access_key',
+                title: 'Secret Access Key',
+                secret: true,
+                type: 'text' as RegistryVarType,
+              },
+            ],
+          },
+          {
+            input: 'cloudbeat/cis_eks',
+            template_path: 'eks.yml.hbs',
+            title: 'Amazon EKS Benchmark',
+            vars: [
+              {
+                name: 'secret_access_key',
+                title: 'Secret Access Key',
+                secret: true,
+                type: 'text' as RegistryVarType,
+              },
+            ],
+          },
+          {
+            input: 'cloudbeat/cis_azure',
+            template_path: 'azure.yml.hbs',
+            title: 'CIS Azure Benchmark',
+            vars: [
+              {
+                multi: false,
+                name: 'azure.credentials.client_secret',
+                required: false,
+                secret: true,
+                show_user: true,
+                title: 'Client Secret',
+                type: 'text' as RegistryVarType,
+              },
+              {
+                multi: false,
+                name: 'azure.credentials.client_password',
+                required: false,
+                secret: true,
+                show_user: true,
+                title: 'Client Password',
+                type: 'text' as RegistryVarType,
+              },
+              {
+                multi: false,
+                name: 'azure.credentials.client_certificate_password',
+                required: false,
+                secret: true,
+                show_user: true,
+                title: 'Client Certificate Password',
+                type: 'text' as RegistryVarType,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    format_version: '3.0.0',
+    version: '1.9.0-preview109',
+    name: 'cloud_security_posture',
+    description: 'Identify & remediate configuration risks in your Cloud infrastructure',
+    owner: {
+      github: 'elastic/cloud-security-posture',
+      type: 'elastic' as 'elastic' | 'partner' | 'community' | undefined,
+    },
+    title: 'Security Posture Management',
+    latestVersion: '1.9.0',
+    assets: {
+      kibana: {},
+    },
   };
 };

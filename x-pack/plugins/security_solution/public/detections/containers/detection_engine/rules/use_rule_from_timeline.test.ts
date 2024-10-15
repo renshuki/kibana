@@ -10,17 +10,19 @@ import { act, renderHook } from '@testing-library/react-hooks';
 import { useRuleFromTimeline } from './use_rule_from_timeline';
 import { useGetInitialUrlParamValue } from '../../../../common/utils/global_query_string/helpers';
 import { resolveTimeline } from '../../../../timelines/containers/api';
-import { useSourcererDataView } from '../../../../common/containers/sourcerer';
-import { mockSourcererScope } from '../../../../common/containers/sourcerer/mocks';
+import { useSourcererDataView } from '../../../../sourcerer/containers';
+import { mockSourcererScope } from '../../../../sourcerer/containers/mocks';
 import { useAppToasts } from '../../../../common/hooks/use_app_toasts';
 import { useAppToastsMock } from '../../../../common/hooks/use_app_toasts.mock';
 import { mockTimeline } from '../../../../../server/lib/timeline/__mocks__/create_timelines';
 import type { TimelineModel } from '../../../..';
 
+jest.mock('../../../../common/hooks/use_experimental_features');
 jest.mock('../../../../common/utils/global_query_string/helpers');
 jest.mock('../../../../timelines/containers/api');
 jest.mock('../../../../common/hooks/use_app_toasts');
-jest.mock('../../../../common/containers/sourcerer');
+jest.mock('../../../../sourcerer/containers');
+jest.mock('../../../../common/components/discover_in_timeline/use_discover_in_timeline_context');
 jest.mock('../../../../common/components/link_to', () => {
   const originalModule = jest.requireActual('../../../../common/components/link_to');
   return {
@@ -177,6 +179,9 @@ describe('useRuleFromTimeline', () => {
     });
 
     it('when from timeline data view id === selected data view id and browser fields is not empty, set rule data to match from timeline query', async () => {
+      (useGetInitialUrlParamValue as jest.Mock)
+        .mockReturnValueOnce(() => timelineId)
+        .mockReturnValue(() => undefined);
       const { result, waitForNextUpdate } = renderHook(() => useRuleFromTimeline(setRuleQuery));
       expect(result.current.loading).toEqual(true);
       await waitForNextUpdate();
@@ -219,6 +224,45 @@ describe('useRuleFromTimeline', () => {
           query: { query: 'host.name:* AND user.name:*', language: 'kuery' },
           saved_id: null,
         },
+      });
+    });
+
+    it('when timeline has eql, set rule data to match from eql query', async () => {
+      const eqlOptions = {
+        eventCategoryField: 'category',
+        tiebreakerField: '',
+        timestampField: '@timestamp',
+        query: 'find it EQL',
+        size: 100,
+      };
+      const eqlTimeline = {
+        data: {
+          timeline: {
+            ...mockTimeline,
+            id: timelineId,
+            savedObjectId: timelineId,
+            indexNames: ['awesome-*'],
+            dataViewId: 'custom-data-view-id',
+            eqlOptions,
+          },
+        },
+      };
+      (resolveTimeline as jest.Mock).mockResolvedValue(eqlTimeline);
+      (useGetInitialUrlParamValue as jest.Mock)
+        .mockReturnValueOnce(() => undefined)
+        .mockReturnValue(() => timelineId);
+      const { result, waitForNextUpdate } = renderHook(() => useRuleFromTimeline(setRuleQuery));
+      expect(result.current.loading).toEqual(true);
+      await waitForNextUpdate();
+      expect(result.current.loading).toEqual(false);
+      expect(setRuleQuery).toHaveBeenCalledWith({
+        index: ['awesome-*'],
+        queryBar: {
+          filters: [],
+          query: { query: 'find it EQL', language: 'eql' },
+          saved_id: null,
+        },
+        eqlOptions,
       });
     });
 

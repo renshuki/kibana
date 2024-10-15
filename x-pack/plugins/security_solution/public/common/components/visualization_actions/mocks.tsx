@@ -7,15 +7,7 @@
 import React from 'react';
 import { cloneDeep } from 'lodash/fp';
 
-import {
-  TestProviders,
-  mockGlobalState,
-  SUB_PLUGINS_REDUCER,
-  kibanaObservable,
-  createSecuritySolutionStorageMock,
-} from '../../mock';
-import type { State } from '../../store';
-import { createStore } from '../../store';
+import { TestProviders, mockGlobalState, createMockStore } from '../../mock';
 import type { LensAttributes } from './types';
 
 export const queryFromSearchBar = {
@@ -43,13 +35,8 @@ export const filterFromSearchBar = [
   },
 ];
 
-export const mockCreateStoreWithQueryFilters = () => {
-  const { storage } = createSecuritySolutionStorageMock();
-
-  const state: State = mockGlobalState;
-
-  const myState = cloneDeep(state);
-
+const mockCreateStoreWithQueryFilters = () => {
+  const myState = cloneDeep(mockGlobalState);
   myState.inputs = {
     ...myState.inputs,
     global: {
@@ -58,7 +45,7 @@ export const mockCreateStoreWithQueryFilters = () => {
       filters: filterFromSearchBar,
     },
   };
-  return createStore(myState, SUB_PLUGINS_REDUCER, kibanaObservable, storage);
+  return createMockStore(myState);
 };
 
 export const wrapper = ({ children }: { children: React.ReactElement }) => (
@@ -129,3 +116,50 @@ export const mockAttributes: LensAttributes = {
     },
   ],
 };
+
+export const mockExtraFilter = [
+  {
+    meta: {
+      type: 'phrases',
+      key: '_index',
+      params: ['.alerts-security.alerts-default'],
+      alias: null,
+      negate: false,
+      disabled: false,
+    },
+    query: {
+      bool: {
+        should: [
+          {
+            match_phrase: {
+              _index: '.alerts-security.alerts-default',
+            },
+          },
+        ],
+        minimum_should_match: 1,
+      },
+    },
+  },
+];
+
+export const mockRulePreviewFilter = (internalReferenceId: string, ruleId: string) => [
+  {
+    meta: {
+      disabled: false,
+      negate: false,
+      alias: null,
+      index: internalReferenceId,
+      key: 'kibana.alert.rule.uuid',
+      field: 'kibana.alert.rule.uuid',
+      params: {
+        query: ruleId,
+      },
+      type: 'phrase',
+    },
+    query: {
+      match_phrase: {
+        'kibana.alert.rule.uuid': ruleId,
+      },
+    },
+  },
+];

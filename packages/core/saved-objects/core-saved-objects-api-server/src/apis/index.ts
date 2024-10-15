@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 export type {
@@ -35,6 +36,7 @@ export type {
   SavedObjectReferenceWithContext,
   SavedObjectsCollectMultiNamespaceReferencesResponse,
   SavedObjectsCollectMultiNamespaceReferencesOptions,
+  SavedObjectsCollectMultiNamespaceReferencesPurpose,
 } from './collect_multinamespace_references';
 export type { SavedObjectsCreateOptions } from './create';
 export type {
@@ -52,6 +54,7 @@ export type {
   SavedObjectsFindResult,
   SavedObjectsPitParams,
 } from './find';
+export type { SavedObjectsGetOptions } from './get';
 export type {
   SavedObjectsIncrementCounterField,
   SavedObjectsIncrementCounterOptions,
@@ -64,7 +67,7 @@ export type {
   SavedObjectsRemoveReferencesToOptions,
   SavedObjectsRemoveReferencesToResponse,
 } from './remove_references_to';
-export type { SavedObjectsResolveResponse } from './resolve';
+export type { SavedObjectsResolveOptions, SavedObjectsResolveResponse } from './resolve';
 export type { SavedObjectsUpdateResponse, SavedObjectsUpdateOptions } from './update';
 export type {
   SavedObjectsUpdateObjectsSpacesObject,

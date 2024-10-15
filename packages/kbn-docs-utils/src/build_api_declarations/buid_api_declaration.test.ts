@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import Path from 'path';
@@ -48,7 +49,7 @@ it('Test number primitive doc def', () => {
   const def = buildApiDeclarationTopNode(node!, {
     plugins,
     log,
-    currentPluginId: plugins[0].manifest.id,
+    currentPluginId: plugins[0].id,
     scope: ApiScope.CLIENT,
     captureReferences: false,
   });
@@ -62,7 +63,7 @@ it('Test a constructor type declaration inside an interface', () => {
   const def = buildApiDeclarationTopNode(node!, {
     plugins,
     log,
-    currentPluginId: plugins[0].manifest.id,
+    currentPluginId: plugins[0].id,
     scope: ApiScope.CLIENT,
     captureReferences: false,
   });
@@ -80,7 +81,7 @@ it('Function type is exported as type with signature', () => {
   const def = buildApiDeclarationTopNode(node!, {
     plugins,
     log,
-    currentPluginId: plugins[0].manifest.id,
+    currentPluginId: plugins[0].id,
     scope: ApiScope.CLIENT,
     captureReferences: false,
   });
@@ -95,7 +96,7 @@ it('Test Interface Kind doc def', () => {
   const def = buildApiDeclarationTopNode(node!, {
     plugins,
     log,
-    currentPluginId: plugins[0].manifest.id,
+    currentPluginId: plugins[0].id,
     scope: ApiScope.CLIENT,
     captureReferences: false,
   });
@@ -111,7 +112,7 @@ it('Test union export', () => {
   const def = buildApiDeclarationTopNode(node!, {
     plugins,
     log,
-    currentPluginId: plugins[0].manifest.id,
+    currentPluginId: plugins[0].id,
     scope: ApiScope.CLIENT,
     captureReferences: false,
   });
@@ -124,7 +125,7 @@ it('Function inside interface has a label', () => {
   const def = buildApiDeclarationTopNode(node!, {
     plugins,
     log,
-    currentPluginId: plugins[0].manifest.id,
+    currentPluginId: plugins[0].id,
     scope: ApiScope.CLIENT,
     captureReferences: false,
   });
@@ -142,7 +143,7 @@ it.skip('Test ReactElement signature', () => {
   const def = buildApiDeclarationTopNode(node!, {
     plugins,
     log,
-    currentPluginId: plugins[0].manifest.id,
+    currentPluginId: plugins[0].id,
     scope: ApiScope.CLIENT,
     captureReferences: false,
   });

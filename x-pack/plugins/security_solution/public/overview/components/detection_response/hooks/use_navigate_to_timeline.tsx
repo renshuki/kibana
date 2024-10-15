@@ -5,18 +5,20 @@
  * 2.0.
  */
 
-import { useCallback, useMemo } from 'react';
-import { useDispatch } from 'react-redux';
+import { useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { v4 as uuidv4 } from 'uuid';
-
-import { useDeepEqualSelector } from '../../../../common/hooks/use_selector';
-import { SourcererScopeName } from '../../../../common/store/sourcerer/model';
-import { sourcererActions } from '../../../../common/store/sourcerer';
-import { getDataProvider } from '../../../../common/components/event_details/table/use_action_cell_data_provider';
+import { SourcererScopeName } from '../../../../sourcerer/store/model';
+import { sourcererActions } from '../../../../sourcerer/store';
+import {
+  getDataProvider,
+  getDataProviderAnd,
+} from '../../../../common/components/event_details/use_action_cell_data_provider';
 import type { DataProvider, QueryOperator } from '../../../../../common/types/timeline';
-import { TimelineId, TimelineType } from '../../../../../common/types/timeline';
-import { useCreateTimeline } from '../../../../timelines/components/timeline/properties/use_create_timeline';
-import { updateProviders } from '../../../../timelines/store/timeline/actions';
+import { TimelineId } from '../../../../../common/types/timeline';
+import { TimelineTypeEnum } from '../../../../../common/api/timeline';
+import { useCreateTimeline } from '../../../../timelines/hooks/use_create_timeline';
+import { updateProviders } from '../../../../timelines/store/actions';
 import { sourcererSelectors } from '../../../../common/store';
 import type { TimeRange } from '../../../../common/store/inputs/model';
 
@@ -29,23 +31,18 @@ export interface Filter {
 export const useNavigateToTimeline = () => {
   const dispatch = useDispatch();
 
-  const getDataViewsSelector = useMemo(
-    () => sourcererSelectors.getSourcererDataViewsSelector(),
-    []
-  );
-  const { defaultDataView, signalIndexName } = useDeepEqualSelector((state) =>
-    getDataViewsSelector(state)
-  );
+  const signalIndexName = useSelector(sourcererSelectors.signalIndexName);
+  const defaultDataView = useSelector(sourcererSelectors.defaultDataView);
 
   const clearTimeline = useCreateTimeline({
     timelineId: TimelineId.active,
-    timelineType: TimelineType.default,
+    timelineType: TimelineTypeEnum.default,
   });
 
   const navigateToTimeline = useCallback(
-    (dataProviders: DataProvider[], timeRange?: TimeRange) => {
+    async (dataProviders: DataProvider[], timeRange?: TimeRange) => {
       // Reset the current timeline
-      clearTimeline({ timeRange });
+      await clearTimeline({ timeRange });
       // Update the timeline's providers to match the current prevalence field query
       dispatch(
         updateProviders({
@@ -74,7 +71,7 @@ export const useNavigateToTimeline = () => {
    * @param timeRange Defines the timeline time range field and removes the time range lock
    */
   const openTimelineWithFilters = useCallback(
-    (filters: Array<[...Filter[]]>, timeRange?: TimeRange) => {
+    async (filters: Array<[...Filter[]]>, timeRange?: TimeRange) => {
       const dataProviders = [];
 
       for (const orFilterGroup of filters) {
@@ -90,13 +87,14 @@ export const useNavigateToTimeline = () => {
 
           for (const filter of orFilterGroup.slice(1)) {
             dataProvider.and.push(
-              getDataProvider(filter.field, uuidv4(), filter.value, filter.operator)
+              getDataProviderAnd(filter.field, uuidv4(), filter.value, filter.operator)
             );
           }
           dataProviders.push(dataProvider);
         }
       }
-      navigateToTimeline(dataProviders, timeRange);
+
+      await navigateToTimeline(dataProviders, timeRange);
     },
     [navigateToTimeline]
   );

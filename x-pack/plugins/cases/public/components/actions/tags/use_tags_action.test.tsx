@@ -79,10 +79,9 @@ describe('useTagsAction', () => {
     await waitFor(() => {
       expect(result.current.isFlyoutOpen).toBe(false);
       expect(onActionSuccess).toHaveBeenCalled();
-      expect(updateSpy).toHaveBeenCalledWith(
-        [{ tags: ['coke', 'one'], id: basicCase.id, version: basicCase.version }],
-        expect.anything()
-      );
+      expect(updateSpy).toHaveBeenCalledWith({
+        cases: [{ tags: ['coke', 'one'], id: basicCase.id, version: basicCase.version }],
+      });
     });
   });
 
@@ -105,9 +104,10 @@ describe('useTagsAction', () => {
     });
 
     await waitFor(() => {
-      expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith(
-        'Edited case'
-      );
+      expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith({
+        title: 'Edited case',
+        className: 'eui-textBreakWord',
+      });
     });
   });
 
@@ -130,9 +130,10 @@ describe('useTagsAction', () => {
     });
 
     await waitFor(() => {
-      expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith(
-        'Edited 2 cases'
-      );
+      expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith({
+        title: 'Edited 2 cases',
+        className: 'eui-textBreakWord',
+      });
     });
   });
 });

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types';
@@ -33,20 +34,24 @@ export const REMOVED_TYPES: string[] = [
   'osquery-usage-metric',
   // Was removed in 8.1 https://github.com/elastic/kibana/issues/91265
   'siem-detection-engine-rule-status',
+  // Was removed in 8.7 https://github.com/elastic/kibana/issues/130966
+  'siem-detection-engine-rule-execution-info',
   // Was removed in 7.16
   'timelion-sheet',
   // Removed in 8.3 https://github.com/elastic/kibana/issues/127745
   'ui-counter',
   // Deprecated, no longer used since 7.13 https://github.com/elastic/kibana/pull/94923/files
   'application_usage_transactional',
+  // Removed in 7.8.1 / 7.9.0 https://github.com/elastic/kibana/pull/69871
+  'maps-telemetry',
   // Deprecated, no longer used since 8.7 https://github.com/elastic/kibana/pull/148530
   'csp_rule',
+  // Removed in 8.8 https://github.com/elastic/kibana/pull/151116
+  'upgrade-assistant-telemetry',
+  // Removed in 8.8 https://github.com/elastic/kibana/pull/155204
+  'endpoint:user-artifact',
 ].sort();
 
-// When migrating from the outdated index we use a read query which excludes
-// saved objects which are no longer used. These saved objects will still be
-// kept in the outdated index for backup purposes, but won't be available in
-// the upgraded index.
 export const excludeUnusedTypesQuery: QueryDslQueryContainer = {
   bool: {
     must_not: [
@@ -55,23 +60,6 @@ export const excludeUnusedTypesQuery: QueryDslQueryContainer = {
           type: typeName,
         },
       })),
-      // https://github.com/elastic/kibana/issues/96131
-      {
-        bool: {
-          must: [
-            {
-              match: {
-                type: 'search-session',
-              },
-            },
-            {
-              match: {
-                'search-session.persisted': false,
-              },
-            },
-          ],
-        },
-      },
     ],
   },
 };

@@ -7,8 +7,10 @@
 
 import { Logger } from '@kbn/core/server';
 import { map } from 'lodash';
+import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { Subject, race, from } from 'rxjs';
-import { bufferWhen, filter, bufferCount, flatMap, mapTo, first } from 'rxjs/operators';
+import { bufferWhen, filter, bufferCount, flatMap, mapTo, first } from 'rxjs';
+import { SavedObjectError } from '@kbn/core-saved-objects-common';
 import { either, Result, asOk, asErr, Ok, Err } from './result_type';
 
 export interface BufferOptions {
@@ -21,36 +23,31 @@ export interface Entity {
   id: string;
 }
 
-export interface OperationError<Input, ErrorOutput> {
-  entity: Input;
-  error: ErrorOutput;
+export interface ErrorOutput {
+  type: string;
+  id: string;
+  status?: number;
+  error: SavedObjectError | estypes.ErrorCause;
 }
 
-export type OperationResult<Input, ErrorOutput, Output = Input> = Result<
-  Output,
-  OperationError<Input, ErrorOutput>
->;
+export type OperationResult<T> = Result<T, ErrorOutput>;
 
-export type Operation<Input, ErrorOutput, Output = Input> = (
-  entity: Input
-) => Promise<Result<Output, ErrorOutput>>;
+export type Operation<T> = (entity: T) => Promise<Result<T, ErrorOutput>>;
 
-export type BulkOperation<Input, ErrorOutput, Output = Input> = (
-  entities: Input[]
-) => Promise<Array<OperationResult<Input, ErrorOutput, Output>>>;
+export type BulkOperation<T> = (entities: T[]) => Promise<Array<OperationResult<T>>>;
 
 const DONT_FLUSH = false;
 const FLUSH = true;
 
-export function createBuffer<Input extends Entity, ErrorOutput, Output extends Entity = Input>(
-  bulkOperation: BulkOperation<Input, ErrorOutput, Output>,
-  { bufferMaxDuration = 0, bufferMaxOperations = Number.MAX_VALUE, logger }: BufferOptions = {}
-): Operation<Input, ErrorOutput, Output> {
+export function createBuffer<T extends Entity>(
+  bulkOperation: BulkOperation<T>,
+  { bufferMaxDuration = 0, bufferMaxOperations = Number.MAX_VALUE, logger }: BufferOptions
+): Operation<T> {
   const flushBuffer = new Subject<void>();
 
   const storeUpdateBuffer = new Subject<{
-    entity: Input;
-    onSuccess: (entity: Ok<Output>) => void;
+    entity: T;
+    onSuccess: (entity: Ok<T>) => void;
     onFailure: (error: Err<ErrorOutput | Error>) => void;
   }>();
 
@@ -82,17 +79,15 @@ export function createBuffer<Input extends Entity, ErrorOutput, Output extends E
                   }
                 );
               },
-              ({ entity, error }: OperationError<Input, ErrorOutput>) => {
+              (error: ErrorOutput) => {
                 either(
-                  pullFirstWhere(bufferedEntities, ({ entity: { id } }) => id === entity.id),
+                  pullFirstWhere(bufferedEntities, ({ entity: { id } }) => id === error.id),
                   ({ onFailure }) => {
                     onFailure(asErr(error));
                   },
                   () => {
                     if (logger) {
-                      logger.warn(
-                        `Unhandled failed Bulk Operation result: ${entity?.id ? entity.id : entity}`
-                      );
+                      logger.warn(`Unhandled failed Bulk Operation result: ${error.id}`);
                     }
                   }
                 );
@@ -148,7 +143,7 @@ export function createBuffer<Input extends Entity, ErrorOutput, Output extends E
       error: flushAndResetCounter,
     });
 
-  return async function (entity: Input) {
+  return async function (entity: T) {
     return new Promise((resolve, reject) => {
       storeUpdateBuffer.next({ entity, onSuccess: resolve, onFailure: reject });
     });

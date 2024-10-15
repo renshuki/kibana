@@ -4,42 +4,55 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-import { CamelToSnake, RewriteRequestCase } from './rewrite_request_case';
-import { RuleAction } from '../../types';
+import { TypeOf } from '@kbn/config-schema/src/types/object_type';
+import { omit } from 'lodash';
+import { NormalizedAlertAction, NormalizedSystemAction } from '../../rules_client';
+import { actionsSchema, systemActionsSchema } from './actions_schema';
 
-type ReqRuleAction = Omit<RuleAction, 'actionTypeId' | 'frequency'> & {
-  frequency?: {
-    [K in keyof NonNullable<RuleAction['frequency']> as CamelToSnake<K>]: NonNullable<
-      RuleAction['frequency']
-    >[K];
-  };
-};
-export const rewriteActionsReq: (
-  actions?: ReqRuleAction[]
-) => Array<Omit<RuleAction, 'actionTypeId'>> = (actions) => {
-  const rewriteFrequency: RewriteRequestCase<NonNullable<RuleAction['frequency']>> = ({
-    notify_when: notifyWhen,
-    ...rest
-  }) => ({ ...rest, notifyWhen });
+export const rewriteActionsReq = (
+  actions: TypeOf<typeof actionsSchema>
+): NormalizedAlertAction[] => {
   if (!actions) return [];
+
   return actions.map(
-    (action) =>
-      ({
-        ...action,
-        ...(action.frequency ? { frequency: rewriteFrequency(action.frequency) } : {}),
-      } as RuleAction)
+    ({
+      frequency,
+      alerts_filter: alertsFilter,
+      use_alert_data_for_template: useAlertDataForTemplate,
+      ...action
+    }) => {
+      return {
+        group: action.group ?? 'default',
+        id: action.id,
+        params: action.params,
+        ...(action.uuid ? { uuid: action.uuid } : {}),
+        ...(typeof useAlertDataForTemplate !== 'undefined' ? { useAlertDataForTemplate } : {}),
+        ...(frequency
+          ? {
+              frequency: {
+                ...omit(frequency, 'notify_when'),
+                summary: frequency.summary,
+                throttle: frequency.throttle,
+                notifyWhen: frequency.notify_when,
+              },
+            }
+          : {}),
+        ...(alertsFilter ? { alertsFilter } : {}),
+      };
+    }
   );
 };
 
-export const rewriteActionsRes = (actions?: RuleAction[]) => {
-  const rewriteFrequency = ({ notifyWhen, ...rest }: NonNullable<RuleAction['frequency']>) => ({
-    ...rest,
-    notify_when: notifyWhen,
-  });
+export const rewriteSystemActionsReq = (
+  actions: TypeOf<typeof systemActionsSchema>
+): NormalizedSystemAction[] => {
   if (!actions) return [];
-  return actions.map(({ actionTypeId, frequency, ...action }) => ({
-    ...action,
-    connector_type_id: actionTypeId,
-    ...(frequency ? { frequency: rewriteFrequency(frequency) } : {}),
-  }));
+
+  return actions.map((action) => {
+    return {
+      id: action.id,
+      params: action.params,
+      ...(action.uuid ? { uuid: action.uuid } : {}),
+    };
+  });
 };

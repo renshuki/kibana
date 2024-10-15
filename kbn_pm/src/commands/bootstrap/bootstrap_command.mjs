@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { run } from '../../lib/spawn.mjs';
@@ -62,7 +63,7 @@ export const command = {
     const forceInstall =
       args.getBooleanValue('force-install') ?? (await haveNodeModulesBeenManuallyDeleted());
 
-    const [{ packages, plugins, tsConfigsPaths }] = await Promise.all([
+    const [{ packageManifestPaths, tsConfigRepoRels }] = await Promise.all([
       // discover the location of packages, plugins, etc
       await time('discovery', discovery),
 
@@ -78,15 +79,21 @@ export const command = {
     ]);
 
     // generate the package map and package.json file, if necessary
-    await Promise.all([
+    const [packages] = await Promise.all([
       time('regenerate package map', async () => {
-        await regeneratePackageMap(packages, plugins, log);
+        return await regeneratePackageMap(log, packageManifestPaths);
       }),
       time('regenerate tsconfig map', async () => {
-        await regenerateTsconfigPaths(tsConfigsPaths, log);
+        await regenerateTsconfigPaths(tsConfigRepoRels, log);
       }),
+    ]);
+
+    await Promise.all([
       time('update package json', async () => {
         await updatePackageJson(packages, log);
+      }),
+      time('regenerate tsconfig.base.json', async () => {
+        await regenerateBaseTsconfig(packages, log);
       }),
     ]);
 
@@ -111,9 +118,6 @@ export const command = {
     });
 
     await Promise.all([
-      time('regenerate tsconfig.base.json', async () => {
-        await regenerateBaseTsconfig();
-      }),
       time('sort package json', async () => {
         await sortPackageJson(log);
       }),

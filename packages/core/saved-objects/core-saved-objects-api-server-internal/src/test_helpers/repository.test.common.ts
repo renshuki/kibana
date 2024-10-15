@@ -1,27 +1,31 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { schema } from '@kbn/config-schema';
 import { loggerMock } from '@kbn/logging-mocks';
-import { Payload } from 'elastic-apm-node';
+import type { Payload } from 'elastic-apm-node';
 import {
-  AuthorizationTypeEntry,
-  CheckAuthorizationResult,
-  ISavedObjectsSecurityExtension,
-  PerformAuthorizationParams,
-  SavedObjectsMappingProperties,
-  SavedObjectsRawDocSource,
-  SavedObjectsType,
-  SavedObjectsTypeMappingDefinition,
+  type AuthorizationTypeEntry,
+  type AuthorizeAndRedactMultiNamespaceReferencesParams,
+  type CheckAuthorizationResult,
+  type ISavedObjectsSecurityExtension,
+  type SavedObjectsMappingProperties,
+  type SavedObjectsRawDocSource,
+  type SavedObjectsType,
+  type SavedObjectsTypeMappingDefinition,
+  type SavedObject,
+  type SavedObjectReference,
+  type AuthorizeFindParams,
+  MAIN_SAVED_OBJECT_INDEX,
 } from '@kbn/core-saved-objects-server';
-import { SavedObject, SavedObjectReference } from '@kbn/core-saved-objects-common';
-import {
+import type {
   SavedObjectsBaseOptions,
   SavedObjectsBulkCreateObject,
   SavedObjectsBulkDeleteObject,
@@ -34,8 +38,6 @@ import {
   SavedObjectsFindOptions,
   SavedObjectsUpdateOptions,
 } from '@kbn/core-saved-objects-api-server';
-import { SavedObjectsErrorHelpers } from '@kbn/core-saved-objects-utils-server';
-
 import {
   encodeHitVersion,
   SavedObjectsSerializer,
@@ -43,9 +45,15 @@ import {
 } from '@kbn/core-saved-objects-base-server-internal';
 import {
   elasticsearchClientMock,
-  ElasticsearchClientMock,
+  type ElasticsearchClientMock,
 } from '@kbn/core-elasticsearch-client-server-mocks';
 import { DocumentMigrator } from '@kbn/core-saved-objects-migration-server-internal';
+import {
+  type AuthorizeAndRedactInternalBulkResolveParams,
+  type GetFindRedactTypeMapParams,
+  type AuthorizationTypeMap,
+  SavedObjectsErrorHelpers,
+} from '@kbn/core-saved-objects-server';
 import { mockGetSearchDsl } from '../lib/repository.test.mock';
 import { SavedObjectsRepository } from '../lib/repository';
 
@@ -96,7 +104,7 @@ export const expectErrorConflict = (obj: TypeIdTuple, overrides?: Record<string,
 export const expectErrorInvalidType = (obj: TypeIdTuple, overrides?: Record<string, unknown>) =>
   expectErrorResult(obj, createUnsupportedTypeErrorPayload(obj.type), overrides);
 
-export const KIBANA_VERSION = '2.0.0';
+export const KIBANA_VERSION = '8.8.0';
 export const ALLOWED_CONVERT_VERSION = '8.0.0';
 export const CUSTOM_INDEX_TYPE = 'customIndex';
 /** This type has namespaceType: 'agnostic'. */
@@ -236,50 +244,76 @@ export const enforceError = SavedObjectsErrorHelpers.decorateForbiddenError(
   'User lacks privileges'
 );
 
-export const setupPerformAuthFullyAuthorized = (
-  mockSecurityExt: jest.Mocked<ISavedObjectsSecurityExtension>
+// Note: Only using 'any' here because we don't care about/use the method parameters of the mock
+// The only alternative I can see is to use a union of all the parameter interfaces which would
+// be lengthy.
+export const setupAuthorizeFunc = (
+  jestMock: jest.MockInstance<Promise<CheckAuthorizationResult<string>>, any>,
+  status: 'fully_authorized' | 'partially_authorized' | 'unauthorized'
 ) => {
-  mockSecurityExt.performAuthorization.mockImplementation(
-    (params: PerformAuthorizationParams<string>): Promise<CheckAuthorizationResult<string>> => {
-      const { auditCallback } = params;
-      auditCallback?.(undefined);
-      return Promise.resolve({ status: 'fully_authorized', typeMap: authMap });
+  jestMock.mockImplementation((): Promise<CheckAuthorizationResult<string>> => {
+    if (status === 'unauthorized') throw enforceError;
+    return Promise.resolve({ status, typeMap: authMap });
+  });
+};
+
+export const setupAuthorizeFind = (
+  mockSecurityExt: jest.Mocked<ISavedObjectsSecurityExtension>,
+  status: 'fully_authorized' | 'partially_authorized' | 'unauthorized'
+) => {
+  mockSecurityExt.authorizeFind.mockImplementation(
+    (params: AuthorizeFindParams): Promise<CheckAuthorizationResult<string>> => {
+      return Promise.resolve({ status, typeMap: authMap });
     }
   );
 };
 
-export const setupPerformAuthPartiallyAuthorized = (
+export const setupGetFindRedactTypeMap = (
   mockSecurityExt: jest.Mocked<ISavedObjectsSecurityExtension>
 ) => {
-  mockSecurityExt.performAuthorization.mockImplementation(
-    (params: PerformAuthorizationParams<string>): Promise<CheckAuthorizationResult<string>> => {
-      const { auditCallback } = params;
-      auditCallback?.(undefined);
-      return Promise.resolve({ status: 'partially_authorized', typeMap: authMap });
+  mockSecurityExt.getFindRedactTypeMap.mockImplementation(
+    (params: GetFindRedactTypeMapParams): Promise<AuthorizationTypeMap<string>> => {
+      return Promise.resolve(authMap);
     }
   );
 };
 
-export const setupPerformAuthUnauthorized = (
+export const setupAuthorizeAndRedactInternalBulkResolveFailure = (
   mockSecurityExt: jest.Mocked<ISavedObjectsSecurityExtension>
 ) => {
-  mockSecurityExt.performAuthorization.mockImplementation(
-    (params: PerformAuthorizationParams<string>): Promise<CheckAuthorizationResult<string>> => {
-      const { auditCallback } = params;
-      auditCallback?.(undefined);
-      return Promise.resolve({ status: 'unauthorized', typeMap: new Map([]) });
-    }
-  );
-};
-
-export const setupPerformAuthEnforceFailure = (
-  mockSecurityExt: jest.Mocked<ISavedObjectsSecurityExtension>
-) => {
-  mockSecurityExt.performAuthorization.mockImplementation(
-    (params: PerformAuthorizationParams<string>) => {
-      const { auditCallback } = params;
-      auditCallback?.(enforceError);
+  mockSecurityExt.authorizeAndRedactInternalBulkResolve.mockImplementation(
+    (params: AuthorizeAndRedactInternalBulkResolveParams<unknown>) => {
       throw enforceError;
+    }
+  );
+};
+
+export const setupAuthorizeAndRedactInternalBulkResolveSuccess = (
+  mockSecurityExt: jest.Mocked<ISavedObjectsSecurityExtension>
+) => {
+  mockSecurityExt.authorizeAndRedactInternalBulkResolve.mockImplementation(
+    (params: AuthorizeAndRedactInternalBulkResolveParams<unknown>) => {
+      return Promise.resolve(params.objects);
+    }
+  );
+};
+
+export const setupAuthorizeAndRedactMultiNamespaceReferenencesFailure = (
+  mockSecurityExt: jest.Mocked<ISavedObjectsSecurityExtension>
+) => {
+  mockSecurityExt.authorizeAndRedactMultiNamespaceReferences.mockImplementation(
+    (params: AuthorizeAndRedactMultiNamespaceReferencesParams) => {
+      throw enforceError;
+    }
+  );
+};
+
+export const setupAuthorizeAndRedactMultiNamespaceReferenencesSuccess = (
+  mockSecurityExt: jest.Mocked<ISavedObjectsSecurityExtension>
+) => {
+  mockSecurityExt.authorizeAndRedactMultiNamespaceReferences.mockImplementation(
+    (params: AuthorizeAndRedactMultiNamespaceReferencesParams) => {
+      return Promise.resolve(params.objects);
     }
   );
 };
@@ -300,7 +334,9 @@ export const createType = (
   hidden: false,
   namespaceType: 'single',
   mappings: {
-    properties: mappings.properties[type].properties! as SavedObjectsMappingProperties,
+    properties: (mappings.properties[type]
+      ? mappings.properties[type].properties!
+      : {}) as SavedObjectsMappingProperties,
   },
   migrations: { '1.1.1': (doc) => doc },
   ...parts,
@@ -352,21 +388,20 @@ export const createRegistry = () => {
 };
 
 export const createSpySerializer = (registry: SavedObjectTypeRegistry) => {
-  const spyInstance = {
-    isRawSavedObject: jest.fn(),
-    rawToSavedObject: jest.fn(),
-    savedObjectToRaw: jest.fn(),
-    generateRawId: jest.fn(),
-    generateRawLegacyUrlAliasId: jest.fn(),
-    trimIdPrefix: jest.fn(),
-  };
-  const realInstance = new SavedObjectsSerializer(registry);
-  Object.keys(spyInstance).forEach((key) => {
-    // @ts-expect-error no proper way to do this with typing support
-    spyInstance[key].mockImplementation((...args) => realInstance[key](...args));
-  });
+  const serializer = new SavedObjectsSerializer(registry);
 
-  return spyInstance as unknown as jest.Mocked<SavedObjectsSerializer>;
+  for (const method of [
+    'isRawSavedObject',
+    'rawToSavedObject',
+    'savedObjectToRaw',
+    'generateRawId',
+    'generateRawLegacyUrlAliasId',
+    'trimIdPrefix',
+  ] as Array<keyof SavedObjectsSerializer>) {
+    jest.spyOn(serializer, method);
+  }
+
+  return serializer as jest.Mocked<SavedObjectsSerializer>;
 };
 
 export const createDocumentMigrator = (registry: SavedObjectTypeRegistry) => {
@@ -405,7 +440,7 @@ export const getMockGetResponse = (
   }
   const namespaceId = namespaces[0] === 'default' ? undefined : namespaces[0];
 
-  return {
+  const result = {
     // NOTE: Elasticsearch returns more fields (_index, _type) but the SavedObjectsRepository method ignores these
     found: true,
     _id: `${registry.isSingleNamespace(type) && namespaceId ? `${namespaceId}:` : ''}${type}:${id}`,
@@ -430,11 +465,14 @@ export const getMockGetResponse = (
       ...mockTimestampFields,
     } as SavedObjectsRawDocSource,
   } as estypes.GetResponse<SavedObjectsRawDocSource>;
+  return result;
 };
 
 export const getMockMgetResponse = (
   registry: SavedObjectTypeRegistry,
-  objects: Array<TypeIdTuple & { found?: boolean; initialNamespaces?: string[] }>,
+  objects: Array<
+    TypeIdTuple & { found?: boolean; initialNamespaces?: string[]; originId?: string }
+  >,
   namespace?: string
 ) =>
   ({
@@ -455,35 +493,6 @@ expect.extend({
   },
 });
 
-export const mockUpdateResponse = (
-  client: ElasticsearchClientMock,
-  type: string,
-  id: string,
-  options?: SavedObjectsUpdateOptions,
-  namespaces?: string[],
-  originId?: string
-) => {
-  client.update.mockResponseOnce(
-    {
-      _id: `${type}:${id}`,
-      ...mockVersionProps,
-      result: 'updated',
-      // don't need the rest of the source for test purposes, just the namespace and namespaces attributes
-      get: {
-        _source: {
-          namespaces: namespaces ?? [options?.namespace ?? 'default'],
-          namespace: options?.namespace,
-
-          // If the existing saved object contains an originId attribute, the operation will return it in the result.
-          // The originId parameter is just used for test purposes to modify the mock cluster call response.
-          ...(!!originId && { originId }),
-        },
-      },
-    } as estypes.UpdateResponse,
-    { statusCode: 200 }
-  );
-};
-
 export const updateSuccess = async <T extends Partial<unknown>>(
   client: ElasticsearchClientMock,
   repository: SavedObjectsRepository,
@@ -494,20 +503,40 @@ export const updateSuccess = async <T extends Partial<unknown>>(
   options?: SavedObjectsUpdateOptions,
   internalOptions: {
     originId?: string;
-    mockGetResponseValue?: estypes.GetResponse;
+    mockGetResponseAsNotFound?: estypes.GetResponse;
   } = {},
   objNamespaces?: string[]
 ) => {
-  const { mockGetResponseValue, originId } = internalOptions;
-  if (registry.isMultiNamespace(type)) {
-    const mockGetResponse =
-      mockGetResponseValue ??
-      getMockGetResponse(registry, { type, id }, objNamespaces ?? options?.namespace);
-    client.get.mockResponseOnce(mockGetResponse, { statusCode: 200 });
+  const { mockGetResponseAsNotFound, originId } = internalOptions;
+  const mockGetResponse =
+    mockGetResponseAsNotFound ??
+    getMockGetResponse(registry, { type, id, originId }, objNamespaces ?? options?.namespace);
+  client.get.mockResponseOnce(mockGetResponse, { statusCode: 200 });
+  if (!mockGetResponseAsNotFound) {
+    // index doc from existing doc
+    client.index.mockResponseImplementation((params) => {
+      return {
+        body: {
+          _id: params.id,
+          ...mockVersionProps,
+        } as estypes.CreateResponse,
+      };
+    });
   }
-  mockUpdateResponse(client, type, id, options, objNamespaces, originId);
+  if (mockGetResponseAsNotFound) {
+    // upsert case: create the doc. (be careful here, we're also sending mockGetResponseValue as { found: false })
+    client.create.mockResponseImplementation((params) => {
+      return {
+        body: {
+          _id: params.id,
+          ...mockVersionProps,
+        } as estypes.CreateResponse,
+      };
+    });
+  }
+
   const result = await repository.update(type, id, attributes, options);
-  expect(client.get).toHaveBeenCalledTimes(registry.isMultiNamespace(type) ? 1 : 0);
+  expect(client.get).toHaveBeenCalled(); // not asserting on the number of calls here, we end up testing the test mocks and not the actual implementation
   return result;
 };
 
@@ -548,32 +577,46 @@ export const expectBulkGetResult = (
   attributes: doc._source![type],
   references: doc._source!.references || [],
   migrationVersion: doc._source!.migrationVersion,
+  managed: expect.any(Boolean),
+  coreMigrationVersion: expect.any(String),
+  typeMigrationVersion: expect.any(String),
 });
 
 export const getMockBulkCreateResponse = (
   objects: SavedObjectsBulkCreateObject[],
-  namespace?: string
+  namespace?: string,
+  managed?: boolean
 ) => {
   return {
     errors: false,
     took: 1,
-    items: objects.map(({ type, id, originId, attributes, references, migrationVersion }) => ({
-      create: {
-        // status: 1,
-        // _index: '.kibana',
-        _id: `${namespace ? `${namespace}:` : ''}${type}:${id}`,
-        _source: {
-          [type]: attributes,
-          type,
-          namespace,
-          ...(originId && { originId }),
-          references,
-          ...mockTimestampFieldsWithCreated,
-          migrationVersion: migrationVersion || { [type]: '1.1.1' },
+    items: objects.map(
+      ({
+        type,
+        id,
+        originId,
+        attributes,
+        references,
+        migrationVersion,
+        typeMigrationVersion,
+        managed: docManaged,
+      }) => ({
+        create: {
+          _id: `${namespace ? `${namespace}:` : ''}${type}:${id}`,
+          _source: {
+            [type]: attributes,
+            type,
+            namespace,
+            ...(originId && { originId }),
+            references,
+            ...mockTimestampFieldsWithCreated,
+            typeMigrationVersion: typeMigrationVersion || migrationVersion?.[type] || '1.1.1',
+            managed: managed ?? docManaged ?? false,
+          },
+          ...mockVersionProps,
         },
-        ...mockVersionProps,
-      },
-    })),
+      })
+    ),
   } as unknown as estypes.BulkResponse;
 };
 
@@ -583,7 +626,7 @@ export const bulkCreateSuccess = async (
   objects: SavedObjectsBulkCreateObject[],
   options?: SavedObjectsCreateOptions
 ) => {
-  const mockResponse = getMockBulkCreateResponse(objects, options?.namespace);
+  const mockResponse = getMockBulkCreateResponse(objects, options?.namespace, options?.managed);
   client.bulk.mockResponse(mockResponse);
   const result = await repository.bulkCreate(objects, options);
   return result;
@@ -593,10 +636,12 @@ export const expectCreateResult = (obj: {
   type: string;
   namespace?: string;
   namespaces?: string[];
+  managed?: boolean;
 }) => ({
   ...obj,
-  migrationVersion: { [obj.type]: '1.1.1' },
-  coreMigrationVersion: KIBANA_VERSION,
+  coreMigrationVersion: expect.any(String),
+  typeMigrationVersion: '1.1.1',
+  managed: obj.managed ?? false,
   version: mockVersion,
   namespaces: obj.namespaces ?? [obj.namespace ?? 'default'],
   ...mockTimestampFieldsWithCreated,
@@ -607,10 +652,10 @@ export const getMockBulkUpdateResponse = (
   objects: TypeIdTuple[],
   options?: SavedObjectsBulkUpdateOptions,
   originId?: string
-) =>
-  ({
+) => {
+  return {
     items: objects.map(({ type, id }) => ({
-      update: {
+      index: {
         _id: `${
           registry.isSingleNamespace(type) && options?.namespace ? `${options?.namespace}:` : ''
         }${type}:${id}`,
@@ -625,7 +670,8 @@ export const getMockBulkUpdateResponse = (
         result: 'updated',
       },
     })),
-  } as estypes.BulkResponse);
+  } as estypes.BulkResponse;
+};
 
 export const bulkUpdateSuccess = async (
   client: ElasticsearchClientMock,
@@ -636,19 +682,26 @@ export const bulkUpdateSuccess = async (
   originId?: string,
   multiNamespaceSpace?: string // the space for multi namespace objects returned by mock mget (this is only needed for space ext testing)
 ) => {
-  const multiNamespaceObjects = objects.filter(({ type }) => registry.isMultiNamespace(type));
-  if (multiNamespaceObjects?.length) {
-    const response = getMockMgetResponse(
-      registry,
-      multiNamespaceObjects,
-      multiNamespaceSpace ?? options?.namespace
-    );
-    client.mget.mockResponseOnce(response);
+  let mockedMgetResponse;
+  const validObjects = objects.filter(({ type }) => registry.getType(type) !== undefined);
+  const multiNamespaceObjects = validObjects.filter(({ type }) => registry.isMultiNamespace(type));
+
+  if (validObjects?.length) {
+    if (multiNamespaceObjects.length > 0) {
+      mockedMgetResponse = getMockMgetResponse(
+        registry,
+        validObjects,
+        multiNamespaceSpace ?? options?.namespace
+      );
+    } else {
+      mockedMgetResponse = getMockMgetResponse(registry, validObjects);
+    }
+    client.mget.mockResponseOnce(mockedMgetResponse);
   }
   const response = getMockBulkUpdateResponse(registry, objects, options, originId);
   client.bulk.mockResponseOnce(response);
   const result = await repository.bulkUpdate(objects, options);
-  expect(client.mget).toHaveBeenCalledTimes(multiNamespaceObjects?.length ? 1 : 0);
+  expect(client.mget).toHaveBeenCalledTimes(validObjects?.length ? 1 : 0);
   return result;
 };
 
@@ -680,7 +733,7 @@ export const generateIndexPatternSearchResults = (namespace?: string) => {
       total: 4,
       hits: [
         {
-          _index: '.kibana',
+          _index: MAIN_SAVED_OBJECT_INDEX,
           _id: `${namespace ? `${namespace}:` : ''}index-pattern:logstash-*`,
           _score: 1,
           ...mockVersionProps,
@@ -697,7 +750,7 @@ export const generateIndexPatternSearchResults = (namespace?: string) => {
           },
         },
         {
-          _index: '.kibana',
+          _index: MAIN_SAVED_OBJECT_INDEX,
           _id: `${namespace ? `${namespace}:` : ''}config:6.0.0-alpha1`,
           _score: 2,
           ...mockVersionProps,
@@ -712,7 +765,7 @@ export const generateIndexPatternSearchResults = (namespace?: string) => {
           },
         },
         {
-          _index: '.kibana',
+          _index: MAIN_SAVED_OBJECT_INDEX,
           _id: `${namespace ? `${namespace}:` : ''}index-pattern:stocks-*`,
           _score: 3,
           ...mockVersionProps,
@@ -728,7 +781,7 @@ export const generateIndexPatternSearchResults = (namespace?: string) => {
           },
         },
         {
-          _index: '.kibana',
+          _index: MAIN_SAVED_OBJECT_INDEX,
           _id: `${NAMESPACE_AGNOSTIC_TYPE}:something`,
           _score: 4,
           ...mockVersionProps,

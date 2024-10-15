@@ -343,7 +343,7 @@
               "\nThe state of checking the results of a license type meeting the license minimum."
             ],
             "signature": [
-              "\"invalid\" | \"unavailable\" | \"valid\" | \"expired\""
+              "\"valid\" | \"invalid\" | \"unavailable\" | \"expired\""
             ],
             "path": "x-pack/plugins/licensing/common/types.ts",
             "deprecated": false,
@@ -440,7 +440,7 @@
               "\nThe validity status of the license."
             ],
             "signature": [
-              "\"invalid\" | \"active\" | \"expired\""
+              "\"active\" | \"invalid\" | \"expired\""
             ],
             "path": "x-pack/plugins/licensing/common/types.ts",
             "deprecated": false,
@@ -495,52 +495,68 @@
             "trackAdoption": false,
             "references": [
               {
-                "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "plugin": "fleet",
+                "path": "x-pack/plugins/fleet/common/services/agent_policy_config.test.ts"
+              },
+              {
+                "plugin": "fleet",
+                "path": "x-pack/plugins/fleet/common/services/agent_policy_config.test.ts"
+              },
+              {
+                "plugin": "fleet",
+                "path": "x-pack/plugins/fleet/server/services/agent_policy_watch.test.ts"
+              },
+              {
+                "plugin": "fleet",
+                "path": "x-pack/plugins/fleet/server/services/agent_policy_watch.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
+              },
+              {
+                "plugin": "apm",
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "security",
@@ -695,7 +711,7 @@
         "label": "LicenseCheckState",
         "description": [],
         "signature": [
-          "\"invalid\" | \"unavailable\" | \"valid\" | \"expired\""
+          "\"valid\" | \"invalid\" | \"unavailable\" | \"expired\""
         ],
         "path": "x-pack/plugins/licensing/common/types.ts",
         "deprecated": false,
@@ -710,7 +726,7 @@
         "label": "LicenseStatus",
         "description": [],
         "signature": [
-          "\"invalid\" | \"active\" | \"expired\""
+          "\"active\" | \"invalid\" | \"expired\""
         ],
         "path": "x-pack/plugins/licensing/common/types.ts",
         "deprecated": false,
@@ -791,16 +807,16 @@
               "path": "x-pack/plugins/security/public/plugin.tsx"
             },
             {
+              "plugin": "aiops",
+              "path": "x-pack/plugins/aiops/public/plugin.tsx"
+            },
+            {
               "plugin": "licenseManagement",
               "path": "x-pack/plugins/license_management/public/plugin.ts"
             },
             {
               "plugin": "ml",
               "path": "x-pack/plugins/ml/public/plugin.ts"
-            },
-            {
-              "plugin": "apm",
-              "path": "x-pack/plugins/apm/public/context/license/license_context.tsx"
             },
             {
               "plugin": "crossClusterReplication",
@@ -833,6 +849,18 @@
             {
               "plugin": "watcher",
               "path": "x-pack/plugins/watcher/public/plugin.ts"
+            },
+            {
+              "plugin": "profiling",
+              "path": "x-pack/plugins/observability_solution/profiling/public/components/contexts/license/license_context.tsx"
+            },
+            {
+              "plugin": "apm",
+              "path": "x-pack/plugins/observability_solution/apm/public/context/license/license_context.tsx"
+            },
+            {
+              "plugin": "slo",
+              "path": "x-pack/plugins/observability_solution/slo/public/plugin.ts"
             }
           ]
         },
@@ -912,6 +940,26 @@
         },
         {
           "parentPluginId": "licensing",
+          "id": "def-public.LicensingPluginStart.getLicense",
+          "type": "Function",
+          "tags": [],
+          "label": "getLicense",
+          "description": [
+            "\nRetrieves the {@link ILicense | licensing information}"
+          ],
+          "signature": [
+            "() => Promise<",
+            "ILicense",
+            ">"
+          ],
+          "path": "x-pack/plugins/licensing/public/types.ts",
+          "deprecated": false,
+          "trackAdoption": false,
+          "children": [],
+          "returnComment": []
+        },
+        {
+          "parentPluginId": "licensing",
           "id": "def-public.LicensingPluginStart.refresh",
           "type": "Function",
           "tags": [],
@@ -971,35 +1019,23 @@
             "text": "CheckLicense"
           },
           ", handler: ",
-          {
-            "pluginId": "core",
-            "scope": "server",
-            "docId": "kibCorePluginApi",
-            "section": "def-server.RequestHandler",
-            "text": "RequestHandler"
-          },
+          "RequestHandler",
           "<P, Q, B, Context, any, ",
           {
             "pluginId": "@kbn/core-http-server",
-            "scope": "common",
+            "scope": "server",
             "docId": "kibKbnCoreHttpServerPluginApi",
-            "section": "def-common.KibanaResponseFactory",
+            "section": "def-server.KibanaResponseFactory",
             "text": "KibanaResponseFactory"
           },
           ">) => ",
-          {
-            "pluginId": "core",
-            "scope": "server",
-            "docId": "kibCorePluginApi",
-            "section": "def-server.RequestHandler",
-            "text": "RequestHandler"
-          },
+          "RequestHandler",
           "<P, Q, B, Context, any, ",
           {
             "pluginId": "@kbn/core-http-server",
-            "scope": "common",
+            "scope": "server",
             "docId": "kibKbnCoreHttpServerPluginApi",
-            "section": "def-common.KibanaResponseFactory",
+            "section": "def-server.KibanaResponseFactory",
             "text": "KibanaResponseFactory"
           },
           ">"
@@ -1037,19 +1073,13 @@
             "label": "handler",
             "description": [],
             "signature": [
-              {
-                "pluginId": "core",
-                "scope": "server",
-                "docId": "kibCorePluginApi",
-                "section": "def-server.RequestHandler",
-                "text": "RequestHandler"
-              },
+              "RequestHandler",
               "<P, Q, B, Context, any, ",
               {
                 "pluginId": "@kbn/core-http-server",
-                "scope": "common",
+                "scope": "server",
                 "docId": "kibKbnCoreHttpServerPluginApi",
-                "section": "def-common.KibanaResponseFactory",
+                "section": "def-server.KibanaResponseFactory",
                 "text": "KibanaResponseFactory"
               },
               ">"
@@ -1592,7 +1622,7 @@
               "\nThe state of checking the results of a license type meeting the license minimum."
             ],
             "signature": [
-              "\"invalid\" | \"unavailable\" | \"valid\" | \"expired\""
+              "\"valid\" | \"invalid\" | \"unavailable\" | \"expired\""
             ],
             "path": "x-pack/plugins/licensing/common/types.ts",
             "deprecated": false,
@@ -1739,7 +1769,7 @@
               "\nThe validity status of the license."
             ],
             "signature": [
-              "\"invalid\" | \"active\" | \"expired\""
+              "\"active\" | \"invalid\" | \"expired\""
             ],
             "path": "x-pack/plugins/licensing/common/types.ts",
             "deprecated": false,
@@ -1794,52 +1824,68 @@
             "trackAdoption": false,
             "references": [
               {
-                "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "plugin": "fleet",
+                "path": "x-pack/plugins/fleet/common/services/agent_policy_config.test.ts"
+              },
+              {
+                "plugin": "fleet",
+                "path": "x-pack/plugins/fleet/common/services/agent_policy_config.test.ts"
+              },
+              {
+                "plugin": "fleet",
+                "path": "x-pack/plugins/fleet/server/services/agent_policy_watch.test.ts"
+              },
+              {
+                "plugin": "fleet",
+                "path": "x-pack/plugins/fleet/server/services/agent_policy_watch.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "apm",
-                "path": "x-pack/plugins/apm/common/license_check.test.ts"
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
+              },
+              {
+                "plugin": "apm",
+                "path": "x-pack/plugins/observability_solution/apm/common/license_check.test.ts"
               },
               {
                 "plugin": "security",
@@ -2041,7 +2087,7 @@
         "label": "LicenseCheckState",
         "description": [],
         "signature": [
-          "\"invalid\" | \"unavailable\" | \"valid\" | \"expired\""
+          "\"valid\" | \"invalid\" | \"unavailable\" | \"expired\""
         ],
         "path": "x-pack/plugins/licensing/common/types.ts",
         "deprecated": false,
@@ -2056,7 +2102,7 @@
         "label": "LicenseStatus",
         "description": [],
         "signature": [
-          "\"invalid\" | \"active\" | \"expired\""
+          "\"active\" | \"invalid\" | \"expired\""
         ],
         "path": "x-pack/plugins/licensing/common/types.ts",
         "deprecated": false,
@@ -2157,12 +2203,16 @@
               "path": "x-pack/plugins/alerting/server/plugin.ts"
             },
             {
-              "plugin": "ml",
-              "path": "x-pack/plugins/ml/server/plugin.ts"
+              "plugin": "aiops",
+              "path": "x-pack/plugins/aiops/server/plugin.ts"
             },
             {
               "plugin": "remoteClusters",
               "path": "x-pack/plugins/remote_clusters/server/plugin.ts"
+            },
+            {
+              "plugin": "ml",
+              "path": "x-pack/plugins/ml/server/plugin.ts"
             },
             {
               "plugin": "graph",
@@ -2173,8 +2223,24 @@
               "path": "x-pack/plugins/index_lifecycle_management/server/services/license.ts"
             },
             {
-              "plugin": "mapsEms",
-              "path": "src/plugins/maps_ems/server/index.ts"
+              "plugin": "osquery",
+              "path": "x-pack/plugins/osquery/server/handlers/action/create_action_service.ts"
+            },
+            {
+              "plugin": "securitySolution",
+              "path": "x-pack/plugins/security_solution/server/lib/detection_engine/rule_types/utils/get_is_alert_suppression_active.ts"
+            },
+            {
+              "plugin": "securitySolution",
+              "path": "x-pack/plugins/security_solution/server/lib/detection_engine/rule_types/indicator_match/threat_mapping/create_threat_signals.ts"
+            },
+            {
+              "plugin": "securitySolution",
+              "path": "x-pack/plugins/security_solution/server/lib/detection_engine/rule_types/query/query.ts"
+            },
+            {
+              "plugin": "securitySolution",
+              "path": "x-pack/plugins/security_solution/server/lib/detection_engine/rule_types/threshold/threshold.ts"
             },
             {
               "plugin": "painlessLab",
@@ -2187,10 +2253,6 @@
             {
               "plugin": "searchprofiler",
               "path": "x-pack/plugins/searchprofiler/server/plugin.ts"
-            },
-            {
-              "plugin": "securitySolution",
-              "path": "x-pack/plugins/security_solution/server/lib/detection_engine/signals/executors/query.ts"
             },
             {
               "plugin": "snapshotRestore",
@@ -2215,6 +2277,18 @@
             {
               "plugin": "upgradeAssistant",
               "path": "x-pack/plugins/upgrade_assistant/server/lib/reindexing/reindex_service.test.ts"
+            },
+            {
+              "plugin": "securitySolution",
+              "path": "x-pack/plugins/security_solution/server/lib/detection_engine/rule_types/utils/get_is_alert_suppression_active.test.ts"
+            },
+            {
+              "plugin": "securitySolution",
+              "path": "x-pack/plugins/security_solution/server/lib/detection_engine/rule_types/utils/get_is_alert_suppression_active.test.ts"
+            },
+            {
+              "plugin": "securitySolution",
+              "path": "x-pack/plugins/security_solution/server/lib/detection_engine/rule_types/utils/get_is_alert_suppression_active.test.ts"
             },
             {
               "plugin": "actions",
@@ -2254,12 +2328,7 @@
           "deprecated": true,
           "removeBy": "8.8.0",
           "trackAdoption": false,
-          "references": [
-            {
-              "plugin": "mapsEms",
-              "path": "src/plugins/maps_ems/server/index.ts"
-            }
-          ],
+          "references": [],
           "children": [],
           "returnComment": []
         },
@@ -2321,6 +2390,26 @@
         },
         {
           "parentPluginId": "licensing",
+          "id": "def-server.LicensingPluginStart.getLicense",
+          "type": "Function",
+          "tags": [],
+          "label": "getLicense",
+          "description": [
+            "\nRetrieves the {@link ILicense | licensing information}"
+          ],
+          "signature": [
+            "() => Promise<",
+            "ILicense",
+            ">"
+          ],
+          "path": "x-pack/plugins/licensing/server/types.ts",
+          "deprecated": false,
+          "trackAdoption": false,
+          "children": [],
+          "returnComment": []
+        },
+        {
+          "parentPluginId": "licensing",
           "id": "def-server.LicensingPluginStart.refresh",
           "type": "Function",
           "tags": [],
@@ -2352,9 +2441,9 @@
             "(clusterClient: ",
             {
               "pluginId": "@kbn/core-elasticsearch-server",
-              "scope": "common",
+              "scope": "server",
               "docId": "kibKbnCoreElasticsearchServerPluginApi",
-              "section": "def-common.IClusterClient",
+              "section": "def-server.IClusterClient",
               "text": "IClusterClient"
             },
             ", pollingFrequency: number) => { license$: ",
@@ -2379,9 +2468,9 @@
               "signature": [
                 {
                   "pluginId": "@kbn/core-elasticsearch-server",
-                  "scope": "common",
+                  "scope": "server",
                   "docId": "kibKbnCoreElasticsearchServerPluginApi",
-                  "section": "def-common.IClusterClient",
+                  "section": "def-server.IClusterClient",
                   "text": "IClusterClient"
                 }
               ],

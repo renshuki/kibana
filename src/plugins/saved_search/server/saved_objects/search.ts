@@ -1,20 +1,31 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+import { ANALYTICS_SAVED_OBJECT_INDEX } from '@kbn/core-saved-objects-server';
 import { SavedObjectsType } from '@kbn/core/server';
 import { MigrateFunctionsObject } from '@kbn/kibana-utils-plugin/common';
 import { getAllMigrations } from './search_migrations';
+import {
+  SCHEMA_SEARCH_V8_8_0,
+  SCHEMA_SEARCH_MODEL_VERSION_1,
+  SCHEMA_SEARCH_MODEL_VERSION_2,
+  SCHEMA_SEARCH_MODEL_VERSION_3,
+  SCHEMA_SEARCH_MODEL_VERSION_4,
+  SCHEMA_SEARCH_MODEL_VERSION_5,
+} from './schema';
 
 export function getSavedSearchObjectType(
   getSearchSourceMigrations: () => MigrateFunctionsObject
 ): SavedObjectsType {
   return {
     name: 'search',
+    indexPattern: ANALYTICS_SAVED_OBJECT_INDEX,
     hidden: false,
     namespaceType: 'multiple-isolated',
     convertToMultiNamespaceTypeVersion: '8.0.0',
@@ -32,44 +43,52 @@ export function getSavedSearchObjectType(
         };
       },
     },
-    mappings: {
-      properties: {
-        columns: { type: 'keyword', index: false, doc_values: false },
-        description: { type: 'text' },
-        viewMode: { type: 'keyword', index: false, doc_values: false },
-        hideChart: { type: 'boolean', index: false, doc_values: false },
-        isTextBasedQuery: { type: 'boolean', index: false, doc_values: false },
-        usesAdHocDataView: { type: 'boolean', index: false, doc_values: false },
-        hideAggregatedPreview: { type: 'boolean', index: false, doc_values: false },
-        hits: { type: 'integer', index: false, doc_values: false },
-        kibanaSavedObjectMeta: {
-          properties: {
-            searchSourceJSON: { type: 'text', index: false },
-          },
+    modelVersions: {
+      1: {
+        changes: [],
+        schemas: {
+          forwardCompatibility: SCHEMA_SEARCH_MODEL_VERSION_1.extends({}, { unknowns: 'ignore' }),
+          create: SCHEMA_SEARCH_MODEL_VERSION_1,
         },
-        sort: { type: 'keyword', index: false, doc_values: false },
-        title: { type: 'text' },
-        grid: { type: 'object', enabled: false },
-        version: { type: 'integer' },
-        rowHeight: { type: 'text' },
-        timeRestore: { type: 'boolean', index: false, doc_values: false },
-        timeRange: {
-          dynamic: false,
-          properties: {
-            from: { type: 'keyword', index: false, doc_values: false },
-            to: { type: 'keyword', index: false, doc_values: false },
-          },
-        },
-        refreshInterval: {
-          dynamic: false,
-          properties: {
-            pause: { type: 'boolean', index: false, doc_values: false },
-            value: { type: 'integer', index: false, doc_values: false },
-          },
-        },
-        rowsPerPage: { type: 'integer', index: false, doc_values: false },
-        breakdownField: { type: 'text' },
       },
+      2: {
+        changes: [],
+        schemas: {
+          forwardCompatibility: SCHEMA_SEARCH_MODEL_VERSION_2.extends({}, { unknowns: 'ignore' }),
+          create: SCHEMA_SEARCH_MODEL_VERSION_2,
+        },
+      },
+      3: {
+        changes: [],
+        schemas: {
+          forwardCompatibility: SCHEMA_SEARCH_MODEL_VERSION_3.extends({}, { unknowns: 'ignore' }),
+          create: SCHEMA_SEARCH_MODEL_VERSION_3,
+        },
+      },
+      4: {
+        changes: [],
+        schemas: {
+          forwardCompatibility: SCHEMA_SEARCH_MODEL_VERSION_4.extends({}, { unknowns: 'ignore' }),
+          create: SCHEMA_SEARCH_MODEL_VERSION_4,
+        },
+      },
+      5: {
+        changes: [],
+        schemas: {
+          forwardCompatibility: SCHEMA_SEARCH_MODEL_VERSION_5.extends({}, { unknowns: 'ignore' }),
+          create: SCHEMA_SEARCH_MODEL_VERSION_5,
+        },
+      },
+    },
+    mappings: {
+      dynamic: false,
+      properties: {
+        title: { type: 'text' },
+        description: { type: 'text' },
+      },
+    },
+    schemas: {
+      '8.8.0': SCHEMA_SEARCH_V8_8_0,
     },
     migrations: () => getAllMigrations(getSearchSourceMigrations()),
   };

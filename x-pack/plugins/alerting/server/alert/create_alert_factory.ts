@@ -10,6 +10,7 @@ import { cloneDeep } from 'lodash';
 import { AlertInstanceContext, AlertInstanceState } from '../types';
 import { Alert, PublicAlert } from './alert';
 import { processAlerts } from '../lib';
+import { DISABLE_FLAPPING_SETTINGS } from '../../common/rules_settings';
 
 export interface AlertFactory<
   State extends AlertInstanceState,
@@ -17,6 +18,7 @@ export interface AlertFactory<
   ActionGroupIds extends string
 > {
   create: (id: string) => PublicAlert<State, Context, ActionGroupIds>;
+  get: (id: string) => PublicAlert<State, Context, ActionGroupIds> | null;
   alertLimit: {
     getValue: () => number;
     setLimitReached: (reached: boolean) => void;
@@ -100,6 +102,9 @@ export function createAlertFactory<
 
       return alerts[id];
     },
+    get: (id: string): PublicAlert<State, Context, ActionGroupIds> | null => {
+      return alerts[id] ? alerts[id] : null;
+    },
     // namespace alert limit services for rule type executors to use
     alertLimit: {
       getValue: (): number => {
@@ -149,8 +154,8 @@ export function createAlertFactory<
             hasReachedAlertLimit,
             alertLimit: maxAlerts,
             autoRecoverAlerts,
-            // setFlapping is false, as we only want to use this function to get the recovered alerts
-            setFlapping: false,
+            // flappingSettings.enabled is false, as we only want to use this function to get the recovered alerts
+            flappingSettings: DISABLE_FLAPPING_SETTINGS,
           });
           return Object.keys(currentRecoveredAlerts ?? {}).map(
             (alertId: string) => currentRecoveredAlerts[alertId]

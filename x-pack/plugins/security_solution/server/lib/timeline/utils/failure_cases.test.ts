@@ -17,6 +17,7 @@ import {
   CREATE_TEMPLATE_TIMELINE_WITHOUT_VERSION_ERROR_MESSAGE,
   NO_MATCH_ID_ERROR_MESSAGE,
   NO_MATCH_VERSION_ERROR_MESSAGE,
+  NO_MATCH_TEMPLATE_VERSION_ERROR_MESSAGE,
   NOT_ALLOW_UPDATE_TIMELINE_TYPE_ERROR_MESSAGE,
   UPDATE_TEMPLATE_TIMELINE_ERROR_MESSAGE,
   CREATE_WITH_INVALID_STATUS_ERROR_MESSAGE,
@@ -25,20 +26,20 @@ import {
   NOT_ALLOW_UPDATE_STATUS_ERROR_MESSAGE,
   TEMPLATE_TIMELINE_VERSION_CONFLICT_MESSAGE,
 } from './failure_cases';
-import type { TimelineSavedObject } from '../../../../common/types/timeline';
-import { TimelineStatus, TimelineType } from '../../../../common/types/timeline';
+import type { TimelineResponse } from '../../../../common/api/timeline';
+import { TimelineStatusEnum, TimelineTypeEnum } from '../../../../common/api/timeline';
 import { mockGetTimelineValue, mockGetTemplateTimelineValue } from '../__mocks__/import_timelines';
 
 describe('failure cases', () => {
   describe('commonFailureChecker', () => {
     test('If timeline type is draft, it should not return error if title is not given', () => {
-      const result = commonFailureChecker(TimelineStatus.draft, null);
+      const result = commonFailureChecker(TimelineStatusEnum.draft, null);
 
       expect(result).toBeNull();
     });
 
     test('If timeline type is active, it should return error if title is not given', () => {
-      const result = commonFailureChecker(TimelineStatus.active, null);
+      const result = commonFailureChecker(TimelineStatusEnum.active, null);
 
       expect(result).toEqual({
         body: EMPTY_TITLE_ERROR_MESSAGE,
@@ -47,7 +48,7 @@ describe('failure cases', () => {
     });
 
     test('If timeline type is immutable, it should return error if title is not given', () => {
-      const result = commonFailureChecker(TimelineStatus.immutable, null);
+      const result = commonFailureChecker(TimelineStatusEnum.immutable, null);
 
       expect(result).toEqual({
         body: EMPTY_TITLE_ERROR_MESSAGE,
@@ -56,7 +57,7 @@ describe('failure cases', () => {
     });
 
     test('If timeline type is not a draft, it should return no error if title is given', () => {
-      const result = commonFailureChecker(TimelineStatus.active, 'title');
+      const result = commonFailureChecker(TimelineStatusEnum.active, 'title');
 
       expect(result).toBeNull();
     });
@@ -68,12 +69,12 @@ describe('failure cases', () => {
       const version = null;
       const templateTimelineVersion = null;
       const templateTimelineId = null;
-      const existTimeline = mockGetTimelineValue as TimelineSavedObject;
+      const existTimeline = mockGetTimelineValue as TimelineResponse;
       const existTemplateTimeline = null;
       const result = checkIsCreateFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.default,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.default,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -93,11 +94,11 @@ describe('failure cases', () => {
       const templateTimelineVersion = 1;
       const templateTimelineId = 'template-timeline-id-one';
       const existTimeline = null;
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsCreateFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.template,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -120,8 +121,8 @@ describe('failure cases', () => {
       const existTemplateTimeline = null;
       const result = checkIsCreateFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.template,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -143,14 +144,14 @@ describe('failure cases', () => {
       const templateTimelineVersion = null;
       const templateTimelineId = null;
       const existTimeline = {
-        ...(mockGetTimelineValue as TimelineSavedObject),
-        status: TimelineStatus.immutable,
+        ...(mockGetTimelineValue as TimelineResponse),
+        status: TimelineStatusEnum.immutable,
       };
       const existTemplateTimeline = null;
       const result = checkIsUpdateFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.default,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.default,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -171,13 +172,13 @@ describe('failure cases', () => {
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = null;
       const existTemplateTimeline = {
-        ...(mockGetTemplateTimelineValue as TimelineSavedObject),
-        status: TimelineStatus.immutable,
+        ...(mockGetTemplateTimelineValue as TimelineResponse),
+        status: TimelineStatusEnum.immutable,
       };
       const result = checkIsUpdateFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.template,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -197,11 +198,11 @@ describe('failure cases', () => {
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = null;
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsUpdateFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.default,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.default,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -224,8 +225,8 @@ describe('failure cases', () => {
       const existTemplateTimeline = null;
       const result = checkIsUpdateFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.default,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.default,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -245,14 +246,14 @@ describe('failure cases', () => {
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = {
-        ...(mockGetTemplateTimelineValue as TimelineSavedObject),
+        ...(mockGetTemplateTimelineValue as TimelineResponse),
         savedObjectId: 'someOtherId',
       };
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsUpdateFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.template,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -266,17 +267,44 @@ describe('failure cases', () => {
       });
     });
 
-    test('should return error if given version field is defferent from existing version of timelin template', () => {
+    test('should return error if given version field is defferent from existing version of timeline template', () => {
       const isHandlingTemplateTimeline = true;
       const version = 'xxx';
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = null;
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsUpdateFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.template,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
+        version,
+        templateTimelineVersion,
+        templateTimelineId,
+        existTimeline,
+        existTemplateTimeline
+      );
+
+      expect(result).toEqual({
+        body: NO_MATCH_TEMPLATE_VERSION_ERROR_MESSAGE,
+        statusCode: 409,
+      });
+    });
+
+    test('should return error if given version field is defferent from existing version of timeline', () => {
+      const isHandlingTemplateTimeline = false;
+      const version = 'xxx';
+      const templateTimelineVersion = null;
+      const templateTimelineId = null;
+      const existTimeline = {
+        ...(mockGetTemplateTimelineValue as TimelineResponse),
+        savedObjectId: 'someOtherId',
+      };
+      const existTemplateTimeline = null;
+      const result = checkIsUpdateFailureCases(
+        isHandlingTemplateTimeline,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -298,11 +326,11 @@ describe('failure cases', () => {
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = null;
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsCreateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.draft,
-        TimelineType.template,
+        TimelineStatusEnum.draft,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -322,11 +350,11 @@ describe('failure cases', () => {
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = null;
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsCreateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.template,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -345,12 +373,12 @@ describe('failure cases', () => {
       const version = mockGetTimelineValue.version;
       const templateTimelineVersion = null;
       const templateTimelineId = null;
-      const existTimeline = mockGetTimelineValue as TimelineSavedObject;
+      const existTimeline = mockGetTimelineValue as TimelineResponse;
       const existTemplateTimeline = null;
       const result = checkIsCreateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.default,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.default,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -371,12 +399,12 @@ describe('failure cases', () => {
       const version = mockGetTimelineValue.version;
       const templateTimelineVersion = null;
       const templateTimelineId = null;
-      const existTimeline = mockGetTimelineValue as TimelineSavedObject;
+      const existTimeline = mockGetTimelineValue as TimelineResponse;
       const existTemplateTimeline = null;
       const result = checkIsUpdateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.default,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.default,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -396,11 +424,11 @@ describe('failure cases', () => {
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = null;
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsUpdateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.default,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.default,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -420,11 +448,11 @@ describe('failure cases', () => {
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = null;
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsUpdateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.immutable,
-        TimelineType.template,
+        TimelineStatusEnum.immutable,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -447,8 +475,8 @@ describe('failure cases', () => {
       const existTemplateTimeline = null;
       const result = checkIsUpdateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.default,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.default,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -468,14 +496,14 @@ describe('failure cases', () => {
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = {
-        ...(mockGetTemplateTimelineValue as TimelineSavedObject),
+        ...(mockGetTemplateTimelineValue as TimelineResponse),
         savedObjectId: 'someOtherId',
       };
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsUpdateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.template,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -489,17 +517,17 @@ describe('failure cases', () => {
       });
     });
 
-    test('should return error if given version field is defferent from existing version of timelin template', () => {
+    test('should return error if given version field is defferent from existing version of timeline template', () => {
       const isHandlingTemplateTimeline = true;
       const version = 'xxx';
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = null;
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsUpdateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.template,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,
@@ -508,22 +536,22 @@ describe('failure cases', () => {
       );
 
       expect(result).toEqual({
-        body: NO_MATCH_VERSION_ERROR_MESSAGE,
+        body: NO_MATCH_TEMPLATE_VERSION_ERROR_MESSAGE,
         statusCode: 409,
       });
     });
 
-    test('should return error if given templateTimelineVersion field is less or equal to existing templateTimelineVersion of timelin template', () => {
+    test('should return error if given templateTimelineVersion field is less or equal to existing templateTimelineVersion of timeline template', () => {
       const isHandlingTemplateTimeline = true;
       const version = mockGetTemplateTimelineValue.version;
       const templateTimelineVersion = mockGetTemplateTimelineValue.templateTimelineVersion;
       const templateTimelineId = mockGetTemplateTimelineValue.templateTimelineId;
       const existTimeline = null;
-      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineSavedObject;
+      const existTemplateTimeline = mockGetTemplateTimelineValue as TimelineResponse;
       const result = checkIsUpdateViaImportFailureCases(
         isHandlingTemplateTimeline,
-        TimelineStatus.active,
-        TimelineType.template,
+        TimelineStatusEnum.active,
+        TimelineTypeEnum.template,
         version,
         templateTimelineVersion,
         templateTimelineId,

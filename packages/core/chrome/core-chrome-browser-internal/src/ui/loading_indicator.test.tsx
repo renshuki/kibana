@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -28,9 +29,9 @@ describe('kbnLoadingIndicator', () => {
     expect(wrapper).toMatchSnapshot();
   });
 
-  it('shows EuiLoadingSpinner when showPlainSpinner is true', () => {
+  it('shows logo image when customLogo is set', () => {
     const wrapper = shallow(
-      <LoadingIndicator loadingCount$={new BehaviorSubject(1)} showPlainSpinner={true} />
+      <LoadingIndicator loadingCount$={new BehaviorSubject(1)} customLogo={'customLogo'} />
     );
     // Pause the check beyond the 250ms delay that it has
     setTimeout(() => {

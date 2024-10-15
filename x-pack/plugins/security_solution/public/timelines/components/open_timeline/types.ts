@@ -6,18 +6,16 @@
  */
 
 import type React from 'react';
-import type { AllTimelinesVariables } from '../../containers/all';
-import type { TimelineModel } from '../../store/timeline/model';
-import type { NoteResult } from '../../../../common/types/timeline/note';
+import type { IconType } from '@elastic/eui';
+import type { TimelineModel } from '../../store/model';
 import type {
-  TimelineTypeLiteral,
-  TimelineTypeLiteralWithNull,
-  TimelineStatus,
-  TemplateTimelineTypeLiteral,
   RowRendererId,
-  TimelineStatusLiteralWithNull,
-  SingleTimelineResolveResponse,
-} from '../../../../common/types/timeline';
+  ResolvedTimeline,
+  TimelineType,
+  TimelineStatus,
+  TemplateTimelineType,
+  Note,
+} from '../../../../common/api/timeline';
 
 /** The users who added a timeline to favorites */
 export interface FavoriteTimelineResult {
@@ -40,11 +38,11 @@ export interface TimelineActionsOverflowColumns {
   width: string;
   actions: Array<{
     name: string;
-    icon?: string;
+    icon: IconType;
     onClick?: (timeline: OpenTimelineResult) => void;
     description: string;
     render?: (timeline: OpenTimelineResult) => JSX.Element;
-  } | null>;
+  }>;
 }
 
 /** The results of the query run by the OpenTimeline component */
@@ -57,11 +55,13 @@ export interface OpenTimelineResult {
   noteIds?: string[] | null;
   notes?: TimelineResultNote[] | null;
   pinnedEventIds?: Readonly<Record<string, boolean>> | null;
+  queryType?: { hasEql: boolean; hasQuery: boolean };
   savedObjectId?: string | null;
+  savedSearchId?: string | null;
   status?: TimelineStatus | null;
   title?: string | null;
   templateTimelineId?: string | null;
-  timelineType?: TimelineTypeLiteral;
+  timelineType?: TimelineType;
   updated?: number | null;
   updatedBy?: string | null;
 }
@@ -76,7 +76,7 @@ export interface EuiSearchBarQuery {
 }
 
 /** Performs IO to delete the specified timelines */
-export type DeleteTimelines = (timelineIds: string[], variables?: AllTimelinesVariables) => void;
+export type DeleteTimelines = (timelineIds: string[], searchIds?: string[]) => void;
 
 /** Invoked when the user clicks the action create rule from timeline */
 export type OnCreateRuleFromTimeline = (savedObjectId: string) => void;
@@ -96,7 +96,7 @@ export type OnOpenTimeline = ({
 }: {
   duplicate: boolean;
   timelineId: string;
-  timelineType?: TimelineTypeLiteral;
+  timelineType?: TimelineType;
 }) => void;
 
 export type OnOpenDeleteTimelineModal = (selectedItem: OpenTimelineResult) => void;
@@ -116,11 +116,11 @@ export type OnToggleShowNotes = (itemIdToExpandedNotesRowMap: Record<string, JSX
 
 /** Parameters to the OnTableChange callback  */
 export interface OnTableChangeParams {
-  page: {
+  page?: {
     index: number;
     size: number;
   };
-  sort: {
+  sort?: {
     field: string;
     direction: 'asc' | 'desc';
   };
@@ -135,7 +135,8 @@ export type ActionTimelineToShow =
   | 'delete'
   | 'export'
   | 'selectable'
-  | 'createRule';
+  | 'createRule'
+  | 'createRuleFromEql';
 
 export interface OpenTimelineProps {
   /** Invoked when the user clicks the delete (trash) icon on an individual timeline */
@@ -152,6 +153,9 @@ export interface OpenTimelineProps {
   importDataModalToggle?: boolean;
   /** If this callback is specified, a "Create rule from timeline" button will be displayed, and this callback will be invoked when the button is clicked */
   onCreateRule?: OnCreateRuleFromTimeline;
+
+  /** If this callback is specified, a "Create rule from timeline correlation" button will be displayed, and this callback will be invoked when the button is clicked */
+  onCreateRuleFromEql?: OnCreateRuleFromTimeline;
   /** If this callback is specified, a "Favorite Selected" button will be displayed, and this callback will be invoked when the button is clicked */
   onAddTimelinesToFavorites?: OnAddTimelinesToFavorites;
   /** If this callback is specified, a "Delete Selected" button will be displayed, and this callback will be invoked when the button is clicked */
@@ -181,7 +185,7 @@ export interface OpenTimelineProps {
   /** The results of executing a search, null is the status before data fatched */
   searchResults: OpenTimelineResult[] | null;
   /** the currently-selected timelines in the table */
-  selectedItems: OpenTimelineResult[];
+  selectedItems?: OpenTimelineResult[];
   /** Toggle export timelines modal*/
   setImportDataModalToggle?: React.Dispatch<React.SetStateAction<boolean>>;
   /** the requested sort direction of the query results */
@@ -189,9 +193,9 @@ export interface OpenTimelineProps {
   /** the requested field to sort on */
   sortField: string;
   /** this affects timeline's behaviour like editable / duplicatible */
-  timelineType: TimelineTypeLiteralWithNull;
+  timelineType: TimelineType | null;
   /* active or immutable */
-  timelineStatus: TimelineStatusLiteralWithNull;
+  timelineStatus: TimelineStatus | null;
   /** when timelineType === template, templatetimelineFilter is a JSX.Element */
   templateTimelineFilter: JSX.Element[] | null;
   /** timeline / timeline template */
@@ -205,34 +209,25 @@ export interface OpenTimelineProps {
 }
 
 export interface ResolveTimelineConfig {
-  alias_target_id: SingleTimelineResolveResponse['data']['alias_target_id'];
-  outcome: SingleTimelineResolveResponse['data']['outcome'];
-  alias_purpose: SingleTimelineResolveResponse['data']['alias_purpose'];
+  alias_target_id: ResolvedTimeline['alias_target_id'];
+  outcome: ResolvedTimeline['outcome'];
+  alias_purpose: ResolvedTimeline['alias_purpose'];
 }
 export interface UpdateTimeline {
   duplicate: boolean;
   id: string;
   forceNotes?: boolean;
   from: string;
-  notes: NoteResult[] | null | undefined;
+  notes: Note[] | null | undefined;
   resolveTimelineConfig?: ResolveTimelineConfig;
   timeline: TimelineModel;
   to: string;
   ruleNote?: string;
   ruleAuthor?: string;
+  preventSettingQuery?: boolean;
 }
 
-export type DispatchUpdateTimeline = ({
-  duplicate,
-  id,
-  from,
-  notes,
-  resolveTimelineConfig,
-  timeline,
-  to,
-  ruleNote,
-  ruleAuthor,
-}: UpdateTimeline) => () => void;
+export type DispatchUpdateTimeline = (args: UpdateTimeline) => void;
 
 export enum TimelineTabsStyle {
   tab = 'tab',
@@ -242,13 +237,13 @@ export enum TimelineTabsStyle {
 export interface TimelineTab {
   disabled: boolean;
   href: string;
-  id: TimelineTypeLiteral;
+  id: TimelineType;
   name: string;
-  onClick: (ev: { preventDefault: () => void }) => void;
+  onClick: (ev: React.SyntheticEvent) => void;
 }
 
 export interface TemplateTimelineFilter {
-  id: TemplateTimelineTypeLiteral;
+  id: TemplateTimelineType;
   name: string;
   disabled: boolean;
   withNext: boolean;

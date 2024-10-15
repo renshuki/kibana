@@ -13,41 +13,36 @@ import numeral from '@elastic/numeral';
 
 import { indexPatterns } from '@kbn/data-plugin/public';
 import { XJson } from '@kbn/es-ui-shared-plugin/public';
-
-import { isValidIndexName } from '../../../../../../../common/util/es_utils';
-
-import { Action, ACTION } from './actions';
-import {
-  getInitialState,
-  getFormStateFromJobConfig,
-  getJobConfigFromFormState,
-  State,
-} from './state';
-import {
-  isJobIdValid,
-  validateModelMemoryLimitUnits,
-} from '../../../../../../../common/util/job_utils';
-import {
-  composeValidators,
-  maxLengthValidator,
-  memoryInputValidator,
-  requiredValidator,
-} from '../../../../../../../common/util/validators';
-import {
-  JOB_ID_MAX_LENGTH,
-  ALLOWED_DATA_UNITS,
-} from '../../../../../../../common/constants/validation';
-import { ANALYSIS_CONFIG_TYPE } from '../../../../../../../common/constants/data_frame_analytics';
 import {
   getDependentVar,
   getNumTopFeatureImportanceValues,
   getTrainingPercent,
   isRegressionAnalysis,
   isClassificationAnalysis,
+  ANALYSIS_CONFIG_TYPE,
   NUM_TOP_FEATURE_IMPORTANCE_VALUES_MIN,
   TRAINING_PERCENT_MIN,
   TRAINING_PERCENT_MAX,
-} from '../../../../common/analytics';
+} from '@kbn/ml-data-frame-analytics-utils';
+import {
+  composeValidators,
+  maxLengthValidator,
+  memoryInputValidator,
+  requiredValidator,
+  JOB_ID_MAX_LENGTH,
+  ALLOWED_DATA_UNITS,
+} from '@kbn/ml-validators';
+
+import { isValidIndexName } from '../../../../../../../common/util/es_utils';
+
+import type { Action } from './actions';
+import { ACTION } from './actions';
+import type { State } from './state';
+import { getInitialState, getFormStateFromJobConfig, getJobConfigFromFormState } from './state';
+import {
+  isJobIdValid,
+  validateModelMemoryLimitUnits,
+} from '../../../../../../../common/util/job_utils';
 import { isAdvancedConfig } from '../../components/action_clone/clone_action_name';
 
 const { collapseLiteralStrings } = XJson;
@@ -148,7 +143,7 @@ export const validateNumTopFeatureImportanceValues = (
 };
 
 export const validateAdvancedEditor = (state: State): State => {
-  const { jobIdEmpty, jobIdValid, jobIdExists, jobType, createIndexPattern } = state.form;
+  const { jobIdEmpty, jobIdValid, jobIdExists, jobType, createDataView } = state.form;
   const { jobConfig } = state;
 
   state.advancedEditorMessages = [];
@@ -161,8 +156,7 @@ export const validateAdvancedEditor = (state: State): State => {
   const destinationIndexName = jobConfig?.dest?.index ?? '';
   const destinationIndexNameEmpty = destinationIndexName === '';
   const destinationIndexNameValid = isValidIndexName(destinationIndexName);
-  const destinationIndexPatternTitleExists =
-    state.indexPatternsMap[destinationIndexName] !== undefined;
+  const destinationDataViewTitleExists = state.dataViewsMap[destinationIndexName] !== undefined;
 
   const analyzedFields = jobConfig?.analyzed_fields?.includes || [];
 
@@ -294,7 +288,7 @@ export const validateAdvancedEditor = (state: State): State => {
       ),
       message: '',
     });
-  } else if (destinationIndexPatternTitleExists && !createIndexPattern) {
+  } else if (destinationDataViewTitleExists && !createDataView) {
     state.advancedEditorMessages.push({
       error: i18n.translate(
         'xpack.ml.dataframe.analytics.create.advancedEditorMessage.destinationIndexNameExistsWarn',
@@ -360,7 +354,7 @@ export const validateAdvancedEditor = (state: State): State => {
     });
   }
 
-  state.form.destinationIndexPatternTitleExists = destinationIndexPatternTitleExists;
+  state.form.destinationDataViewTitleExists = destinationDataViewTitleExists;
 
   state.isValid =
     includesValid &&
@@ -376,8 +370,8 @@ export const validateAdvancedEditor = (state: State): State => {
     !resultsFieldEmptyString &&
     !dependentVariableEmpty &&
     !modelMemoryLimitEmpty &&
-    numTopFeatureImportanceValuesValid &&
-    (!destinationIndexPatternTitleExists || !createIndexPattern);
+    (numTopFeatureImportanceValuesValid || jobType === ANALYSIS_CONFIG_TYPE.OUTLIER_DETECTION) &&
+    (!destinationDataViewTitleExists || !createDataView);
 
   return state;
 };
@@ -425,8 +419,8 @@ const validateForm = (state: State): State => {
     sourceIndexNameValid,
     destinationIndexNameEmpty,
     destinationIndexNameValid,
-    destinationIndexPatternTitleExists,
-    createIndexPattern,
+    destinationDataViewTitleExists,
+    createDataView,
     dependentVariable,
     modelMemoryLimit,
     numTopFeatureImportanceValuesValid,
@@ -457,8 +451,8 @@ const validateForm = (state: State): State => {
     !destinationIndexNameEmpty &&
     destinationIndexNameValid &&
     !dependentVariableEmpty &&
-    numTopFeatureImportanceValuesValid &&
-    (!destinationIndexPatternTitleExists || !createIndexPattern);
+    (numTopFeatureImportanceValuesValid || jobType === ANALYSIS_CONFIG_TYPE.OUTLIER_DETECTION) &&
+    (!destinationDataViewTitleExists || !createDataView);
 
   return state;
 };
@@ -513,8 +507,8 @@ export function reducer(state: State, action: Action): State {
       if (action.payload.destinationIndex !== undefined) {
         newFormState.destinationIndexNameEmpty = newFormState.destinationIndex === '';
         newFormState.destinationIndexNameValid = isValidIndexName(newFormState.destinationIndex);
-        newFormState.destinationIndexPatternTitleExists =
-          state.indexPatternsMap[newFormState.destinationIndex] !== undefined;
+        newFormState.destinationDataViewTitleExists =
+          state.dataViewsMap[newFormState.destinationIndex] !== undefined;
       }
 
       if (action.payload.jobId !== undefined) {
@@ -541,13 +535,13 @@ export function reducer(state: State, action: Action): State {
         ? validateAdvancedEditor({ ...state, form: newFormState })
         : validateForm({ ...state, form: newFormState });
 
-    case ACTION.SET_INDEX_PATTERN_TITLES: {
+    case ACTION.SET_DATA_VIEW_TITLES: {
       const newState = {
         ...state,
         ...action.payload,
       };
-      newState.form.destinationIndexPatternTitleExists =
-        newState.indexPatternsMap[newState.form.destinationIndex] !== undefined;
+      newState.form.destinationDataViewTitleExists =
+        newState.dataViewsMap[newState.form.destinationIndex] !== undefined;
       return newState;
     }
 
@@ -577,7 +571,9 @@ export function reducer(state: State, action: Action): State {
       const { jobConfig: config } = state;
       const { jobId } = state.form;
       // @ts-ignore
-      const formState = getFormStateFromJobConfig(config, false);
+      const formStateFromJobConfig = getFormStateFromJobConfig(config, false);
+      // Ensure previous form settings are persisted. Form state does not include any nested attributes.
+      const formState = { ...formStateFromJobConfig, ...state.form };
 
       if (typeof jobId === 'string' && jobId.trim() !== '') {
         formState.jobId = jobId;
@@ -589,8 +585,8 @@ export function reducer(state: State, action: Action): State {
 
       formState.destinationIndexNameEmpty = formState.destinationIndex === '';
       formState.destinationIndexNameValid = isValidIndexName(formState.destinationIndex || '');
-      formState.destinationIndexPatternTitleExists =
-        state.indexPatternsMap[formState.destinationIndex || ''] !== undefined;
+      formState.destinationDataViewTitleExists =
+        state.dataViewsMap[formState.destinationIndex || ''] !== undefined;
 
       if (formState.numTopFeatureImportanceValues !== undefined) {
         formState.numTopFeatureImportanceValuesValid = validateNumTopFeatureImportanceValues(
@@ -605,7 +601,6 @@ export function reducer(state: State, action: Action): State {
 
       return validateForm({
         ...state,
-        // @ts-ignore
         form: formState,
         isAdvancedEditorEnabled: false,
         advancedEditorRawString: JSON.stringify(config, null, 2),

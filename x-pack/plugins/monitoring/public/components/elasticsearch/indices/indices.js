@@ -16,7 +16,6 @@ import { EuiMonitoringTable } from '../../table';
 import {
   EuiLink,
   EuiPage,
-  EuiPageContent_Deprecated as EuiPageContent,
   EuiPageBody,
   EuiPanel,
   EuiSwitch,
@@ -139,7 +138,7 @@ const getNoDataMessage = () => {
       <p>
         <FormattedMessage
           id="xpack.monitoring.elasticsearch.indices.howToShowSystemIndicesDescription"
-          defaultMessage="If you are looking for system indices (e.g., .kibana), try checking &lsquo;Show system indices&rsquo;."
+          defaultMessage="If you are looking for system indices (e.g., .kibana), try checking &lsquo;Filter for system indices&rsquo;."
         />
       </p>
     </div>
@@ -171,7 +170,7 @@ export const ElasticsearchIndices = ({
           <ClusterStatus stats={clusterStatus} alerts={alerts} />
         </EuiPanel>
         <EuiSpacer size="m" />
-        <EuiPageContent>
+        <EuiPanel>
           <EuiSwitch
             label={
               <FormattedMessage
@@ -206,7 +205,7 @@ export const ElasticsearchIndices = ({
               defaultFields: ['name'],
             }}
           />
-        </EuiPageContent>
+        </EuiPanel>
       </EuiPageBody>
     </EuiPage>
   );

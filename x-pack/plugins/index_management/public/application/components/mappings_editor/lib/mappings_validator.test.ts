@@ -33,10 +33,14 @@ describe('Mappings configuration validator', () => {
         required: false,
       },
       dynamic: true,
+      _data_stream_timestamp: {
+        enabled: true,
+      },
       // Mapper-size plugin
       _size: {
         enabled: true,
       },
+      subobjects: true,
     };
 
     const { errors } = validateMappings(mappings, [MapperSizePluginId]);
@@ -56,6 +60,7 @@ describe('Mappings configuration validator', () => {
       },
       properties: { title: { type: 'text' } },
       dynamic_templates: [],
+      subobjects: true,
       unknown: 123,
     };
 
@@ -82,6 +87,7 @@ describe('Mappings configuration validator', () => {
       _size: {
         enabled: true,
       },
+      subobjects: true,
     };
 
     const { value, errors } = validateMappings(mappings, []);
@@ -90,6 +96,7 @@ describe('Mappings configuration validator', () => {
       dynamic: true,
       properties: {},
       dynamic_templates: [],
+      subobjects: true,
     });
 
     expect(errors).not.toBe(undefined);
@@ -306,6 +313,7 @@ describe('Properties validator', () => {
         depth_limit: true,
         dims: false,
         max_shingle_size: 'string_not_allowed',
+        subobjects: 'abc',
       },
       // All the parameters in "goodField" have the correct format
       // and should still be there after the validation ran.
@@ -329,7 +337,7 @@ describe('Properties validator', () => {
         orientation: 'ccw',
         boost: 1.5,
         scaling_factor: 2.5,
-        dynamic: 'strict', // true | false | 'strict' are allowed
+        dynamic: 'strict', // true | false | 'strict' | 'true' | 'false' | 'runtime' are allowed
         enabled: true,
         format: 'strict_date_optional_time',
         analyzer: 'standard',
@@ -358,6 +366,7 @@ describe('Properties validator', () => {
         depth_limit: 20,
         dims: 'abc',
         max_shingle_size: 2,
+        subobjects: true,
       },
       goodField2: {
         type: 'object',
@@ -367,16 +376,39 @@ describe('Properties validator', () => {
         type: 'object',
         dynamic: false,
       },
+      goodField4: {
+        type: 'object',
+        dynamic: 'true',
+      },
+      goodField5: {
+        type: 'object',
+        dynamic: 'false',
+      },
+      goodField6: {
+        type: 'object',
+        dynamic: 'runtime',
+      },
     };
 
     const { value, errors } = validateProperties(properties as any);
 
-    expect(Object.keys(value)).toEqual(['wrongField', 'goodField', 'goodField2', 'goodField3']);
+    expect(Object.keys(value)).toEqual([
+      'wrongField',
+      'goodField',
+      'goodField2',
+      'goodField3',
+      'goodField4',
+      'goodField5',
+      'goodField6',
+    ]);
 
     expect(value.wrongField).toEqual({ type: 'text' }); // All parameters have been stripped out but the "type".
     expect(value.goodField).toEqual(properties.goodField); // All parameters are stil there.
     expect(value.goodField2).toEqual(properties.goodField2);
     expect(value.goodField3).toEqual(properties.goodField3);
+    expect(value.goodField4).toEqual(properties.goodField4);
+    expect(value.goodField5).toEqual(properties.goodField5);
+    expect(value.goodField6).toEqual(properties.goodField6);
 
     const allWrongParameters = Object.keys(properties.wrongField).filter((v) => v !== 'type');
     expect(errors).toEqual(

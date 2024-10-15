@@ -40,6 +40,7 @@ describe('listAlertTypesRoute', () => {
     const [config, handler] = router.get.mock.calls[0];
 
     expect(config.path).toMatchInlineSnapshot(`"/api/alerts/list_alert_types"`);
+    expect(config.options?.access).toBe('public');
 
     const listTypes = [
       {
@@ -60,11 +61,15 @@ describe('listAlertTypesRoute', () => {
           context: [],
           state: [],
         },
+        category: 'test',
         producer: 'test',
         enabledInLicense: true,
+        hasAlertsMappings: false,
+        hasFieldsForAAD: false,
+        validLegacyConsumers: [],
       } as RegistryAlertTypeWithAuth,
     ];
-    rulesClient.listAlertTypes.mockResolvedValueOnce(new Set(listTypes));
+    rulesClient.listRuleTypes.mockResolvedValueOnce(new Set(listTypes));
 
     const [context, req, res] = mockHandlerArguments({ rulesClient }, {}, ['ok']);
 
@@ -83,8 +88,11 @@ describe('listAlertTypesRoute', () => {
               "state": Array [],
             },
             "authorizedConsumers": Object {},
+            "category": "test",
             "defaultActionGroupId": "default",
             "enabledInLicense": true,
+            "hasAlertsMappings": false,
+            "hasFieldsForAAD": false,
             "id": "1",
             "isExportable": true,
             "minimumLicenseRequired": "basic",
@@ -94,16 +102,29 @@ describe('listAlertTypesRoute', () => {
               "id": "recovered",
               "name": "Recovered",
             },
+            "validLegacyConsumers": Array [],
           },
         ],
       }
     `);
 
-    expect(rulesClient.listAlertTypes).toHaveBeenCalledTimes(1);
+    expect(rulesClient.listRuleTypes).toHaveBeenCalledTimes(1);
 
     expect(res.ok).toHaveBeenCalledWith({
       body: listTypes,
     });
+  });
+
+  it('should have internal access for serverless', async () => {
+    const licenseState = licenseStateMock.create();
+    const router = httpServiceMock.createRouter();
+
+    listAlertTypesRoute(router, licenseState, undefined, true);
+
+    const [config] = router.get.mock.calls[0];
+
+    expect(config.path).toMatchInlineSnapshot(`"/api/alerts/list_alert_types"`);
+    expect(config.options?.access).toBe('internal');
   });
 
   it('ensures the license allows listing alert types', async () => {
@@ -135,12 +156,16 @@ describe('listAlertTypesRoute', () => {
           context: [],
           state: [],
         },
+        category: 'test',
         producer: 'alerts',
         enabledInLicense: true,
+        hasAlertsMappings: false,
+        hasFieldsForAAD: false,
+        validLegacyConsumers: [],
       } as RegistryAlertTypeWithAuth,
     ];
 
-    rulesClient.listAlertTypes.mockResolvedValueOnce(new Set(listTypes));
+    rulesClient.listRuleTypes.mockResolvedValueOnce(new Set(listTypes));
 
     const [context, req, res] = mockHandlerArguments(
       { rulesClient },
@@ -188,12 +213,16 @@ describe('listAlertTypesRoute', () => {
           context: [],
           state: [],
         },
+        category: 'test',
         producer: 'alerts',
         enabledInLicense: true,
+        hasAlertsMappings: false,
+        hasFieldsForAAD: false,
+        validLegacyConsumers: [],
       } as RegistryAlertTypeWithAuth,
     ];
 
-    rulesClient.listAlertTypes.mockResolvedValueOnce(new Set(listTypes));
+    rulesClient.listRuleTypes.mockResolvedValueOnce(new Set(listTypes));
 
     const [context, req, res] = mockHandlerArguments(
       { rulesClient },
@@ -203,7 +232,7 @@ describe('listAlertTypesRoute', () => {
       ['ok']
     );
 
-    expect(handler(context, req, res)).rejects.toMatchInlineSnapshot(`[Error: OMG]`);
+    await expect(handler(context, req, res)).rejects.toMatchInlineSnapshot(`[Error: OMG]`);
 
     expect(verifyApiAccess).toHaveBeenCalledWith(licenseState);
   });
@@ -214,7 +243,7 @@ describe('listAlertTypesRoute', () => {
     const mockUsageCountersSetup = usageCountersServiceMock.createSetupContract();
     const mockUsageCounter = mockUsageCountersSetup.createUsageCounter('test');
 
-    rulesClient.listAlertTypes.mockResolvedValueOnce(new Set([]));
+    rulesClient.listRuleTypes.mockResolvedValueOnce(new Set([]));
 
     listAlertTypesRoute(router, licenseState, mockUsageCounter);
     const [, handler] = router.get.mock.calls[0];

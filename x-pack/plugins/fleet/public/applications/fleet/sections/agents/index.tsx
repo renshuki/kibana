@@ -7,7 +7,8 @@
 
 import React from 'react';
 import { FormattedMessage } from '@kbn/i18n-react';
-import { Router, Route, Switch, useHistory } from 'react-router-dom';
+import { Routes, Route } from '@kbn/shared-ux-router';
+
 import { EuiButton, EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
 
 import { FLEET_ROUTING_PATHS } from '../../constants';
@@ -22,9 +23,8 @@ import { NoAccessPage } from './error_pages/no_access';
 
 export const AgentsApp: React.FunctionComponent = () => {
   useBreadcrumbs('agent_list');
-  const history = useHistory();
   const { agents } = useConfig();
-  const hasFleetAllPrivileges = useAuthz().fleet.all;
+  const authz = useAuthz();
   const fleetStatus = useFleetStatus();
   const flyoutContext = useFlyoutContext();
 
@@ -54,7 +54,8 @@ export const AgentsApp: React.FunctionComponent = () => {
     fleetStatus.missingRequirements[0] === 'fleet_server';
 
   const displayInstructions =
-    fleetStatus.forceDisplayInstructions || hasOnlyFleetServerMissingRequirement;
+    authz.fleet.allAgents &&
+    (fleetStatus.forceDisplayInstructions || hasOnlyFleetServerMissingRequirement);
 
   if (
     !hasOnlyFleetServerMissingRequirement &&
@@ -63,7 +64,7 @@ export const AgentsApp: React.FunctionComponent = () => {
   ) {
     return <MissingESRequirementsPage missingRequirements={fleetStatus.missingRequirements} />;
   }
-  if (!hasFleetAllPrivileges) {
+  if (!authz.fleet.readAgents) {
     return <NoAccessPage />;
   }
 
@@ -85,21 +86,19 @@ export const AgentsApp: React.FunctionComponent = () => {
   ) : undefined;
 
   return (
-    <Router history={history}>
-      <Switch>
-        <Route path={FLEET_ROUTING_PATHS.agent_details}>
-          <AgentDetailsPage />
-        </Route>
-        <Route path={FLEET_ROUTING_PATHS.agents}>
-          <DefaultLayout section="agents" rightColumn={rightColumn}>
-            {displayInstructions ? (
-              <FleetServerRequirementPage showEnrollmentRecommendation={false} />
-            ) : (
-              <AgentListPage />
-            )}
-          </DefaultLayout>
-        </Route>
-      </Switch>
-    </Router>
+    <Routes>
+      <Route path={FLEET_ROUTING_PATHS.agent_details}>
+        <AgentDetailsPage />
+      </Route>
+      <Route path={FLEET_ROUTING_PATHS.agents}>
+        <DefaultLayout section="agents" rightColumn={rightColumn}>
+          {displayInstructions ? (
+            <FleetServerRequirementPage showEnrollmentRecommendation={false} />
+          ) : (
+            <AgentListPage />
+          )}
+        </DefaultLayout>
+      </Route>
+    </Routes>
   );
 };

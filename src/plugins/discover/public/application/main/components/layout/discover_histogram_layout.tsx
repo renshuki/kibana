@@ -1,85 +1,98 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { RefObject } from 'react';
-import { UnifiedHistogramLayout } from '@kbn/unified-histogram-plugin/public';
+import React, { useCallback, useMemo } from 'react';
+import { UnifiedHistogramContainer } from '@kbn/unified-histogram-plugin/public';
 import { css } from '@emotion/react';
-import { useDiscoverServices } from '../../../../hooks/use_discover_services';
+import useObservable from 'react-use/lib/useObservable';
+import { ESQL_TABLE_TYPE } from '@kbn/data-plugin/common';
+import type { Datatable } from '@kbn/expressions-plugin/common';
 import { useDiscoverHistogram } from './use_discover_histogram';
-import type { DiscoverSearchSessionManager } from '../../services/discover_search_session';
-import type { InspectorAdapters } from '../../hooks/use_inspector';
 import { type DiscoverMainContentProps, DiscoverMainContent } from './discover_main_content';
-import { ResetSearchButton } from './reset_search_button';
+import { useAppStateSelector } from '../../state_management/discover_app_state_container';
+import { FetchStatus } from '../../../types';
+import { useIsEsqlMode } from '../../hooks/use_is_esql_mode';
 
 export interface DiscoverHistogramLayoutProps extends DiscoverMainContentProps {
-  resetSavedSearch: () => void;
-  isTimeBased: boolean;
-  resizeRef: RefObject<HTMLDivElement>;
-  inspectorAdapters: InspectorAdapters;
-  searchSessionManager: DiscoverSearchSessionManager;
+  container: HTMLElement | null;
 }
 
+const histogramLayoutCss = css`
+  height: 100%;
+`;
+
 export const DiscoverHistogramLayout = ({
-  isPlainRecord,
   dataView,
-  resetSavedSearch,
-  savedSearch,
   stateContainer,
-  isTimeBased,
-  resizeRef,
-  inspectorAdapters,
-  searchSessionManager,
+  container,
+  panelsToggle,
   ...mainContentProps
 }: DiscoverHistogramLayoutProps) => {
-  const services = useDiscoverServices();
-
-  const commonProps = {
-    dataView,
-    isPlainRecord,
+  const { dataState } = stateContainer;
+  const searchSessionId = useObservable(stateContainer.searchSessionManager.searchSessionId$);
+  const hideChart = useAppStateSelector((state) => state.hideChart);
+  const isEsqlMode = useIsEsqlMode();
+  const unifiedHistogramProps = useDiscoverHistogram({
     stateContainer,
-    savedSearch,
-    savedSearchData$: stateContainer.dataState.data$,
-  };
-
-  const histogramProps = useDiscoverHistogram({
-    isTimeBased,
-    inspectorAdapters,
-    searchSessionManager,
-    savedSearchFetch$: stateContainer.dataState.fetch$,
-    ...commonProps,
+    inspectorAdapters: dataState.inspectorAdapters,
+    hideChart,
   });
 
-  if (!histogramProps) {
+  const datatable = useObservable(dataState.data$.documents$);
+  const renderCustomChartToggleActions = useCallback(
+    () =>
+      React.isValidElement(panelsToggle)
+        ? React.cloneElement(panelsToggle, { renderedFor: 'histogram' })
+        : panelsToggle,
+    [panelsToggle]
+  );
+
+  const table: Datatable | undefined = useMemo(() => {
+    if (
+      isEsqlMode &&
+      datatable &&
+      [FetchStatus.PARTIAL, FetchStatus.COMPLETE].includes(datatable.fetchStatus)
+    ) {
+      return {
+        type: 'datatable' as 'datatable',
+        rows: datatable.result!.map((r) => r.raw),
+        columns: datatable.esqlQueryColumns || [],
+        meta: {
+          type: ESQL_TABLE_TYPE,
+        },
+      };
+    }
+  }, [datatable, isEsqlMode]);
+
+  // Initialized when the first search has been requested or
+  // when in ES|QL mode since search sessions are not supported
+  if (!searchSessionId && !isEsqlMode) {
     return null;
   }
 
-  const histogramLayoutCss = css`
-    height: 100%;
-  `;
-
   return (
-    <UnifiedHistogramLayout
-      resizeRef={resizeRef}
-      services={services}
-      dataView={dataView}
-      appendHitsCounter={
-        savedSearch?.id ? <ResetSearchButton resetSavedSearch={resetSavedSearch} /> : undefined
-      }
+    <UnifiedHistogramContainer
+      {...unifiedHistogramProps}
+      searchSessionId={searchSessionId}
+      requestAdapter={dataState.inspectorAdapters.requests}
+      table={table}
+      container={container}
       css={histogramLayoutCss}
-      {...histogramProps}
+      renderCustomChartToggleActions={renderCustomChartToggleActions}
+      abortController={stateContainer.dataState.getAbortController()}
     >
       <DiscoverMainContent
-        {...commonProps}
         {...mainContentProps}
-        // The documents grid doesn't rerender when the chart visibility changes
-        // which causes it to render blank space, so we need to force a rerender
-        key={`docKey${histogramProps.chart?.hidden}`}
+        stateContainer={stateContainer}
+        dataView={dataView}
+        panelsToggle={panelsToggle}
       />
-    </UnifiedHistogramLayout>
+    </UnifiedHistogramContainer>
   );
 };

@@ -1,20 +1,26 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { Observable } from 'rxjs';
 import type { ChromeNavLink, ChromeNavLinks } from './nav_links';
 import type { ChromeRecentlyAccessed } from './recently_accessed';
 import type { ChromeDocTitle } from './doc_title';
-import type { ChromeNavControls } from './nav_controls';
+import type { ChromeHelpMenuLink, ChromeNavControls } from './nav_controls';
 import type { ChromeHelpExtension } from './help_extension';
-import type { ChromeBreadcrumb, ChromeBreadcrumbsAppendExtension } from './breadcrumb';
-import type { ChromeBadge, ChromeUserBanner } from './types';
-import { ChromeGlobalHelpExtensionMenuLink } from './help_extension';
+import type {
+  ChromeBreadcrumb,
+  ChromeBreadcrumbsAppendExtension,
+  ChromeSetBreadcrumbsParams,
+} from './breadcrumb';
+import type { ChromeBadge, ChromeStyle, ChromeUserBanner } from './types';
+import type { ChromeGlobalHelpExtensionMenuLink } from './help_extension';
+import type { PanelSelectedNode } from './project_navigation';
 
 /**
  * ChromeStart allows plugins to customize the global chrome header UI and
@@ -82,7 +88,7 @@ export interface ChromeStart {
   /**
    * Override the current set of breadcrumbs
    */
-  setBreadcrumbs(newBreadcrumbs: ChromeBreadcrumb[]): void;
+  setBreadcrumbs(newBreadcrumbs: ChromeBreadcrumb[], params?: ChromeSetBreadcrumbsParams): void;
 
   /**
    * Get an observable of the current extension appended to breadcrumbs
@@ -105,6 +111,11 @@ export interface ChromeStart {
    * Override the current set of custom nav link
    */
   setCustomNavLink(newCustomNavLink?: Partial<ChromeNavLink>): void;
+
+  /**
+   * Override the default links shown in the help menu
+   */
+  setHelpMenuLinks(links: ChromeHelpMenuLink[]): void;
 
   /**
    * Get the list of the registered global help extension menu links
@@ -135,6 +146,11 @@ export interface ChromeStart {
   setHelpSupportUrl(url: string): void;
 
   /**
+   * Get the support URL shown in the help menu
+   */
+  getHelpSupportUrl$(): Observable<string>;
+
+  /**
    * Get an observable of the current locked state of the nav drawer.
    */
   getIsNavDrawerLocked$(): Observable<boolean>;
@@ -150,4 +166,58 @@ export interface ChromeStart {
    * Get an observable of the current header banner presence state.
    */
   hasHeaderBanner$(): Observable<boolean>;
+
+  /**
+   * Sets the style type of the chrome.
+   * @param style The style type to apply to the chrome.
+   */
+  setChromeStyle(style: ChromeStyle): void;
+
+  /**
+   * Get an observable of the current style type of the chrome.
+   */
+  getChromeStyle$(): Observable<ChromeStyle>;
+
+  sideNav: {
+    /**
+     * Get an observable of the current collapsed state of the side nav.
+     */
+    getIsCollapsed$(): Observable<boolean>;
+
+    /**
+     * Set the collapsed state of the side nav.
+     * @param isCollapsed The collapsed state of the side nav.
+     */
+    setIsCollapsed(isCollapsed: boolean): void;
+
+    /**
+     * Get an observable of the selected nav node that opens the side nav panel.
+     */
+    getPanelSelectedNode$: () => Observable<PanelSelectedNode | null>;
+
+    /**
+     * Set the selected nav node that opens the side nav panel.
+     *
+     * @param node The selected nav node that opens the side nav panel. If a string is provided,
+     * it will be used as the **id** of the selected nav node. If `null` is provided, the side nav panel
+     * will be closed.
+     */
+    setPanelSelectedNode(node: string | PanelSelectedNode | null): void;
+
+    /**
+     * Get an observable of the visibility state of the feedback button in the side nav.
+     */
+    getIsFeedbackBtnVisible$: () => Observable<boolean>;
+
+    /**
+     * Set the visibility state of the feedback button in the side nav.
+     * @param isVisible The visibility state of the feedback button in the side nav.
+     */
+    setIsFeedbackBtnVisible: (isVisible: boolean) => void;
+  };
+
+  /**
+   * Get the id of the currently active project navigation or `null` otherwise.
+   */
+  getActiveSolutionNavId$(): Observable<string | null>;
 }

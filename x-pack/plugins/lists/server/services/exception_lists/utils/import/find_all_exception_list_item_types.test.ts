@@ -65,9 +65,9 @@ describe('find_all_exception_list_item_types', () => {
 
       expect(savedObjectsClient.find).toHaveBeenCalledWith({
         filter:
-          '((exception-list-agnostic.attributes.list_type: item AND exception-list-agnostic.attributes.list_id: "detection_list_id") AND exception-list-agnostic.attributes.item_id:(1))',
+          '((exception-list-agnostic.attributes.list_type: item AND exception-list-agnostic.attributes.list_id: "detection_list_id") AND (exception-list-agnostic.attributes.item_id:(1)))',
         page: undefined,
-        perPage: 100,
+        perPage: 1000,
         sortField: undefined,
         sortOrder: undefined,
         type: ['exception-list-agnostic'],
@@ -83,9 +83,9 @@ describe('find_all_exception_list_item_types', () => {
 
       expect(savedObjectsClient.find).toHaveBeenCalledWith({
         filter:
-          '((exception-list.attributes.list_type: item AND exception-list.attributes.list_id: "detection_list_id") AND exception-list.attributes.item_id:(1))',
+          '((exception-list.attributes.list_type: item AND exception-list.attributes.list_id: "detection_list_id") AND (exception-list.attributes.item_id:(1)))',
         page: undefined,
-        perPage: 100,
+        perPage: 1000,
         sortField: undefined,
         sortOrder: undefined,
         type: ['exception-list'],
@@ -101,9 +101,9 @@ describe('find_all_exception_list_item_types', () => {
 
       expect(savedObjectsClient.find).toHaveBeenCalledWith({
         filter:
-          '((exception-list.attributes.list_type: item AND exception-list.attributes.list_id: "detection_list_id") AND exception-list.attributes.item_id:(2)) OR ((exception-list-agnostic.attributes.list_type: item AND exception-list-agnostic.attributes.list_id: "detection_list_id") AND exception-list-agnostic.attributes.item_id:(1))',
+          '((exception-list.attributes.list_type: item AND exception-list.attributes.list_id: "detection_list_id") AND (exception-list.attributes.item_id:(2))) OR ((exception-list-agnostic.attributes.list_type: item AND exception-list-agnostic.attributes.list_id: "detection_list_id") AND (exception-list-agnostic.attributes.item_id:(1)))',
         page: undefined,
-        perPage: 100,
+        perPage: 1000,
         sortField: undefined,
         sortOrder: undefined,
         type: ['exception-list', 'exception-list-agnostic'],

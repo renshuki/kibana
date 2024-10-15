@@ -1,15 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { DeeplyMockedKeys } from '@kbn/utility-types-jest';
 import { of, delay, merge, tap, mergeMap } from 'rxjs';
 import { TestScheduler } from 'rxjs/testing';
-import type { FileKind, FileJSON, BaseFilesClient as FilesClient } from '@kbn/shared-ux-file-types';
+import type {
+  FileKindBrowser,
+  FileJSON,
+  BaseFilesClient as FilesClient,
+} from '@kbn/shared-ux-file-types';
 import { createMockFilesClient } from '@kbn/shared-ux-file-mocks';
 import { ImageMetadataFactory } from '@kbn/shared-ux-file-util';
 
@@ -29,7 +34,12 @@ describe('UploadState', () => {
     filesClient.create.mockReturnValue(of({ file: { id: 'test' } as FileJSON }) as any);
     filesClient.upload.mockReturnValue(of(undefined) as any);
     uploadState = new UploadState(
-      { id: 'test', http: {}, maxSizeBytes: 1000 } as FileKind,
+      {
+        id: 'test',
+        http: {},
+        maxSizeBytes: 1000,
+        allowedMimeTypes: ['text/plain', 'image/png'],
+      } as FileKindBrowser,
       filesClient,
       {},
       imageMetadataFactory
@@ -67,10 +77,10 @@ describe('UploadState', () => {
     });
   });
 
-  it('uploads all provided files and reports errors', async () => {
+  it('uploads all provided files', async () => {
     testScheduler.run(({ expectObservable, cold, flush }) => {
-      const file1 = { name: 'test', size: 1 } as File;
-      const file2 = { name: 'test 2', size: 1 } as File;
+      const file1 = { name: 'test', size: 1, type: 'text/plain' } as File;
+      const file2 = { name: 'test 2', size: 1, type: 'text/plain' } as File;
 
       uploadState.setFiles([file1, file2]);
 
@@ -116,7 +126,7 @@ describe('UploadState', () => {
       filesClient.upload.mockReturnValue(of(undefined).pipe(delay(10)) as any);
       filesClient.delete.mockReturnValue(of(undefined) as any);
 
-      const file1 = { name: 'test' } as File;
+      const file1 = { name: 'test', type: 'text/plain' } as File;
       const file2 = { name: 'test 2.png', type: 'image/png' } as File;
 
       uploadState.setFiles([file1, file2]);
@@ -156,7 +166,7 @@ describe('UploadState', () => {
       expect(filesClient.create).toHaveBeenNthCalledWith(1, {
         kind: 'test',
         meta: { myMeta: true },
-        mimeType: undefined,
+        mimeType: 'text/plain',
         name: 'test',
       });
       expect(filesClient.create).toHaveBeenNthCalledWith(2, {
@@ -188,10 +198,32 @@ describe('UploadState', () => {
     });
   });
 
+  it('throws for files, which mime-type is not supported', () => {
+    testScheduler.run(({ expectObservable }) => {
+      const file = {
+        name: 'script.sh',
+        size: 123,
+        type: 'text/x-sh',
+      } as File;
+      uploadState.setFiles([file]);
+      expectObservable(uploadState.files$).toBe('a', {
+        a: [
+          {
+            file,
+            status: 'idle',
+            error: new Error(
+              'File mime type "text/x-sh" is not supported. Supported mime types are: text/plain, image/png.'
+            ),
+          },
+        ],
+      });
+    });
+  });
+
   it('option "allowRepeatedUploads" calls clear after upload is done', () => {
     testScheduler.run(({ expectObservable, cold }) => {
       uploadState = new UploadState(
-        { id: 'test', http: {}, maxSizeBytes: 1000 } as FileKind,
+        { id: 'test', http: {}, maxSizeBytes: 1000 } as FileKindBrowser,
         filesClient,
         { allowRepeatedUploads: true },
         imageMetadataFactory

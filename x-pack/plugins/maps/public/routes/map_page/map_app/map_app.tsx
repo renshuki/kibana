@@ -7,9 +7,14 @@
 
 import React from 'react';
 import _ from 'lodash';
-import { finalize, switchMap, tap } from 'rxjs/operators';
+import { finalize, switchMap, tap } from 'rxjs';
 import { i18n } from '@kbn/i18n';
-import { AppLeaveAction, AppMountParameters, ScopedHistory } from '@kbn/core/public';
+import {
+  AppLeaveAction,
+  AppMountParameters,
+  KibanaExecutionContext,
+  ScopedHistory,
+} from '@kbn/core/public';
 import { Adapters } from '@kbn/embeddable-plugin/public';
 import { Subscription } from 'rxjs';
 import { type Filter, FilterStateStore, type Query, type TimeRange } from '@kbn/es-query';
@@ -27,9 +32,10 @@ import {
   withNotifyOnErrors,
   IKbnUrlStateStorage,
 } from '@kbn/kibana-utils-plugin/public';
+import { getManagedContentBadge } from '@kbn/managed-content-badge';
 import {
   getData,
-  getExecutionContext,
+  getExecutionContextService,
   getCoreChrome,
   getIndexPatternService,
   getMapsCapabilities,
@@ -42,8 +48,12 @@ import { AppStateManager, startAppStateSyncing } from '../url_state';
 import { MapContainer } from '../../../connected_components/map_container';
 import { getIndexPatternsFromIds } from '../../../index_pattern_util';
 import { getTopNavConfig } from '../top_nav_config';
-import { getEditPath, getFullPath, APP_ID } from '../../../../common/constants';
-import { getMapEmbeddableDisplayName } from '../../../../common/i18n_getters';
+import {
+  getEditPath,
+  getFullPath,
+  APP_ID,
+  MAP_EMBEDDABLE_NAME,
+} from '../../../../common/constants';
 import {
   getInitialQuery,
   getInitialRefreshConfig,
@@ -52,7 +62,7 @@ import {
   unsavedChangesWarning,
 } from '../saved_map';
 import { waitUntilTimeLayersLoad$ } from './wait_until_time_layers_load';
-import { RefreshConfig as MapRefreshConfig, SerializedMapState } from '../saved_map';
+import { RefreshConfig as MapRefreshConfig, ParsedMapStateJSON } from '../saved_map';
 
 export interface Props {
   savedMap: SavedMap;
@@ -84,6 +94,7 @@ export interface Props {
   query: Query | undefined;
   setHeaderActionMenu: AppMountParameters['setHeaderActionMenu'];
   history: ScopedHistory;
+  setExecutionContext: (executionContext: KibanaExecutionContext) => void;
 }
 
 export interface State {
@@ -123,11 +134,15 @@ export class MapApp extends React.Component<Props, State> {
   componentDidMount() {
     this._isMounted = true;
 
-    getExecutionContext().set({
+    const executionContext = {
       type: 'application',
-      page: 'editor',
+      name: APP_ID,
+      url: window.location.pathname,
       id: this.props.savedMap.getSavedObjectId() || 'new',
-    });
+      page: 'editor',
+    };
+    getExecutionContextService().set(executionContext); // set execution context in core ExecutionContextStartService
+    this.props.setExecutionContext(executionContext); // set execution context in redux store
 
     this._autoRefreshSubscription = getTimeFilter()
       .getAutoRefreshFetch$()
@@ -244,9 +259,17 @@ export class MapApp extends React.Component<Props, State> {
     } else {
       indexPatterns = await getIndexPatternsFromIds(nextIndexPatternIds);
     }
-    if (this._isMounted) {
-      this.setState({ indexPatterns });
+
+    if (!this._isMounted) {
+      return;
     }
+
+    // ignore results for outdated requests
+    if (!_.isEqual(nextIndexPatternIds, this._prevIndexPatternIds)) {
+      return;
+    }
+
+    this.setState({ indexPatterns });
   }
 
   _onQueryChange = ({
@@ -287,24 +310,24 @@ export class MapApp extends React.Component<Props, State> {
     this._updateGlobalState(updatedGlobalState);
   };
 
-  _getInitialTime(serializedMapState?: SerializedMapState) {
+  _getInitialTime(mapState?: ParsedMapStateJSON) {
     if (this._initialTimeFromUrl) {
       return this._initialTimeFromUrl;
     }
 
-    return !this.props.savedMap.hasSaveAndReturnConfig() && serializedMapState?.timeFilters
-      ? serializedMapState.timeFilters
+    return !this.props.savedMap.hasSaveAndReturnConfig() && mapState?.timeFilters
+      ? mapState.timeFilters
       : getTimeFilter().getTime();
   }
 
-  _initMapAndLayerSettings(serializedMapState?: SerializedMapState) {
+  _initMapAndLayerSettings(mapState?: ParsedMapStateJSON) {
     const globalState = this._getGlobalState();
 
-    const savedObjectFilters = serializedMapState?.filters ? serializedMapState.filters : [];
+    const savedObjectFilters = mapState?.filters ? mapState.filters : [];
     const appFilters = this._appStateManager.getFilters() || [];
 
     const query = getInitialQuery({
-      serializedMapState,
+      mapState,
       appState: this._appStateManager.getAppState(),
     });
     if (query) {
@@ -314,12 +337,12 @@ export class MapApp extends React.Component<Props, State> {
     this._onQueryChange({
       filters: [..._.get(globalState, 'filters', []), ...appFilters, ...savedObjectFilters],
       query,
-      time: this._getInitialTime(serializedMapState),
+      time: this._getInitialTime(mapState),
     });
 
     this._onRefreshConfigChange(
       getInitialRefreshConfig({
-        serializedMapState,
+        mapState,
         globalState,
       })
     );
@@ -414,7 +437,7 @@ export class MapApp extends React.Component<Props, State> {
       await spaces.ui.redirectLegacyUrl({
         path: newPath,
         aliasPurpose: sharingSavedObjectProps.aliasPurpose,
-        objectNoun: getMapEmbeddableDisplayName(),
+        objectNoun: MAP_EMBEDDABLE_NAME,
       });
       return;
     }
@@ -430,16 +453,16 @@ export class MapApp extends React.Component<Props, State> {
       );
     }
 
-    let serializedMapState: SerializedMapState | undefined;
+    let mapState: ParsedMapStateJSON | undefined;
     try {
       const attributes = this.props.savedMap.getAttributes();
       if (attributes.mapStateJSON) {
-        serializedMapState = JSON.parse(attributes.mapStateJSON);
+        mapState = JSON.parse(attributes.mapStateJSON);
       }
     } catch (e) {
       // ignore malformed mapStateJSON, not a critical error for viewing map - map will just use defaults
     }
-    this._initMapAndLayerSettings(serializedMapState);
+    this._initMapAndLayerSettings(mapState);
 
     this.setState({ initialized: true });
   }
@@ -464,6 +487,17 @@ export class MapApp extends React.Component<Props, State> {
       <TopNavMenu
         setMenuMountPoint={this.props.setHeaderActionMenu}
         appName={APP_ID}
+        badges={
+          this.props.savedMap.isManaged()
+            ? [
+                getManagedContentBadge(
+                  i18n.translate('xpack.maps.mapController.managedMapDescriptionTooltip', {
+                    defaultMessage: 'Elastic manages this map. Save any changes to a new map.',
+                  })
+                ),
+              ]
+            : undefined
+        }
         config={topNavConfig}
         indexPatterns={this.state.indexPatterns}
         filters={this.props.filters}
@@ -500,7 +534,9 @@ export class MapApp extends React.Component<Props, State> {
         showSearchBar={true}
         showFilterBar={true}
         showDatePicker={true}
-        showSaveQuery={!!getMapsCapabilities().saveQuery}
+        saveQueryMenuVisibility={
+          getMapsCapabilities().saveQuery ? 'allowed_by_app_privilege' : 'globally_managed'
+        }
         savedQuery={this.state.savedQuery}
         onSaved={this._updateStateFromSavedQuery}
         onSavedQueryUpdated={this._updateStateFromSavedQuery}
@@ -529,7 +565,7 @@ export class MapApp extends React.Component<Props, State> {
     const spaces = getSpacesApi();
     return spaces && sharingSavedObjectProps?.outcome === 'conflict'
       ? spaces.ui.components.getLegacyUrlConflict({
-          objectNoun: getMapEmbeddableDisplayName(),
+          objectNoun: MAP_EMBEDDABLE_NAME,
           currentObjectId: this.props.savedMap.getSavedObjectId()!,
           otherObjectId: sharingSavedObjectProps.aliasTargetId!,
           otherObjectPath: `${getEditPath(sharingSavedObjectProps.aliasTargetId!)}${

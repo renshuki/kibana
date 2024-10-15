@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { xyVisFunction } from '.';
@@ -352,6 +353,55 @@ describe('xyVis', () => {
         syncColors: false,
         syncTooltips: false,
         syncCursor: true,
+      },
+    });
+  });
+
+  test('should pass over overrides from variables', async () => {
+    const { data, args } = sampleArgs();
+    const { layers, ...rest } = args;
+    const { layerId, layerType, table, type, ...restLayerArgs } = sampleLayer;
+    const overrides = {
+      settings: {
+        onBrushEnd: 'ignore',
+      },
+      axisX: {
+        showOverlappingTicks: true,
+      },
+    };
+    const context = {
+      ...createMockExecutionContext(),
+      variables: {
+        overrides,
+      },
+    };
+    const result = await xyVisFunction.fn(
+      data,
+      { ...rest, ...restLayerArgs, referenceLines: [] },
+      context
+    );
+
+    expect(result).toEqual({
+      type: 'render',
+      as: XY_VIS,
+      value: {
+        args: {
+          ...rest,
+          layers: [
+            {
+              layerType,
+              table: data,
+              layerId: 'dataLayers-0',
+              type,
+              ...restLayerArgs,
+            },
+          ],
+        },
+        canNavigateToLens: false,
+        syncColors: false,
+        syncTooltips: false,
+        syncCursor: true,
+        overrides,
       },
     });
   });

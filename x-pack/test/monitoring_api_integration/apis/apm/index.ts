@@ -6,11 +6,14 @@
  */
 
 import { FtrProviderContext } from '../../../api_integration/ftr_provider_context';
+import { installPackage } from '../../packages';
 
-export default function ({ loadTestFile }: FtrProviderContext) {
-  describe('APM', () => {
+export default function ({ loadTestFile, getService }: FtrProviderContext) {
+  // FLAKY: https://github.com/elastic/kibana/issues/177142
+  describe.skip('APM', () => {
+    before(() => installPackage(getService('supertest'), 'beat'));
+
     loadTestFile(require.resolve('./overview'));
     loadTestFile(require.resolve('./instances'));
-    loadTestFile(require.resolve('./instance'));
   });
 }

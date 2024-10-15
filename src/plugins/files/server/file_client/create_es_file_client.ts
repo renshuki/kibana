@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { Logger, ElasticsearchClient } from '@kbn/core/server';
@@ -27,15 +28,23 @@ export interface CreateEsFileClientArgs {
    */
   blobStorageIndex: string;
   /**
-   * An elasticsearch client that will be used to interact with the cluster
+   * An elasticsearch client that will be used to interact with the cluster.
    */
   elasticsearchClient: ElasticsearchClient;
   /**
-   * The maximum file size to be write
+   * Treat the indices provided as Aliases/Datastreams.
+   * When set to `true`:
+   * - additional ES calls will be made to get the real backing indexes
+   * - will not check if indexes exists and attempt to create them if not
+   * - an additional `@timestamp` property will be written to all documents (at root of document)
+   */
+  indexIsAlias?: boolean;
+  /**
+   * The maximum file size to be written.
    */
   maxSizeBytes?: number;
   /**
-   * A logger for debuggin purposes
+   * A logger for debugging purposes.
    */
   logger: Logger;
 }
@@ -49,15 +58,31 @@ export interface CreateEsFileClientArgs {
  * @param arg - See {@link CreateEsFileClientArgs}
  */
 export function createEsFileClient(arg: CreateEsFileClientArgs): FileClient {
-  const { blobStorageIndex, elasticsearchClient, logger, metadataIndex, maxSizeBytes } = arg;
+  const {
+    blobStorageIndex,
+    elasticsearchClient,
+    logger,
+    metadataIndex,
+    maxSizeBytes,
+    indexIsAlias,
+  } = arg;
   return new FileClientImpl(
     {
       id: NO_FILE_KIND,
       http: {},
       maxSizeBytes,
+      hashes: ['md5', 'sha1', 'sha256', 'sha512'],
     },
-    new EsIndexFilesMetadataClient(metadataIndex, elasticsearchClient, logger),
-    new ElasticsearchBlobStorageClient(elasticsearchClient, blobStorageIndex, undefined, logger),
+    new EsIndexFilesMetadataClient(metadataIndex, elasticsearchClient, logger, indexIsAlias),
+    new ElasticsearchBlobStorageClient(
+      elasticsearchClient,
+      blobStorageIndex,
+      undefined,
+      logger,
+      undefined,
+      undefined,
+      indexIsAlias
+    ),
     undefined,
     undefined,
     logger

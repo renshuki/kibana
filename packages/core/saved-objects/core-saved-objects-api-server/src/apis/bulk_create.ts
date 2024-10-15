@@ -1,15 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import type {
-  SavedObjectReference,
-  SavedObjectsMigrationVersion,
-} from '@kbn/core-saved-objects-common';
+import type { SavedObjectsMigrationVersion } from '@kbn/core-saved-objects-common';
+import type { SavedObjectReference } from '../..';
 
 /**
  * Object parameters for the bulk create operation
@@ -27,7 +26,10 @@ export interface SavedObjectsBulkCreateObject<T = unknown> {
   version?: string;
   /** Array of references to other saved objects */
   references?: SavedObjectReference[];
-  /** {@inheritDoc SavedObjectsMigrationVersion} */
+  /**
+   * {@inheritDoc SavedObjectsMigrationVersion}
+   * @deprecated
+   */
   migrationVersion?: SavedObjectsMigrationVersion;
   /**
    * A semver value that is used when upgrading objects between Kibana versions. If undefined, this will be automatically set to the current
@@ -39,6 +41,8 @@ export interface SavedObjectsBulkCreateObject<T = unknown> {
    * field set and you want to create it again.
    */
   coreMigrationVersion?: string;
+  /** A semver value that is used when migrating documents between Kibana versions. */
+  typeMigrationVersion?: string;
   /** Optional ID of the original saved object, if this object's `id` was regenerated */
   originId?: string;
   /**
@@ -52,4 +56,12 @@ export interface SavedObjectsBulkCreateObject<T = unknown> {
    * * For global object types (registered with `namespaceType: 'agnostic'`): this option cannot be used.
    */
   initialNamespaces?: string[];
+  /**
+   * Flag indicating if a saved object is managed by Kibana (default=false)
+   *
+   * This can be leveraged by applications to e.g. prevent edits to a managed
+   * saved object. Instead, users can be guided to create a copy first and
+   * make their edits to the copy.
+   */
+  managed?: boolean;
 }

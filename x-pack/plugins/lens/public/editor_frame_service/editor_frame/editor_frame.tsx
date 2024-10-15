@@ -8,6 +8,8 @@
 import React, { useCallback, useRef } from 'react';
 import { CoreStart } from '@kbn/core/public';
 import { ReactExpressionRendererType } from '@kbn/expressions-plugin/public';
+import { type DragDropAction, DragDropIdentifier, RootDragDropProvider } from '@kbn/dom-drag-drop';
+import { getAbsoluteDateRange } from '../../utils';
 import { trackUiCounterEvents } from '../../lens_ui_telemetry';
 import {
   DatasourceMap,
@@ -23,7 +25,6 @@ import { ConfigPanelWrapper } from './config_panel';
 import { FrameLayout } from './frame_layout';
 import { SuggestionPanelWrapper } from './suggestion_panel';
 import { WorkspacePanel } from './workspace_panel';
-import { DragDropIdentifier, RootDragDropProvider } from '../../drag_drop';
 import { EditorFrameStartPlugins } from '../service';
 import { getTopSuggestionForField, switchToSuggestion } from './suggestion_helpers';
 import {
@@ -38,6 +39,7 @@ import {
 import type { LensInspector } from '../../lens_inspector_service';
 import { ErrorBoundary, showMemoizedErrorNotification } from '../../lens_ui_errors';
 import { IndexPatternServiceAPI } from '../../data_views_service/service';
+import { getLongMessage } from '../../user_messages_utils';
 
 export interface EditorFrameProps {
   datasourceMap: DatasourceMap;
@@ -68,6 +70,10 @@ export function EditorFrame(props: EditorFrameProps) {
     selectFramePublicAPI(state, datasourceMap)
   );
 
+  framePublicAPI.absDateRange = getAbsoluteDateRange(
+    props.plugins.data.query.timefilter.timefilter
+  );
+
   // Using a ref to prevent rerenders in the child components while keeping the latest state
   const getSuggestionForField = useRef<(field: DragDropIdentifier) => Suggestion | undefined>();
   getSuggestionForField.current = (field: DragDropIdentifier) => {
@@ -81,7 +87,8 @@ export function EditorFrame(props: EditorFrameProps) {
       visualizationMap,
       datasourceMap[activeDatasourceId],
       field,
-      framePublicAPI.dataViews
+      framePublicAPI.dataViews,
+      true
     );
   };
 
@@ -91,7 +98,7 @@ export function EditorFrame(props: EditorFrameProps) {
   );
 
   const dropOntoWorkspace = useCallback(
-    (field) => {
+    (field: DragDropIdentifier) => {
       const suggestion = getSuggestionForField.current!(field);
       if (suggestion) {
         trackUiCounterEvents('drop_onto_workspace');
@@ -107,13 +114,22 @@ export function EditorFrame(props: EditorFrameProps) {
 
   const bannerMessages = props.getUserMessages('banner', { severity: 'warning' });
 
+  const telemetryMiddleware = useCallback((action: DragDropAction) => {
+    if (action.type === 'dropToTarget') {
+      trackUiCounterEvents('drop_total');
+    }
+  }, []);
+
   return (
-    <RootDragDropProvider>
+    <RootDragDropProvider
+      initialState={{ dataTestSubjPrefix: 'lnsDragDrop' }}
+      customMiddleware={telemetryMiddleware}
+    >
       <FrameLayout
         bannerMessages={
           bannerMessages.length ? (
             <ErrorBoundary onError={onError}>
-              <BannerWrapper nodes={bannerMessages.map(({ longMessage }) => longMessage)} />
+              <BannerWrapper nodes={bannerMessages.map(getLongMessage)} />
             </ErrorBoundary>
           ) : undefined
         }
@@ -141,6 +157,7 @@ export function EditorFrame(props: EditorFrameProps) {
                 visualizationMap={visualizationMap}
                 framePublicAPI={framePublicAPI}
                 uiActions={props.plugins.uiActions}
+                dataViews={props.plugins.dataViews}
                 indexPatternService={props.indexPatternService}
                 getUserMessages={props.getUserMessages}
               />
@@ -176,6 +193,9 @@ export function EditorFrame(props: EditorFrameProps) {
                 visualizationMap={visualizationMap}
                 frame={framePublicAPI}
                 getUserMessages={props.getUserMessages}
+                nowProvider={props.plugins.data.nowProvider}
+                core={props.core}
+                showOnlyIcons
               />
             </ErrorBoundary>
           )

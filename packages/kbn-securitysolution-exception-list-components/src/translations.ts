@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { i18n } from '@kbn/i18n';
@@ -67,10 +68,16 @@ export const EXCEPTION_LIST_HEADER_DELETE_ACTION = i18n.translate(
     defaultMessage: 'Delete exception list',
   }
 );
-export const EXCEPTION_LIST_HEADER_MANAGE_RULES_BUTTON = i18n.translate(
-  'exceptionList-components.exception_list_header_manage_rules_button',
+export const EXCEPTION_LIST_HEADER_DUPLICATE_ACTION = i18n.translate(
+  'exceptionList-components.exception_list_header_duplicate_action',
   {
-    defaultMessage: 'Manage rules',
+    defaultMessage: 'Duplicate exception list',
+  }
+);
+export const EXCEPTION_LIST_HEADER_LINK_RULES_BUTTON = i18n.translate(
+  'exceptionList-components.exception_list_header_link_rules_button',
+  {
+    defaultMessage: 'Link rules',
   }
 );
 
@@ -83,7 +90,7 @@ export const EXCEPTION_LIST_HEADER_LINKED_RULES = (noOfRules: number) =>
 export const EXCEPTION_LIST_HEADER_BREADCRUMB = i18n.translate(
   'exceptionList-components.exception_list_header_breadcrumb',
   {
-    defaultMessage: 'Rule exceptions',
+    defaultMessage: 'Shared Exception Lists',
   }
 );
 

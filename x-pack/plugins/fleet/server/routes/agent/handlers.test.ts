@@ -5,38 +5,81 @@
  * 2.0.
  */
 
-import { readFile } from 'fs/promises';
-
 import { coreMock, httpServerMock } from '@kbn/core/server/mocks';
 
-import { getAvailableVersionsHandler } from './handlers';
+import { getAgentStatusForAgentPolicy } from '../../services/agents/status';
+
+import { getAgentStatusForAgentPolicyHandler, getAvailableVersionsHandler } from './handlers';
+
+jest.mock('../../services/agents/versions', () => {
+  return {
+    getAvailableVersions: jest.fn().mockReturnValue(['8.1.0', '8.0.0', '7.17.0']),
+  };
+});
 
 jest.mock('../../services/app_context', () => {
   const { loggerMock } = jest.requireActual('@kbn/logging-mocks');
   return {
     appContextService: {
       getLogger: () => loggerMock.create(),
-      getKibanaVersion: () => '300.0.0',
     },
   };
 });
 
-jest.mock('fs/promises');
+jest.mock('../../services/agents/status', () => ({
+  getAgentStatusForAgentPolicy: jest.fn(),
+}));
 
-const mockedReadFile = readFile as jest.MockedFunction<typeof readFile>;
+describe('Handlers', () => {
+  describe('getAgentStatusForAgentPolicyHandler', () => {
+    it.each([
+      { requested: 'policy-id-1', called: ['policy-id-1'] },
+      { requested: ['policy-id-2'], called: ['policy-id-2'] },
+      { requested: ['policy-id-3', 'policy-id-4'], called: ['policy-id-3', 'policy-id-4'] },
+      ...[undefined, '', []].map((requested) => ({ requested, called: undefined })),
+    ])('calls getAgentStatusForAgentPolicy with correct parameters', async (item) => {
+      const request = {
+        query: {
+          policyId: 'policy-id',
+          kuery: 'kuery',
+          policyIds: item.requested,
+        },
+      };
+      const response = httpServerMock.createResponseFactory();
 
-describe('getAvailableVersionsHandler', () => {
-  it('should return available version and filter version < 7.17', async () => {
-    const ctx = coreMock.createCustomRequestHandlerContext(coreMock.createRequestHandlerContext());
-    const response = httpServerMock.createResponseFactory();
+      await getAgentStatusForAgentPolicyHandler(
+        {
+          core: coreMock.createRequestHandlerContext(),
+          fleet: { internalSoClient: {} },
+        } as any,
+        request as any,
+        response
+      );
 
-    mockedReadFile.mockResolvedValue(`["8.1.0", "8.0.0", "7.17.0", "7.16.0"]`);
+      expect(getAgentStatusForAgentPolicy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        'policy-id',
+        'kuery',
+        undefined,
+        item.called
+      );
+    });
+  });
 
-    await getAvailableVersionsHandler(ctx, httpServerMock.createKibanaRequest(), response);
+  describe('getAvailableVersionsHandler', () => {
+    it('should return the value from getAvailableVersions', async () => {
+      const ctx = coreMock.createCustomRequestHandlerContext(
+        coreMock.createRequestHandlerContext()
+      );
+      const response = httpServerMock.createResponseFactory();
 
-    expect(response.ok).toBeCalled();
-    expect(response.ok.mock.calls[0][0]?.body).toEqual({
-      items: ['300.0.0', '8.1.0', '8.0.0', '7.17.0'],
+      await getAvailableVersionsHandler(ctx, httpServerMock.createKibanaRequest(), response);
+
+      expect(response.ok).toBeCalled();
+      expect(response.ok.mock.calls[0][0]?.body).toEqual({
+        items: ['8.1.0', '8.0.0', '7.17.0'],
+      });
     });
   });
 });

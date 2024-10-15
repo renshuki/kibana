@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -12,7 +13,7 @@ import { action } from '@storybook/addon-actions';
 import { EuiContextMenu } from '@elastic/eui';
 
 import { Toolbar } from './toolbar';
-import { AddFromLibraryButton, IconButtonGroup, PrimaryButton } from '../buttons';
+import { AddFromLibraryButton, IconButtonGroup, ToolbarButton } from '../buttons';
 import { ToolbarPopover } from '../popover';
 
 const iconButtons = [
@@ -45,9 +46,21 @@ const iconButtons = [
 ];
 
 const primaryButtonConfigs = {
-  Generic: <PrimaryButton label="Primary Action" iconType="apps" onClick={action('generic')} />,
+  Generic: (
+    <ToolbarButton
+      type="primary"
+      label="Primary Action"
+      iconType="apps"
+      onClick={action('generic')}
+    />
+  ),
   Canvas: (
-    <ToolbarPopover label="Add element" iconType="plusInCircle" panelPaddingSize="none">
+    <ToolbarPopover
+      type="primary"
+      label="Add element"
+      iconType="plusInCircle"
+      panelPaddingSize="none"
+    >
       {() => (
         <EuiContextMenu
           initialPanelId={0}
@@ -59,14 +72,17 @@ const primaryButtonConfigs = {
                 {
                   name: 'Lens',
                   icon: 'lensApp',
+                  onClick: action('Lens'),
                 },
                 {
                   name: 'Maps',
                   icon: 'logoMaps',
+                  onClick: action('Maps'),
                 },
                 {
                   name: 'TSVB',
                   icon: 'visVisualBuilder',
+                  onClick: action('TSVB'),
                 },
               ],
             },
@@ -76,7 +92,12 @@ const primaryButtonConfigs = {
     </ToolbarPopover>
   ),
   Dashboard: (
-    <PrimaryButton label="Create chart" iconType="plusInCircle" onClick={action('dashboard')} />
+    <ToolbarButton
+      type="primary"
+      label="Create chart"
+      iconType="plusInCircle"
+      onClick={action('dashboard')}
+    />
   ),
 };
 
@@ -96,14 +117,17 @@ const extraButtonConfigs = {
                 {
                   name: 'Lens',
                   icon: 'lensApp',
+                  onClick: action('Lens'),
                 },
                 {
                   name: 'Maps',
                   icon: 'logoMaps',
+                  onClick: action('Maps'),
                 },
                 {
                   name: 'TSVB',
                   icon: 'visVisualBuilder',
+                  onClick: action('TSVB'),
                 },
               ],
             },
@@ -156,18 +180,18 @@ const Template: Story<{
   showAddFromLibraryButton: boolean;
 }> = ({ iconButtonCount, solution, showAddFromLibraryButton }) => {
   const primaryButton = primaryButtonConfigs[solution];
-  const extraButtons = extraButtonConfigs[solution];
+  const extraButtons = showAddFromLibraryButton
+    ? [
+        ...(extraButtonConfigs[solution] ?? []),
+        <AddFromLibraryButton onClick={action('addFromLibrary')} />,
+      ]
+    : extraButtonConfigs[solution];
   let iconButtonGroup;
-  let addFromLibraryButton;
 
   if (iconButtonCount > 0) {
     iconButtonGroup = (
       <IconButtonGroup buttons={iconButtons.slice(0, iconButtonCount)} legend="example" />
     );
-  }
-
-  if (showAddFromLibraryButton) {
-    addFromLibraryButton = <AddFromLibraryButton onClick={action('addFromLibrary')} />;
   }
 
   return (
@@ -176,7 +200,6 @@ const Template: Story<{
         primaryButton,
         iconButtonGroup,
         extraButtons,
-        addFromLibraryButton,
       }}
     </Toolbar>
   );

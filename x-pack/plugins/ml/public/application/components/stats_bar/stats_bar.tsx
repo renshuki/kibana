@@ -5,8 +5,11 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
-import { Stat, StatsBarStat } from './stat';
+import type { FC } from 'react';
+import React from 'react';
+import { useEuiTheme } from '@elastic/eui';
+import type { StatsBarStat } from './stat';
+import { Stat } from './stat';
 
 interface Stats {
   total: StatsBarStat;
@@ -37,9 +40,13 @@ interface StatsBarProps {
 }
 
 export const StatsBar: FC<StatsBarProps> = ({ stats, dataTestSub }) => {
+  const { euiTheme } = useEuiTheme();
   const statsList = Object.keys(stats).map((k) => stats[k as StatsKey]);
   return (
-    <div className="mlStatsBar" data-test-subj={dataTestSub}>
+    <div
+      css={{ padding: euiTheme.size.m, backgroundColor: euiTheme.colors.lightestShade }}
+      data-test-subj={dataTestSub}
+    >
       {statsList
         .filter((s: StatsBarStat) => s.show)
         .map((s: StatsBarStat) => (

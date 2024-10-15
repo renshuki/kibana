@@ -6,59 +6,15 @@
  */
 
 import { FtrProviderContext } from '../../../ftr_provider_context';
+import { indexThresholdRuleName } from '.';
 
 export default function ({ getService, getPageObjects }: FtrProviderContext) {
   const commonScreenshots = getService('commonScreenshots');
   const screenshotDirectories = ['response_ops_docs', 'stack_alerting'];
   const pageObjects = getPageObjects(['common', 'header']);
-  const actions = getService('actions');
-  const rules = getService('rules');
   const testSubjects = getService('testSubjects');
 
   describe('list view', function () {
-    let serverLogConnectorId: string;
-    let ruleId: string;
-    const indexThresholdRule = {
-      consumer: 'alerts',
-      name: 'my rule',
-      notifyWhen: 'onActionGroupChange',
-      params: {
-        index: ['.test-index'],
-        timeField: '@timestamp',
-        aggType: 'count',
-        groupBy: 'all',
-        timeWindowSize: 5,
-        timeWindowUnit: 'd',
-        thresholdComparator: '>',
-        threshold: [1000],
-      },
-      ruleTypeId: '.index-threshold',
-      schedule: { interval: '1m' },
-      tags: [],
-    };
-
-    before(async () => {
-      const connectorName = `server-log-connector`;
-      ({ id: serverLogConnectorId } = await createServerLogConnector(connectorName));
-      ({ id: ruleId } = await rules.api.createRule(indexThresholdRule));
-    });
-
-    after(async () => {
-      await actions.api.deleteConnector(serverLogConnectorId);
-      await rules.api.deleteRule(ruleId);
-    });
-
-    it('connectors list screenshot', async () => {
-      await pageObjects.common.navigateToApp('connectors');
-      await pageObjects.header.waitUntilLoadingHasFinished();
-      await commonScreenshots.takeScreenshot(
-        'connector-listing',
-        screenshotDirectories,
-        1400,
-        1024
-      );
-    });
-
     it('rules list screenshot', async () => {
       await pageObjects.common.navigateToApp('triggersActions');
       await pageObjects.header.waitUntilLoadingHasFinished();
@@ -86,14 +42,46 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
       await snoozeBadge.click();
       await commonScreenshots.takeScreenshot('snooze-panel', screenshotDirectories, 1400, 1024);
     });
-  });
 
-  const createServerLogConnector = async (name: string) => {
-    return actions.api.createConnector({
-      name,
-      config: {},
-      secrets: {},
-      connectorTypeId: '.server-log',
+    it('rule detail screenshots', async () => {
+      await pageObjects.common.navigateToApp('triggersActions');
+      await pageObjects.header.waitUntilLoadingHasFinished();
+      await testSubjects.setValue('ruleSearchField', indexThresholdRuleName);
+      const rulesList = await testSubjects.find('rulesList');
+      const alertRule = await rulesList.findByCssSelector(`[title="${indexThresholdRuleName}"]`);
+      await alertRule.click();
+      await pageObjects.header.waitUntilLoadingHasFinished();
+      await commonScreenshots.takeScreenshot(
+        'rule-details-alerts-active',
+        screenshotDirectories,
+        1400,
+        1024
+      );
     });
-  };
+
+    it('alerts UI screenshots', async () => {
+      await pageObjects.common.navigateToUrl(
+        'management',
+        'insightsAndAlerting/triggersActionsAlerts',
+        {
+          shouldUseHashForSubUrl: false,
+        }
+      );
+      await pageObjects.header.waitUntilLoadingHasFinished();
+      await commonScreenshots.takeScreenshot(
+        'stack-management-alerts-page',
+        screenshotDirectories,
+        1400,
+        1024
+      );
+      const queryMenu = await testSubjects.find('showQueryBarMenu');
+      await queryMenu.click();
+      await commonScreenshots.takeScreenshot(
+        'stack-management-alerts-query-menu',
+        screenshotDirectories,
+        1400,
+        1024
+      );
+    });
+  });
 }

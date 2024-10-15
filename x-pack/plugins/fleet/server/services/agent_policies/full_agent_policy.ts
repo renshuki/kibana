@@ -5,8 +5,17 @@
  * 2.0.
  */
 
+/* eslint-disable @typescript-eslint/naming-convention */
+
 import type { SavedObjectsClientContract } from '@kbn/core/server';
-import { safeLoad } from 'js-yaml';
+import { load } from 'js-yaml';
+import deepMerge from 'deepmerge';
+import { set } from '@kbn/safer-lodash-set';
+
+import {
+  getDefaultPresetForEsOutput,
+  outputTypeSupportPresets,
+} from '../../../common/services/output_helpers';
 
 import type {
   FullAgentPolicy,
@@ -16,14 +25,26 @@ import type {
   FullAgentPolicyOutput,
   FleetProxy,
   FleetServerHost,
+  AgentPolicy,
 } from '../../types';
-import type { FullAgentPolicyOutputPermissions, PackageInfo } from '../../../common/types';
+import type {
+  FullAgentPolicyMonitoring,
+  FullAgentPolicyOutputPermissions,
+  PackageInfo,
+} from '../../../common/types';
 import { agentPolicyService } from '../agent_policy';
-import { dataTypes, outputType } from '../../../common/constants';
-import { DEFAULT_OUTPUT } from '../../constants';
-
+import {
+  dataTypes,
+  DEFAULT_OUTPUT,
+  kafkaCompressionType,
+  outputType,
+} from '../../../common/constants';
+import { getSettingsValuesForAgentPolicy } from '../form_settings';
 import { getPackageInfo } from '../epm/packages';
 import { pkgToPkgKey, splitPkgKey } from '../epm/registry';
+import { appContextService } from '../app_context';
+
+import { getOutputSecretReferences } from '../secrets';
 
 import { getMonitoringPermissions } from './monitoring_permissions';
 import { storedPackagePoliciesToAgentInputs } from '.';
@@ -47,18 +68,30 @@ async function fetchAgentPolicy(soClient: SavedObjectsClientContract, id: string
 export async function getFullAgentPolicy(
   soClient: SavedObjectsClientContract,
   id: string,
-  options?: { standalone: boolean }
+  options?: { standalone?: boolean; agentPolicy?: AgentPolicy }
 ): Promise<FullAgentPolicy | null> {
   const standalone = options?.standalone ?? false;
 
-  const agentPolicy = await fetchAgentPolicy(soClient, id);
+  let agentPolicy: AgentPolicy | null;
+  if (options?.agentPolicy?.package_policies) {
+    agentPolicy = options.agentPolicy;
+  } else {
+    agentPolicy = await fetchAgentPolicy(soClient, id);
+  }
+
   if (!agentPolicy) {
     return null;
   }
 
-  const { outputs, proxies, dataOutput, fleetServerHosts, monitoringOutput, sourceUri } =
-    await fetchRelatedSavedObjects(soClient, agentPolicy);
-
+  const {
+    outputs,
+    proxies,
+    dataOutput,
+    fleetServerHosts,
+    monitoringOutput,
+    downloadSourceUri,
+    downloadSourceProxyUri,
+  } = await fetchRelatedSavedObjects(soClient, agentPolicy);
   // Build up an in-memory object for looking up Package Info, so we don't have
   // call `getPackageInfo` for every single policy, which incurs performance costs
   const packageInfoCache = new Map<string, PackageInfo>();
@@ -87,6 +120,23 @@ export async function getFullAgentPolicy(
     })
   );
 
+  const inputs = await storedPackagePoliciesToAgentInputs(
+    agentPolicy.package_policies as PackagePolicy[],
+    packageInfoCache,
+    getOutputIdForAgentPolicy(dataOutput),
+    agentPolicy.namespace,
+    agentPolicy.global_data_tags
+  );
+  const features = (agentPolicy.agent_features || []).reduce((acc, { name, ...featureConfig }) => {
+    acc[name] = featureConfig;
+    return acc;
+  }, {} as NonNullable<FullAgentPolicy['agent']>['features']);
+
+  const outputSecretReferences = outputs.flatMap((output) => getOutputSecretReferences(output));
+  const packagePolicySecretReferences = (agentPolicy?.package_policies || []).flatMap(
+    (policy) => policy.secret_references || []
+  );
+
   const fullAgentPolicy: FullAgentPolicy = {
     id: agentPolicy.id,
     outputs: {
@@ -100,44 +150,79 @@ export async function getFullAgentPolicy(
         return acc;
       }, {}),
     },
-    inputs: await storedPackagePoliciesToAgentInputs(
-      agentPolicy.package_policies as PackagePolicy[],
-      packageInfoCache,
-      getOutputIdForAgentPolicy(dataOutput)
-    ),
+    inputs,
+    secret_references: [...outputSecretReferences, ...packagePolicySecretReferences],
     revision: agentPolicy.revision,
     agent: {
       download: {
-        sourceURI: sourceUri,
+        sourceURI: downloadSourceUri,
+        ...(downloadSourceProxyUri ? { proxy_url: downloadSourceProxyUri } : {}),
       },
-      monitoring:
-        agentPolicy.monitoring_enabled && agentPolicy.monitoring_enabled.length > 0
-          ? {
-              namespace: agentPolicy.namespace,
-              use_output: getOutputIdForAgentPolicy(monitoringOutput),
-              enabled: true,
-              logs: agentPolicy.monitoring_enabled.includes(dataTypes.Logs),
-              metrics: agentPolicy.monitoring_enabled.includes(dataTypes.Metrics),
-            }
-          : { enabled: false, logs: false, metrics: false },
+      monitoring: getFullMonitoringSettings(agentPolicy, monitoringOutput),
+      features,
+      protection: {
+        enabled: agentPolicy.is_protected,
+        uninstall_token_hash: '',
+        signing_key: '',
+      },
+    },
+    signed: {
+      data: '',
+      signature: '',
     },
   };
 
-  const dataPermissions =
-    (await storedPackagePoliciesToAgentPermissions(
-      packageInfoCache,
-      agentPolicy.package_policies
-    )) || {};
+  if (agentPolicy.space_ids) {
+    fullAgentPolicy.namespaces = agentPolicy.space_ids;
+  }
 
-  dataPermissions._elastic_agent_checks = {
-    cluster: DEFAULT_CLUSTER_PERMISSIONS,
-  };
+  const packagePoliciesByOutputId = Object.keys(fullAgentPolicy.outputs).reduce(
+    (acc: Record<string, PackagePolicy[]>, outputId) => {
+      acc[outputId] = [];
+      return acc;
+    },
+    {}
+  );
+  (agentPolicy.package_policies || []).forEach((packagePolicy) => {
+    const packagePolicyDataOutput = packagePolicy.output_id
+      ? outputs.find((output) => output.id === packagePolicy.output_id)
+      : undefined;
+    if (packagePolicyDataOutput) {
+      packagePoliciesByOutputId[getOutputIdForAgentPolicy(packagePolicyDataOutput)].push(
+        packagePolicy
+      );
+    } else {
+      packagePoliciesByOutputId[getOutputIdForAgentPolicy(dataOutput)].push(packagePolicy);
+    }
+  });
+
+  const dataPermissionsByOutputId = Object.keys(fullAgentPolicy.outputs).reduce(
+    (acc: Record<string, FullAgentPolicyOutputPermissions>, outputId) => {
+      acc[outputId] = {};
+      return acc;
+    },
+    {}
+  );
+  for (const [outputId, packagePolicies] of Object.entries(packagePoliciesByOutputId)) {
+    const dataPermissions = await storedPackagePoliciesToAgentPermissions(
+      packageInfoCache,
+      agentPolicy.namespace,
+      packagePolicies
+    );
+    dataPermissionsByOutputId[outputId] = {
+      _elastic_agent_checks: {
+        cluster: DEFAULT_CLUSTER_PERMISSIONS,
+      },
+      ...(dataPermissions || {}),
+    };
+  }
 
   const monitoringPermissions = await getMonitoringPermissions(
     soClient,
     {
       logs: agentPolicy.monitoring_enabled?.includes(dataTypes.Logs) ?? false,
       metrics: agentPolicy.monitoring_enabled?.includes(dataTypes.Metrics) ?? false,
+      traces: agentPolicy.monitoring_enabled?.includes(dataTypes.Traces) ?? false,
     },
     agentPolicy.namespace
   );
@@ -150,14 +235,20 @@ export async function getFullAgentPolicy(
     NonNullable<FullAgentPolicy['output_permissions']>
   >((outputPermissions, outputId) => {
     const output = fullAgentPolicy.outputs[outputId];
-    if (output && output.type === outputType.Elasticsearch) {
+    if (
+      output &&
+      (output.type === outputType.Elasticsearch || output.type === outputType.RemoteElasticsearch)
+    ) {
       const permissions: FullAgentPolicyOutputPermissions = {};
       if (outputId === getOutputIdForAgentPolicy(monitoringOutput)) {
         Object.assign(permissions, monitoringPermissions);
       }
 
-      if (outputId === getOutputIdForAgentPolicy(dataOutput)) {
-        Object.assign(permissions, dataPermissions);
+      if (
+        outputId === getOutputIdForAgentPolicy(dataOutput) ||
+        packagePoliciesByOutputId[outputId].length > 0
+      ) {
+        Object.assign(permissions, dataPermissionsByOutputId[outputId]);
       }
 
       outputPermissions[outputId] = permissions;
@@ -169,6 +260,55 @@ export async function getFullAgentPolicy(
   if (!standalone && fleetServerHosts) {
     fullAgentPolicy.fleet = generateFleetConfig(fleetServerHosts, proxies);
   }
+
+  const settingsValues = getSettingsValuesForAgentPolicy(
+    'AGENT_POLICY_ADVANCED_SETTINGS',
+    agentPolicy
+  );
+  Object.entries(settingsValues).forEach(([settingsKey, settingValue]) => {
+    set(fullAgentPolicy, settingsKey, settingValue);
+  });
+
+  // populate protection and signed properties
+  const messageSigningService = appContextService.getMessageSigningService();
+  if (messageSigningService && fullAgentPolicy.agent) {
+    const publicKey = await messageSigningService.getPublicKey();
+    const tokenHash =
+      (await appContextService
+        .getUninstallTokenService()
+        ?.getHashedTokenForPolicyId(fullAgentPolicy.id)) ?? '';
+
+    fullAgentPolicy.agent.protection = {
+      enabled: agentPolicy.is_protected,
+      uninstall_token_hash: tokenHash,
+      signing_key: publicKey,
+    };
+
+    const dataToSign = {
+      id: fullAgentPolicy.id,
+      agent: {
+        features,
+        protection: fullAgentPolicy.agent.protection,
+      },
+      inputs: inputs.map(({ id: inputId, name, revision, type }) => ({
+        id: inputId,
+        name,
+        revision,
+        type,
+      })),
+    };
+
+    const { data: signedData, signature } = await messageSigningService.sign(dataToSign);
+    fullAgentPolicy.signed = {
+      data: signedData.toString('base64'),
+      signature,
+    };
+  }
+
+  if (agentPolicy.overrides) {
+    return deepMerge<FullAgentPolicy>(fullAgentPolicy, agentPolicy.overrides);
+  }
+
   return fullAgentPolicy;
 }
 
@@ -187,11 +327,19 @@ export function generateFleetConfig(
     if (fleetServerHostproxy.proxy_headers) {
       config.proxy_headers = fleetServerHostproxy.proxy_headers;
     }
-    if (fleetServerHostproxy.certificate_authorities) {
+    if (
+      fleetServerHostproxy.certificate_authorities ||
+      fleetServerHostproxy.certificate ||
+      fleetServerHostproxy.certificate_key
+    ) {
       config.ssl = {
-        certificate_authorities: [fleetServerHostproxy.certificate_authorities],
         renegotiation: 'never',
         verification_mode: '',
+        ...(fleetServerHostproxy.certificate_authorities && {
+          certificate_authorities: [fleetServerHostproxy.certificate_authorities],
+        }),
+        ...(fleetServerHostproxy.certificate && { certificate: fleetServerHostproxy.certificate }),
+        ...(fleetServerHostproxy.certificate_key && { key: fleetServerHostproxy.certificate_key }),
       };
     }
   }
@@ -203,24 +351,98 @@ export function transformOutputToFullPolicyOutput(
   proxy?: FleetProxy,
   standalone = false
 ): FullAgentPolicyOutput {
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  const { config_yaml, type, hosts, ca_sha256, ca_trusted_fingerprint, ssl, shipper } = output;
+  const {
+    config_yaml,
+    type,
+    hosts,
+    ca_sha256,
+    ca_trusted_fingerprint,
+    ssl,
+    shipper,
+    secrets,
+    preset,
+  } = output;
 
-  const configJs = config_yaml ? safeLoad(config_yaml) : {};
+  const configJs = config_yaml ? load(config_yaml) : {};
 
   // build logic to read config_yaml and transform it with the new shipper data
   const isShipperDisabled = !configJs?.shipper || configJs?.shipper?.enabled === false;
   let shipperDiskQueueData = {};
   let generalShipperData;
+  let kafkaData = {};
+
+  if (type === outputType.Kafka) {
+    const {
+      client_id,
+      version,
+      key,
+      compression,
+      compression_level,
+      username,
+      password,
+      sasl,
+      partition,
+      random,
+      round_robin,
+      hash,
+      topic,
+      topics,
+      headers,
+      timeout,
+      broker_timeout,
+      required_acks,
+    } = output;
+
+    const kafkaTopic = topic ? topic : topics?.filter((t) => !t.when)?.[0]?.topic;
+
+    const transformPartition = () => {
+      if (!partition) return {};
+      switch (partition) {
+        case 'random':
+          return {
+            random: {
+              ...(random?.group_events
+                ? { group_events: random.group_events }
+                : { group_events: 1 }),
+            },
+          };
+        case 'round_robin':
+          return {
+            round_robin: {
+              ...(round_robin?.group_events
+                ? { group_events: round_robin.group_events }
+                : { group_events: 1 }),
+            },
+          };
+        case 'hash':
+        default:
+          return { hash: { ...(hash?.hash ? { hash: hash.hash } : { hash: '' }) } };
+      }
+    };
+
+    /* eslint-enable @typescript-eslint/naming-convention */
+    kafkaData = {
+      client_id,
+      version,
+      key,
+      compression,
+      ...(compression === kafkaCompressionType.Gzip ? { compression_level } : {}),
+      ...(username ? { username } : {}),
+      ...(password ? { password } : {}),
+      ...(sasl ? { sasl } : {}),
+      partition: transformPartition(),
+      topic: kafkaTopic,
+      headers: (headers ?? []).filter((item) => item.key !== '' || item.value !== ''),
+      timeout,
+      broker_timeout,
+      required_acks,
+    };
+  }
 
   if (shipper) {
     if (!isShipperDisabled) {
       shipperDiskQueueData = buildShipperQueueData(shipper);
     }
-    /*
-      TODO: Once the Elastic-Shipper is ready,
-      Verify that these parameters have the correct names and structure
-    */
     /* eslint-disable @typescript-eslint/naming-convention */
     const {
       loadbalance,
@@ -245,9 +467,11 @@ export function transformOutputToFullPolicyOutput(
     ...shipperDiskQueueData,
     type,
     hosts,
+    ...kafkaData,
     ...(!isShipperDisabled ? generalShipperData : {}),
     ...(ca_sha256 ? { ca_sha256 } : {}),
     ...(ssl ? { ssl } : {}),
+    ...(secrets ? { secrets } : {}),
     ...(ca_trusted_fingerprint ? { 'ssl.ca_trusted_fingerprint': ca_trusted_fingerprint } : {}),
   };
 
@@ -281,22 +505,120 @@ export function transformOutputToFullPolicyOutput(
   }
 
   if (output.type === outputType.Elasticsearch && standalone) {
-    newOutput.username = '${ES_USERNAME}';
-    newOutput.password = '${ES_PASSWORD}';
+    // adding a place_holder as API_KEY
+    newOutput.api_key = '${API_KEY}';
+  }
+
+  if (output.type === outputType.RemoteElasticsearch) {
+    newOutput.service_token = output.service_token;
+  }
+
+  if (outputTypeSupportPresets(output.type)) {
+    newOutput.preset = preset ?? getDefaultPresetForEsOutput(config_yaml ?? '', load);
   }
 
   return newOutput;
+}
+
+export function getFullMonitoringSettings(
+  agentPolicy: Pick<
+    AgentPolicy,
+    | 'namespace'
+    | 'monitoring_enabled'
+    | 'keep_monitoring_alive'
+    | 'monitoring_pprof_enabled'
+    | 'monitoring_http'
+    | 'monitoring_diagnostics'
+  >,
+  monitoringOutput: Pick<Output, 'id' | 'is_default' | 'type'>
+): FullAgentPolicyMonitoring {
+  // Set base beats monitoring settings
+  const monitoring: FullAgentPolicyMonitoring = {
+    enabled: Boolean(
+      (agentPolicy.monitoring_enabled && agentPolicy.monitoring_enabled.length > 0) ||
+        agentPolicy.monitoring_http?.enabled ||
+        agentPolicy.keep_monitoring_alive
+    ),
+    logs: false,
+    metrics: false,
+    traces: false,
+  };
+
+  // If the agent policy has monitoring enabled for at least one of "logs", "metrics", or "traces"
+  // generate a monitoring config for the resulting compiled agent policy
+  if (agentPolicy.monitoring_enabled && agentPolicy.monitoring_enabled.length > 0) {
+    monitoring.namespace = agentPolicy.namespace;
+    monitoring.use_output = getOutputIdForAgentPolicy(monitoringOutput);
+    monitoring.logs = agentPolicy.monitoring_enabled.includes(dataTypes.Logs);
+    monitoring.metrics = agentPolicy.monitoring_enabled.includes(dataTypes.Metrics);
+    monitoring.traces = agentPolicy.monitoring_enabled.includes(dataTypes.Traces);
+  }
+
+  if (agentPolicy.monitoring_pprof_enabled !== undefined) {
+    monitoring.pprof = {
+      enabled: agentPolicy.monitoring_pprof_enabled,
+    };
+  }
+
+  // Conditionally set http monitoring settings
+  if (agentPolicy.monitoring_http?.enabled) {
+    monitoring.http = {
+      enabled: agentPolicy.monitoring_http.enabled,
+      ...(agentPolicy.monitoring_http.host && { host: agentPolicy.monitoring_http.host }),
+      ...(agentPolicy.monitoring_http.port && { port: agentPolicy.monitoring_http.port }),
+    };
+  }
+
+  // Conditionally set diagnostics monitoring settings
+  if (agentPolicy.monitoring_diagnostics?.limit || agentPolicy.monitoring_diagnostics?.uploader) {
+    monitoring.diagnostics = {};
+
+    if (
+      agentPolicy.monitoring_diagnostics.limit &&
+      (agentPolicy.monitoring_diagnostics.limit.interval ||
+        typeof agentPolicy.monitoring_diagnostics.limit.burst === 'number')
+    ) {
+      monitoring.diagnostics.limit = {
+        ...(agentPolicy.monitoring_diagnostics.limit.interval && {
+          interval: agentPolicy.monitoring_diagnostics.limit.interval,
+        }),
+        ...(typeof agentPolicy.monitoring_diagnostics.limit.burst === 'number' && {
+          burst: agentPolicy.monitoring_diagnostics.limit.burst,
+        }),
+      };
+    }
+
+    if (
+      agentPolicy.monitoring_diagnostics.uploader &&
+      (typeof agentPolicy.monitoring_diagnostics.uploader.max_retries === 'number' ||
+        agentPolicy.monitoring_diagnostics.uploader.init_dur ||
+        agentPolicy.monitoring_diagnostics.uploader.max_dur)
+    ) {
+      monitoring.diagnostics.uploader = {
+        ...(typeof agentPolicy.monitoring_diagnostics.uploader.max_retries === 'number' && {
+          max_retries: agentPolicy.monitoring_diagnostics.uploader.max_retries,
+        }),
+        ...(agentPolicy.monitoring_diagnostics.uploader.init_dur && {
+          init_dur: agentPolicy.monitoring_diagnostics.uploader.init_dur,
+        }),
+        ...(agentPolicy.monitoring_diagnostics.uploader.max_dur && {
+          max_dur: agentPolicy.monitoring_diagnostics.uploader.max_dur,
+        }),
+      };
+    }
+  }
+
+  return monitoring;
 }
 
 /**
  * Get id used in full agent policy (sent to the agents)
  * we use "default" for the default policy to avoid breaking changes
  */
-function getOutputIdForAgentPolicy(output: Output) {
-  if (output.is_default) {
+function getOutputIdForAgentPolicy(output: Pick<Output, 'id' | 'is_default' | 'type'>) {
+  if (output.is_default && output.type === outputType.Elasticsearch) {
     return DEFAULT_OUTPUT.name;
   }
-
   return output.id;
 }
 

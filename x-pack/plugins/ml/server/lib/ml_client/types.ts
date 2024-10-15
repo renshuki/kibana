@@ -5,17 +5,61 @@
  * 2.0.
  */
 
-import { ElasticsearchClient } from '@kbn/core/server';
-import { searchProvider } from './search';
+import type {
+  TransportRequestOptionsWithMeta,
+  TransportRequestOptions,
+} from '@elastic/elasticsearch';
+import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+import type { ElasticsearchClient } from '@kbn/core/server';
+import type { searchProvider } from './search';
 
 type OrigMlClient = ElasticsearchClient['ml'];
 
-export interface MlClient extends OrigMlClient {
+export interface AdaptiveAllocations {
+  adaptive_allocations?: {
+    enabled: boolean;
+    min_number_of_allocations?: number;
+    max_number_of_allocations?: number;
+  };
+}
+
+export interface UpdateTrainedModelDeploymentRequest extends AdaptiveAllocations {
+  model_id: string;
+  deployment_id?: string;
+  number_of_allocations?: number;
+}
+export interface UpdateTrainedModelDeploymentResponse {
+  acknowledge: boolean;
+}
+
+export interface MlStopTrainedModelDeploymentRequest
+  extends estypes.MlStopTrainedModelDeploymentRequest {
+  deployment_id?: string;
+}
+
+export interface MlInferTrainedModelRequest extends estypes.MlInferTrainedModelRequest {
+  deployment_id?: string;
+}
+
+// @ts-expect-error TODO: fix after elasticsearch-js bump
+export interface MlClient
+  extends Omit<OrigMlClient, 'stopTrainedModelDeployment' | 'inferTrainedModel'> {
   anomalySearch: ReturnType<typeof searchProvider>['anomalySearch'];
-  updateTrainedModelDeployment: (payload: {
-    model_id: string;
-    number_of_allocations: number;
-  }) => Promise<{ acknowledge: boolean }>;
+  updateTrainedModelDeployment: (
+    payload: UpdateTrainedModelDeploymentRequest
+  ) => Promise<UpdateTrainedModelDeploymentResponse>;
+  startTrainedModelDeployment: (
+    payload: estypes.MlStartTrainedModelDeploymentRequest & AdaptiveAllocations,
+    options?: TransportRequestOptions
+  ) => Promise<estypes.MlStartTrainedModelDeploymentResponse>;
+  stopTrainedModelDeployment: (
+    p: MlStopTrainedModelDeploymentRequest,
+    options?: TransportRequestOptionsWithMeta
+  ) => Promise<estypes.MlStopTrainedModelDeploymentResponse>;
+  inferTrainedModel: (
+    p: MlInferTrainedModelRequest,
+    options?: TransportRequestOptionsWithMeta
+  ) => Promise<estypes.MlInferTrainedModelResponse>;
 }
 
 export type MlClientParams =

@@ -5,11 +5,21 @@
  * 2.0.
  */
 
-import type { PluginInitializerContext } from '@kbn/core/server';
-import { CloudChatPlugin } from './plugin';
+import { Plugin } from '@kbn/core-plugins-server';
 
 export { config } from './config';
 
-export function plugin(initializerContext: PluginInitializerContext) {
-  return new CloudChatPlugin(initializerContext);
+// The plugin exists only to register the deprecated config keys and to be cleaned up in the future
+export async function plugin() {
+  class CloudChatPlugin implements Plugin {
+    constructor() {}
+
+    public setup() {}
+
+    public start() {}
+
+    public stop() {}
+  }
+
+  return new CloudChatPlugin();
 }

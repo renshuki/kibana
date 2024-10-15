@@ -27,7 +27,7 @@
         "label": "getStatusConfiguration",
         "description": [],
         "signature": [
-          "() => { open: { color: string; label: any; icon: \"folderOpen\"; }; \"in-progress\": { color: string; label: any; icon: \"folderExclamation\"; }; closed: { color: string; label: any; icon: \"folderCheck\"; }; }"
+          "() => { open: { color: string; label: string; icon: \"folderOpen\"; }; \"in-progress\": { color: string; label: string; icon: \"folderExclamation\"; }; closed: { color: string; label: string; icon: \"folderCheck\"; }; }"
         ],
         "path": "packages/kbn-cases-components/src/status/config.ts",
         "deprecated": false,
@@ -61,7 +61,7 @@
             "signature": [
               "P"
             ],
-            "path": "node_modules/@types/react/index.d.ts",
+            "path": "node_modules/@types/react/ts5.0/index.d.ts",
             "deprecated": false,
             "trackAdoption": false
           }
@@ -109,7 +109,7 @@
             "signature": [
               "P"
             ],
-            "path": "node_modules/@types/react/index.d.ts",
+            "path": "node_modules/@types/react/ts5.0/index.d.ts",
             "deprecated": false,
             "trackAdoption": false
           }
@@ -229,7 +229,7 @@
             "label": "children",
             "description": [],
             "signature": [
-              "boolean | React.ReactChild | React.ReactFragment | React.ReactPortal | null | undefined"
+              "string | number | boolean | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | null | undefined"
             ],
             "path": "packages/kbn-cases-components/src/tooltip/types.ts",
             "deprecated": false,
@@ -308,7 +308,9 @@
         "type": "Enum",
         "tags": [],
         "label": "CaseStatuses",
-        "description": [],
+        "description": [
+          "\nThis is being used by Cases in\nx-pack/plugins/cases/common/types/domain/case/v1.ts.\nIntroducing a breaking change in this enum will\nforce cases to create a version of the domain object\nwhich in turn will force cases to create a new version\nto most of the Cases APIs."
+        ],
         "path": "packages/kbn-cases-components/src/status/types.ts",
         "deprecated": false,
         "trackAdoption": false,

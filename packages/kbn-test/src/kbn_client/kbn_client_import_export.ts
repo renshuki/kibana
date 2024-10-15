@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { inspect } from 'util';
@@ -25,6 +26,7 @@ interface ImportApiResponse {
   success: boolean;
   [key: string]: unknown;
 }
+
 export class KbnClientImportExport {
   constructor(
     public readonly log: ToolingLog,
@@ -92,7 +94,7 @@ export class KbnClientImportExport {
     const src = this.resolveAndValidatePath(path);
     this.log.debug('unloading docs from archive at', src);
 
-    const objects = await parseArchive(src);
+    const objects = await parseArchive(src, { stripSummary: true });
     this.log.info('deleting', objects.length, 'objects', { space: options?.space });
 
     const { deleted, missing } = await this.savedObjects.bulkDelete({

@@ -1,30 +1,33 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { act, render } from '@testing-library/react';
 import React from 'react';
-import { makeAction, makeActionContext } from '../mocks/helpers';
+import { makeAction } from '../mocks/helpers';
 import { InlineActions } from './inline_actions';
-import { CellActionsProvider } from '../context/cell_actions_context';
+import type { CellActionExecutionContext } from '../types';
+import { CellActionsProvider } from '../context';
 
+const defaultProps = {
+  anchorPosition: 'rightCenter' as const,
+  disabledActionTypes: [],
+  visibleCellActions: 5,
+  actionContext: { trigger: { id: 'triggerId' } } as CellActionExecutionContext,
+  showActionTooltips: false,
+};
 describe('InlineActions', () => {
-  const actionContext = makeActionContext();
-
   it('renders', async () => {
     const getActionsPromise = Promise.resolve([]);
     const getActions = () => getActionsPromise;
     const { queryByTestId } = render(
       <CellActionsProvider getTriggerCompatibleActions={getActions}>
-        <InlineActions
-          visibleCellActions={5}
-          actionContext={actionContext}
-          showActionTooltips={false}
-        />
+        <InlineActions {...defaultProps} />
       </CellActionsProvider>
     );
 
@@ -46,11 +49,7 @@ describe('InlineActions', () => {
     const getActions = () => getActionsPromise;
     const { queryAllByRole } = render(
       <CellActionsProvider getTriggerCompatibleActions={getActions}>
-        <InlineActions
-          visibleCellActions={5}
-          actionContext={actionContext}
-          showActionTooltips={false}
-        />
+        <InlineActions {...defaultProps} />
       </CellActionsProvider>
     );
 

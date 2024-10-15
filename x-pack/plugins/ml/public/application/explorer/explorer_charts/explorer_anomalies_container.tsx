@@ -7,19 +7,19 @@
 
 import { EuiFlexGroup, EuiFlexItem, EuiSpacer, EuiText } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
-import React, { FC } from 'react';
+import type { FC } from 'react';
+import React from 'react';
 import { FormattedMessage } from '@kbn/i18n-react';
 import type { TimefilterContract } from '@kbn/data-plugin/public';
-import { ChartsPluginStart } from '@kbn/charts-plugin/public';
+import type { ChartsPluginStart } from '@kbn/charts-plugin/public';
+import type { MlEntityFieldOperation } from '@kbn/ml-anomaly-utils';
+import type { TimeBuckets } from '@kbn/ml-time-buckets';
 import { ExplorerChartsContainer } from './explorer_charts_container';
-import {
-  SelectSeverityUI,
-  TableSeverity,
-} from '../../components/controls/select_severity/select_severity';
-import type { TimeBuckets } from '../../util/time_buckets';
-import type { EntityFieldOperation } from '../../../../common/util/anomaly_utils';
+import type { TableSeverity } from '../../components/controls/select_severity/select_severity';
+import { SelectSeverityUI } from '../../components/controls/select_severity/select_severity';
 import type { ExplorerChartsData } from './explorer_charts_container_service';
 import type { MlLocator } from '../../../../common/types/locator';
+import type { AnomaliesTableData } from '../explorer_utils';
 
 interface ExplorerAnomaliesContainerProps {
   id: string;
@@ -28,9 +28,14 @@ interface ExplorerAnomaliesContainerProps {
   severity: TableSeverity;
   setSeverity: (severity: TableSeverity) => void;
   mlLocator: MlLocator;
+  tableData: AnomaliesTableData;
   timeBuckets: TimeBuckets;
   timefilter: TimefilterContract;
-  onSelectEntity: (fieldName: string, fieldValue: string, operation: EntityFieldOperation) => void;
+  onSelectEntity: (
+    fieldName: string,
+    fieldValue: string,
+    operation: MlEntityFieldOperation
+  ) => void;
   showSelectedInterval?: boolean;
   chartsService: ChartsPluginStart;
   timeRange: { from: string; to: string } | undefined;
@@ -51,6 +56,7 @@ export const ExplorerAnomaliesContainer: FC<ExplorerAnomaliesContainerProps> = (
   severity,
   setSeverity,
   mlLocator,
+  tableData,
   timeBuckets,
   timefilter,
   onSelectEntity,
@@ -59,13 +65,14 @@ export const ExplorerAnomaliesContainer: FC<ExplorerAnomaliesContainerProps> = (
   timeRange,
 }) => {
   return (
-    <>
+    // TODO: Remove data-shared-item and data-rendering-count as part of https://github.com/elastic/kibana/issues/179376
+    // These attributes are temporarily needed for reporting to not have any warning
+    <div data-shared-item="" data-rendering-count={1}>
       <EuiFlexGroup id={id} direction="row" gutterSize="l" responsive={true}>
         <EuiFlexItem grow={false}>
           <SelectSeverityUI severity={severity} onChange={setSeverity} />
         </EuiFlexItem>
       </EuiFlexGroup>
-
       <EuiSpacer size="m" />
       {Array.isArray(chartsData.seriesToPlot) &&
         chartsData.seriesToPlot.length === 0 &&
@@ -79,13 +86,13 @@ export const ExplorerAnomaliesContainer: FC<ExplorerAnomaliesContainerProps> = (
             </h4>
           </EuiText>
         )}
-
       {showCharts && (
         <ExplorerChartsContainer
           {...{
             ...chartsData,
             severity: severity.val,
             mlLocator,
+            tableData,
             timeBuckets,
             timefilter,
             timeRange,
@@ -93,9 +100,10 @@ export const ExplorerAnomaliesContainer: FC<ExplorerAnomaliesContainerProps> = (
             tooManyBucketsCalloutMsg,
             showSelectedInterval,
             chartsService,
+            id,
           }}
         />
       )}
-    </>
+    </div>
   );
 };

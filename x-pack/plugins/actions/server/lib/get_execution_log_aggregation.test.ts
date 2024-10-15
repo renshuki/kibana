@@ -5,6 +5,7 @@
  * 2.0.
  */
 
+import { estypes } from '@elastic/elasticsearch';
 import { fromKueryExpression } from '@kbn/es-query';
 import {
   getExecutionLogAggregation,
@@ -96,6 +97,7 @@ describe('getExecutionLogAggregation', () => {
                           'kibana.space_ids',
                           'kibana.action.name',
                           'kibana.action.id',
+                          'kibana.action.execution.source',
                         ],
                       },
                     },
@@ -225,6 +227,7 @@ describe('getExecutionLogAggregation', () => {
                           'kibana.space_ids',
                           'kibana.action.name',
                           'kibana.action.id',
+                          'kibana.action.execution.source',
                         ],
                       },
                     },
@@ -370,6 +373,7 @@ describe('getExecutionLogAggregation', () => {
                           'kibana.space_ids',
                           'kibana.action.name',
                           'kibana.action.id',
+                          'kibana.action.execution.source',
                         ],
                       },
                     },
@@ -482,7 +486,15 @@ describe('getExecutionLogAggregation', () => {
 
 describe('formatExecutionLogResult', () => {
   test('should return empty results if aggregations are undefined', () => {
-    expect(formatExecutionLogResult({ aggregations: undefined })).toEqual({
+    expect(
+      formatExecutionLogResult({
+        aggregations: undefined,
+        hits: {
+          total: { value: 0, relation: 'eq' },
+          hits: [],
+        } as estypes.SearchHitsMetadata<unknown>,
+      })
+    ).toEqual({
       total: 0,
       data: [],
     });
@@ -491,6 +503,10 @@ describe('formatExecutionLogResult', () => {
     expect(
       formatExecutionLogResult({
         aggregations: { executionLogAgg: undefined as unknown as ExecutionUuidAggResult },
+        hits: {
+          total: { value: 5, relation: 'eq' },
+          hits: [],
+        } as estypes.SearchHitsMetadata<unknown>,
       })
     ).toEqual({
       total: 0,
@@ -526,7 +542,11 @@ describe('formatExecutionLogResult', () => {
                             kibana: {
                               space_ids: ['default'],
                               version: '8.7.0',
-                              action: { name: 'test connector', id: '1' },
+                              action: {
+                                name: 'test connector',
+                                id: '1',
+                                execution: { source: 'SAVED_OBJECT' },
+                              },
                             },
                             message:
                               'action executed: .server-log:6709f660-8d11-11ed-bae5-bd32cbc9eaaa: test connector',
@@ -547,6 +567,10 @@ describe('formatExecutionLogResult', () => {
           executionUuidCardinality: { doc_count: 1, executionUuidCardinality: { value: 1 } },
         },
       },
+      hits: {
+        total: { value: 5, relation: 'eq' },
+        hits: [],
+      } as estypes.SearchHitsMetadata<unknown>,
     };
     expect(formatExecutionLogResult(results)).toEqual({
       data: [
@@ -563,6 +587,7 @@ describe('formatExecutionLogResult', () => {
           timestamp: '2023-01-05T15:55:50.495Z',
           version: '8.7.0',
           timed_out: false,
+          source: 'SAVED_OBJECT',
         },
       ],
       total: 1,
@@ -598,7 +623,11 @@ describe('formatExecutionLogResult', () => {
                             kibana: {
                               space_ids: ['default'],
                               version: '8.7.0',
-                              action: { name: 'test', id: '1' },
+                              action: {
+                                name: 'test',
+                                id: '1',
+                                execution: { source: 'SAVED_OBJECT' },
+                              },
                             },
                             message:
                               'action execution failure: .email:e020c620-8d14-11ed-bae5-bd32cbc9eaaa: test',
@@ -638,7 +667,11 @@ describe('formatExecutionLogResult', () => {
                             kibana: {
                               space_ids: ['default'],
                               version: '8.7.0',
-                              action: { name: 'test connector', id: '1' },
+                              action: {
+                                name: 'test connector',
+                                id: '1',
+                                execution: { source: 'SAVED_OBJECT' },
+                              },
                             },
                             message:
                               'action executed: .server-log:6709f660-8d11-11ed-bae5-bd32cbc9eaaa: test connector',
@@ -659,6 +692,10 @@ describe('formatExecutionLogResult', () => {
           executionUuidCardinality: { doc_count: 2, executionUuidCardinality: { value: 2 } },
         },
       },
+      hits: {
+        total: { value: 10, relation: 'eq' },
+        hits: [],
+      } as estypes.SearchHitsMetadata<unknown>,
     };
     expect(formatExecutionLogResult(results)).toEqual({
       data: [
@@ -675,6 +712,7 @@ describe('formatExecutionLogResult', () => {
           timestamp: '2023-01-05T16:23:53.813Z',
           version: '8.7.0',
           timed_out: false,
+          source: 'SAVED_OBJECT',
         },
         {
           connector_name: 'test connector',
@@ -689,6 +727,7 @@ describe('formatExecutionLogResult', () => {
           timestamp: '2023-01-05T15:55:50.495Z',
           version: '8.7.0',
           timed_out: false,
+          source: 'SAVED_OBJECT',
         },
       ],
       total: 2,
@@ -900,6 +939,10 @@ describe('formatExecutionKPIAggBuckets', () => {
     expect(
       formatExecutionKPIResult({
         aggregations: undefined,
+        hits: {
+          total: { value: 0, relation: 'eq' },
+          hits: [],
+        } as estypes.SearchHitsMetadata<unknown>,
       })
     ).toEqual({ failure: 0, success: 0, unknown: 0, warning: 0 });
   });
@@ -933,6 +976,10 @@ describe('formatExecutionKPIAggBuckets', () => {
           },
         },
       },
+      hits: {
+        total: { value: 21, relation: 'eq' },
+        hits: [],
+      } as estypes.SearchHitsMetadata<unknown>,
     };
 
     expect(formatExecutionKPIResult(results)).toEqual({

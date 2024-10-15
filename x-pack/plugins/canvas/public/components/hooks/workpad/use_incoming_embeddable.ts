@@ -8,12 +8,13 @@
 import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { fromExpression } from '@kbn/interpreter';
+import { ErrorStrings } from '../../../../i18n';
 import { CANVAS_APP } from '../../../../common/lib';
-import { decode, encode } from '../../../../common/lib/embeddable_dataurl';
+import { decode } from '../../../../common/lib/embeddable_dataurl';
 import { CanvasElement, CanvasPage } from '../../../../types';
-import { useEmbeddablesService, useLabsService } from '../../../services';
+import { useNotifyService } from '../../../services';
 // @ts-expect-error unconverted file
-import { addElement } from '../../../state/actions/elements';
+import { addElement, fetchAllRenderables } from '../../../state/actions/elements';
 // @ts-expect-error unconverted file
 import { selectToplevelNodes } from '../../../state/actions/transient';
 
@@ -22,13 +23,17 @@ import {
   fetchEmbeddableRenderable,
 } from '../../../state/actions/embeddable';
 import { clearValue } from '../../../state/actions/resolved_args';
+import { embeddableInputToExpression } from '../../../../canvas_plugin_src/renderers/embeddable/embeddable_input_to_expression';
+import { embeddableService, presentationUtilService } from '../../../services/kibana_services';
+
+const { actionsElements: strings } = ErrorStrings;
 
 export const useIncomingEmbeddable = (selectedPage: CanvasPage) => {
-  const embeddablesService = useEmbeddablesService();
-  const labsService = useLabsService();
+  const labsService = presentationUtilService.labsService;
   const dispatch = useDispatch();
+  const notifyService = useNotifyService();
   const isByValueEnabled = labsService.isProjectEnabled('labs:canvas:byValueEmbeddable');
-  const stateTransferService = embeddablesService.getStateTransfer();
+  const stateTransferService = embeddableService.getStateTransfer();
 
   // fetch incoming embeddable from state transfer service.
   const incomingEmbeddable = stateTransferService.getIncomingEmbeddablePackage(CANVAS_APP, true);
@@ -45,9 +50,20 @@ export const useIncomingEmbeddable = (selectedPage: CanvasPage) => {
       if (originalElement) {
         const originalAst = fromExpression(originalElement!.expression);
 
-        const functionIndex = originalAst.chain.findIndex(
-          ({ function: fn }) => fn === 'embeddable'
+        const functionIndex = originalAst.chain.findIndex(({ function: fn }) =>
+          ['embeddable', 'savedVisualization'].includes(fn)
         );
+
+        if (functionIndex === -1) {
+          dispatch(fetchAllRenderables());
+          return;
+        }
+
+        if (originalAst.chain[functionIndex].function === 'savedVisualization') {
+          notifyService.error(strings.getConvertToLensUnsupportedSavedVisualization());
+          dispatch(fetchAllRenderables());
+          return;
+        }
 
         const originalInput = decode(
           originalAst.chain[functionIndex].arguments.config[0] as string
@@ -68,9 +84,7 @@ export const useIncomingEmbeddable = (selectedPage: CanvasPage) => {
           updatedInput = { ...originalInput, ...incomingInput };
         }
 
-        const expression = `embeddable config="${encode(updatedInput)}"
-  type="${type}"
-| render`;
+        const expression = embeddableInputToExpression(updatedInput, type, undefined, true);
 
         dispatch(
           updateEmbeddableExpression({
@@ -85,11 +99,9 @@ export const useIncomingEmbeddable = (selectedPage: CanvasPage) => {
         // select new embeddable element
         dispatch(selectToplevelNodes([embeddableId]));
       } else {
-        const expression = `embeddable config="${encode(incomingInput)}"
-  type="${type}"
-| render`;
+        const expression = embeddableInputToExpression(incomingInput, type, undefined, true);
         dispatch(addElement(selectedPage.id, { expression }));
       }
     }
-  }, [dispatch, selectedPage, incomingEmbeddable, isByValueEnabled]);
+  }, [dispatch, notifyService, selectedPage, incomingEmbeddable, isByValueEnabled]);
 };

@@ -8,7 +8,7 @@
 import { EuiFlexGroup, EuiFlexItem, EuiHorizontalRule, EuiText, EuiTitle } from '@elastic/eui';
 import React, { useCallback, useMemo, useState } from 'react';
 
-import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import * as i18n from './translations';
 import { LinkAnchor } from '../links';
 import { RecentCasesFilters } from './filters';
@@ -17,7 +17,6 @@ import type { FilterMode as RecentCasesFilterMode } from './types';
 import type { FilterOptions } from '../../containers/types';
 import { useCurrentUser } from '../../common/lib/kibana';
 import { useAllCasesNavigation } from '../../common/navigation';
-import { casesQueryClient } from '../cases_context/query_client';
 import { useGetCurrentUserProfile } from '../../containers/user_profiles/use_get_current_user_profile';
 import { getReporterFilter, getAssigneeFilter } from './get_filter_options';
 
@@ -27,9 +26,10 @@ export interface RecentCasesProps {
 
 const RecentCases = React.memo((props: RecentCasesProps) => {
   return (
-    <QueryClientProvider client={casesQueryClient}>
-      <RecentCasesWithoutQueryProvider {...props} />
-    </QueryClientProvider>
+    <>
+      <ReactQueryDevtools initialIsOpen={false} />
+      <RecentCasesComponent {...props} />
+    </>
   );
 });
 
@@ -38,7 +38,7 @@ RecentCases.displayName = 'RecentCases';
 // eslint-disable-next-line import/no-default-export
 export { RecentCases as default };
 
-const RecentCasesWithoutQueryProvider = React.memo(({ maxCasesToShow }: RecentCasesProps) => {
+const RecentCasesComponent = React.memo(({ maxCasesToShow }: RecentCasesProps) => {
   const currentUser = useCurrentUser();
   const { data: currentUserProfile, isLoading: isLoadingCurrentUserProfile } =
     useGetCurrentUserProfile();
@@ -48,7 +48,7 @@ const RecentCasesWithoutQueryProvider = React.memo(({ maxCasesToShow }: RecentCa
     useState<RecentCasesFilterMode>('recentlyCreated');
 
   const navigateToAllCasesClick = useCallback(
-    (e) => {
+    (e: React.SyntheticEvent) => {
       e.preventDefault();
       navigateToAllCases();
     },
@@ -110,4 +110,4 @@ const RecentCasesWithoutQueryProvider = React.memo(({ maxCasesToShow }: RecentCa
   );
 });
 
-RecentCasesWithoutQueryProvider.displayName = 'RecentCases';
+RecentCasesComponent.displayName = 'RecentCasesComponent';

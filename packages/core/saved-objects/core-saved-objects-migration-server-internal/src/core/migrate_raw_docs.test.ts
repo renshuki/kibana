@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { set } from '@kbn/safer-lodash-set';
@@ -31,18 +32,36 @@ describe('migrateRawDocs', () => {
       transform,
       [
         { _id: 'a:b', _source: { type: 'a', a: { name: 'AAA' } } },
+        { _id: 'a:c', _source: { type: 'a', a: { name: 'AAA' }, typeMigrationVersion: '1.0.0' } },
         { _id: 'c:d', _source: { type: 'c', c: { name: 'DDD' } } },
+        {
+          _id: 'c:e',
+          _source: { type: 'c', c: { name: 'DDD' }, migrationVersion: { c: '2.0.0' } },
+        },
       ]
     );
 
     expect(result).toEqual([
       {
         _id: 'a:b',
-        _source: { type: 'a', a: { name: 'HOI!' }, migrationVersion: {}, references: [] },
+        _source: { type: 'a', a: { name: 'HOI!' }, typeMigrationVersion: '', references: [] },
+      },
+      {
+        _id: 'a:c',
+        _source: { type: 'a', a: { name: 'HOI!' }, typeMigrationVersion: '1.0.0', references: [] },
       },
       {
         _id: 'c:d',
-        _source: { type: 'c', c: { name: 'HOI!' }, migrationVersion: {}, references: [] },
+        _source: { type: 'c', c: { name: 'HOI!' }, typeMigrationVersion: '', references: [] },
+      },
+      {
+        _id: 'c:e',
+        _source: {
+          type: 'c',
+          c: { name: 'HOI!' },
+          migrationVersion: { c: '2.0.0' },
+          references: [],
+        },
       },
     ]);
 
@@ -50,19 +69,35 @@ describe('migrateRawDocs', () => {
       id: 'b',
       type: 'a',
       attributes: { name: 'AAA' },
-      migrationVersion: {},
+      typeMigrationVersion: '',
       references: [],
     };
     const obj2 = {
+      id: 'c',
+      type: 'a',
+      attributes: { name: 'AAA' },
+      typeMigrationVersion: '1.0.0',
+      references: [],
+    };
+    const obj3 = {
       id: 'd',
       type: 'c',
       attributes: { name: 'DDD' },
-      migrationVersion: {},
+      typeMigrationVersion: '',
       references: [],
     };
-    expect(transform).toHaveBeenCalledTimes(2);
+    const obj4 = {
+      id: 'e',
+      type: 'c',
+      attributes: { name: 'DDD' },
+      migrationVersion: { c: '2.0.0' },
+      references: [],
+    };
+    expect(transform).toHaveBeenCalledTimes(4);
     expect(transform).toHaveBeenNthCalledWith(1, obj1);
     expect(transform).toHaveBeenNthCalledWith(2, obj2);
+    expect(transform).toHaveBeenNthCalledWith(3, obj3);
+    expect(transform).toHaveBeenNthCalledWith(4, obj4);
   });
 
   test('throws when encountering a corrupt saved object document', async () => {
@@ -99,7 +134,7 @@ describe('migrateRawDocs', () => {
     expect(result).toEqual([
       {
         _id: 'a:b',
-        _source: { type: 'a', a: { name: 'HOI!' }, migrationVersion: {}, references: [] },
+        _source: { type: 'a', a: { name: 'HOI!' }, typeMigrationVersion: '', references: [] },
       },
       {
         _id: 'foo:bar',
@@ -111,7 +146,7 @@ describe('migrateRawDocs', () => {
       id: 'b',
       type: 'a',
       attributes: { name: 'AAA' },
-      migrationVersion: {},
+      typeMigrationVersion: '',
       references: [],
     };
     expect(transform).toHaveBeenCalledTimes(1);
@@ -144,7 +179,12 @@ describe('migrateRawDocsSafely', () => {
       migrateDoc: transform,
       rawDocs: [
         { _id: 'a:b', _source: { type: 'a', a: { name: 'AAA' } } },
+        { _id: 'a:c', _source: { type: 'a', a: { name: 'AAA' }, typeMigrationVersion: '1.0.0' } },
         { _id: 'c:d', _source: { type: 'c', c: { name: 'DDD' } } },
+        {
+          _id: 'c:e',
+          _source: { type: 'c', c: { name: 'DDD' }, migrationVersion: { c: '2.0.0' } },
+        },
       ],
     });
     const result = (await task()) as Either.Right<DocumentsTransformSuccess>;
@@ -152,11 +192,24 @@ describe('migrateRawDocsSafely', () => {
     expect(result.right.processedDocs).toEqual([
       {
         _id: 'a:b',
-        _source: { type: 'a', a: { name: 'HOI!' }, migrationVersion: {}, references: [] },
+        _source: { type: 'a', a: { name: 'HOI!' }, typeMigrationVersion: '', references: [] },
+      },
+      {
+        _id: 'a:c',
+        _source: { type: 'a', a: { name: 'HOI!' }, typeMigrationVersion: '1.0.0', references: [] },
       },
       {
         _id: 'c:d',
-        _source: { type: 'c', c: { name: 'HOI!' }, migrationVersion: {}, references: [] },
+        _source: { type: 'c', c: { name: 'HOI!' }, typeMigrationVersion: '', references: [] },
+      },
+      {
+        _id: 'c:e',
+        _source: {
+          type: 'c',
+          c: { name: 'HOI!' },
+          migrationVersion: { c: '2.0.0' },
+          references: [],
+        },
       },
     ]);
 
@@ -164,19 +217,35 @@ describe('migrateRawDocsSafely', () => {
       id: 'b',
       type: 'a',
       attributes: { name: 'AAA' },
-      migrationVersion: {},
+      typeMigrationVersion: '',
       references: [],
     };
     const obj2 = {
+      id: 'c',
+      type: 'a',
+      attributes: { name: 'AAA' },
+      typeMigrationVersion: '1.0.0',
+      references: [],
+    };
+    const obj3 = {
       id: 'd',
       type: 'c',
       attributes: { name: 'DDD' },
-      migrationVersion: {},
+      typeMigrationVersion: '',
       references: [],
     };
-    expect(transform).toHaveBeenCalledTimes(2);
+    const obj4 = {
+      id: 'e',
+      type: 'c',
+      attributes: { name: 'DDD' },
+      migrationVersion: { c: '2.0.0' },
+      references: [],
+    };
+    expect(transform).toHaveBeenCalledTimes(4);
     expect(transform).toHaveBeenNthCalledWith(1, obj1);
     expect(transform).toHaveBeenNthCalledWith(2, obj2);
+    expect(transform).toHaveBeenNthCalledWith(3, obj3);
+    expect(transform).toHaveBeenNthCalledWith(4, obj4);
   });
 
   test('returns a `left` tag when encountering a corrupt saved object document', async () => {
@@ -220,7 +289,7 @@ describe('migrateRawDocsSafely', () => {
     expect(result.right.processedDocs).toEqual([
       {
         _id: 'a:b',
-        _source: { type: 'a', a: { name: 'HOI!' }, migrationVersion: {}, references: [] },
+        _source: { type: 'a', a: { name: 'HOI!' }, typeMigrationVersion: '', references: [] },
       },
       {
         _id: 'foo:bar',
@@ -232,7 +301,7 @@ describe('migrateRawDocsSafely', () => {
       id: 'b',
       type: 'a',
       attributes: { name: 'AAA' },
-      migrationVersion: {},
+      typeMigrationVersion: '',
       references: [],
     };
     expect(transform).toHaveBeenCalledTimes(1);

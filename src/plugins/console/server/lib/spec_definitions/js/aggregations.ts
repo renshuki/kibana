@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { SpecDefinitionsService } from '../../../services';
@@ -164,7 +165,6 @@ const rules = {
     terms: {
       __template: {
         field: '',
-        size: 10,
       },
       field: '{field}',
       size: 10,
@@ -173,7 +173,7 @@ const rules = {
         __template: {
           _key: 'asc',
         },
-        _term: { __one_of: ['asc', 'desc'] },
+        _key: { __one_of: ['asc', 'desc'] },
         _count: { __one_of: ['asc', 'desc'] },
         '*': { __one_of: ['asc', 'desc'] },
       },
@@ -225,6 +225,25 @@ const rules = {
         // populated by a global rule
       },
     },
+    ip_prefix: {
+      __template: {
+        field: '',
+      },
+      ipPrefix: {
+        __template: {
+          prefixLength: 1,
+          isIpv6: false,
+        },
+        prefixLength: 1,
+        isIpv6: false,
+      },
+      field: '{field}',
+      format: '',
+      keyed: { __one_of: [true, false] },
+      script: {
+        // populated by a global rule
+      },
+    },
     ip_range: {
       __template: {
         field: '',
@@ -268,11 +287,11 @@ const rules = {
     date_histogram: {
       __template: {
         field: 'date',
-        interval: 'month',
+        fixed_interval: '1d',
       },
       field: '{field}',
-      interval: {
-        __one_of: ['year', 'quarter', 'week', 'day', 'hour', 'minute', 'second'],
+      fixed_interval: {
+        __one_of: ['1d', '1h', '1m', '1s', '1ms'],
       },
       min_doc_count: 0,
       extended_bounds: {
@@ -294,7 +313,6 @@ const rules = {
       keyed: { __one_of: [true, false] },
       pre_zone: '-01:00',
       post_zone: '-01:00',
-      pre_zone_adjust_large_interval: { __one_of: [true, false] },
       factor: 1000,
       pre_offset: '1d',
       post_offset: '1d',
@@ -302,7 +320,22 @@ const rules = {
       time_zone: '00:00',
       missing: '',
       calendar_interval: {
-        __one_of: ['year', 'quarter', 'week', 'day', 'hour', 'minute', 'second'],
+        __one_of: [
+          'year',
+          'quarter',
+          'month',
+          'week',
+          'day',
+          'hour',
+          'minute',
+          '1y',
+          '1q',
+          '1M',
+          '1w',
+          '1d',
+          '1h',
+          '1m',
+        ],
       },
     },
     geo_distance: {

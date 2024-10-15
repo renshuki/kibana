@@ -96,7 +96,7 @@ const EncryptedFieldsCalloutComponent: React.FC<EncryptedFieldsCalloutProps> = (
     );
   }
 
-  if (!isEdit) {
+  if (!isEdit && secretFieldsLabel.length) {
     return (
       <Callout
         title={i18n.translate(
@@ -104,7 +104,7 @@ const EncryptedFieldsCalloutComponent: React.FC<EncryptedFieldsCalloutProps> = (
           {
             values: { secretFieldsLabel, encryptedFieldsLength: totalSecretFields },
             defaultMessage:
-              'Remember value{encryptedFieldsLength, plural, one {} other {s}} {secretFieldsLabel}. You must reenter {encryptedFieldsLength, plural, one {it} other {them}} each time you edit the connector.',
+              'Remember your {secretFieldsLabel} {encryptedFieldsLength, plural, one {value} other {values}}. You must reenter {encryptedFieldsLength, plural, one {it} other {them}} each time you edit the connector.',
           }
         )}
         dataTestSubj="create-connector-secrets-callout"
@@ -112,7 +112,7 @@ const EncryptedFieldsCalloutComponent: React.FC<EncryptedFieldsCalloutProps> = (
     );
   }
 
-  if (isEdit) {
+  if (isEdit && secretFieldsLabel.length) {
     return (
       <Callout
         title={i18n.translate(

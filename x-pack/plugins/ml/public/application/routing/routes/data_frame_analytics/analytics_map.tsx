@@ -5,23 +5,28 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
+import type { FC } from 'react';
+import React from 'react';
 import { i18n } from '@kbn/i18n';
-
-import { NavigateToPath } from '../../../contexts/kibana';
-
-import { MlRoute, PageLoader, PageProps } from '../../router';
-import { useResolver } from '../../use_resolver';
+import { dynamic } from '@kbn/shared-ux-utility';
+import { ML_PAGES } from '../../../../locator';
+import type { NavigateToPath } from '../../../contexts/kibana';
+import type { MlRoute } from '../../router';
+import { createPath, PageLoader } from '../../router';
+import { useRouteResolver } from '../../use_resolver';
 import { basicResolvers } from '../../resolvers';
-import { Page } from '../../../data_frame_analytics/pages/job_map/page';
 import { getBreadcrumbWithUrlForApp } from '../../breadcrumbs';
+
+const Page = dynamic(async () => ({
+  default: (await import('../../../data_frame_analytics/pages/job_map/page')).Page,
+}));
 
 export const analyticsMapRouteFactory = (
   navigateToPath: NavigateToPath,
   basePath: string
 ): MlRoute => ({
-  path: '/data_frame_analytics/map',
-  render: (props, deps) => <PageWrapper {...props} deps={deps} />,
+  path: createPath(ML_PAGES.DATA_FRAME_ANALYTICS_MAP),
+  render: () => <PageWrapper />,
   title: i18n.translate('xpack.ml.dataFrameAnalytics.analyticsMap.docTitle', {
     defaultMessage: 'Analytics Map',
   }),
@@ -38,14 +43,8 @@ export const analyticsMapRouteFactory = (
   'data-test-subj': 'mlPageAnalyticsMap',
 });
 
-const PageWrapper: FC<PageProps> = ({ deps }) => {
-  const { context } = useResolver(
-    undefined,
-    undefined,
-    deps.config,
-    deps.dataViewsContract,
-    basicResolvers(deps)
-  );
+const PageWrapper: FC = () => {
+  const { context } = useRouteResolver('full', ['canGetDataFrameAnalytics'], basicResolvers());
 
   return (
     <PageLoader context={context}>

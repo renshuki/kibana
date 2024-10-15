@@ -50,6 +50,11 @@ export function useSyncRulesTableSavedState(): void {
       storageStateToSave.tags = state.filterOptions.tags;
     }
 
+    if (state.filterOptions.enabled !== undefined) {
+      urlStateToSave.enabled = state.filterOptions.enabled;
+      storageStateToSave.enabled = state.filterOptions.enabled;
+    }
+
     if (state.sortingOptions.field !== DEFAULT_SORTING_OPTIONS.field) {
       urlStateToSave.field = state.sortingOptions.field;
       storageStateToSave.field = state.sortingOptions.field;
@@ -67,6 +72,11 @@ export function useSyncRulesTableSavedState(): void {
     if (state.pagination.perPage !== DEFAULT_RULES_PER_PAGE) {
       urlStateToSave.perPage = state.pagination.perPage;
       storageStateToSave.perPage = state.pagination.perPage;
+    }
+
+    if (state.filterOptions.ruleExecutionStatus !== undefined) {
+      urlStateToSave.ruleExecutionStatus = state.filterOptions.ruleExecutionStatus;
+      storageStateToSave.ruleExecutionStatus = state.filterOptions.ruleExecutionStatus;
     }
 
     const hasUrlStateToSave = Object.keys(urlStateToSave).length > 0;

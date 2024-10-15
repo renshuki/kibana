@@ -1,21 +1,23 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Dictionary, countBy, defaults, uniq } from 'lodash';
 import { i18n } from '@kbn/i18n';
 import { DataView, DataViewField } from '@kbn/data-views-plugin/public';
+import { FilterChecked } from '@elastic/eui';
 import {
   TAB_INDEXED_FIELDS,
   TAB_SCRIPTED_FIELDS,
   TAB_SOURCE_FILTERS,
   TAB_RELATIONSHIPS,
 } from '../constants';
-import { areScriptedFieldsEnabled } from '../../utils';
+import { isRollup } from '../../utils';
 
 function filterByName(items: DataViewField[], filter: string) {
   const lowercaseFilter = (filter || '').toLowerCase();
@@ -73,7 +75,12 @@ function getTitle(type: string, filteredCount: Dictionary<number>, totalCount: D
   return title + count;
 }
 
-export function getTabs(indexPattern: DataView, fieldFilter: string, relationshipCount = 0) {
+export function getTabs(
+  indexPattern: DataView,
+  fieldFilter: string,
+  relationshipCount = 0,
+  scriptedFieldsEnabled: boolean
+) {
   const totalCount = getCounts(indexPattern.fields.getAll(), indexPattern.getSourceFiltering());
   const filteredCount = getCounts(
     indexPattern.fields.getAll(),
@@ -89,7 +96,7 @@ export function getTabs(indexPattern: DataView, fieldFilter: string, relationshi
     'data-test-subj': 'tab-indexedFields',
   });
 
-  if (areScriptedFieldsEnabled(indexPattern)) {
+  if (!isRollup(indexPattern.type) && scriptedFieldsEnabled) {
     tabs.push({
       name: getTitle('scripted', filteredCount, totalCount),
       id: TAB_SCRIPTED_FIELDS,
@@ -120,7 +127,11 @@ export function getPath(field: DataViewField, indexPattern: DataView) {
 }
 
 export function convertToEuiFilterOptions(options: string[]) {
-  return uniq(options).map((option) => {
+  return uniq(options).map<{
+    value: string;
+    name: string;
+    checked?: FilterChecked;
+  }>((option) => {
     return {
       value: option,
       name: option,

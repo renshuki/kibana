@@ -5,10 +5,9 @@
  * 2.0.
  */
 
-import * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+import type { Aggs, SamplingOption } from '../../../../../common/types/field_stats';
 import {
-  Aggs,
-  SamplingOption,
   isNormalSamplingOption,
   isRandomSamplingOption,
 } from '../../../../../common/types/field_stats';
@@ -55,48 +54,6 @@ export function buildAggregationWithSamplingOption(
       random_sampler: {
         probability: 1,
         ...(seed ? { seed } : {}),
-      },
-    },
-  };
-}
-
-/**
- * Wraps the supplied aggregations in a random sampler aggregation.
- */
-export function buildRandomSamplerAggregation(
-  aggs: Aggs,
-  probability: number | null,
-  seed: number
-): Record<string, estypes.AggregationsAggregationContainer> {
-  if (probability === null || probability <= 0 || probability > 1) {
-    return aggs;
-  }
-
-  return {
-    sample: {
-      aggs,
-      // @ts-expect-error AggregationsAggregationContainer needs to be updated with random_sampler
-      random_sampler: {
-        probability,
-        ...(seed ? { seed } : {}),
-      },
-    },
-  };
-}
-
-export function buildSamplerAggregation(
-  aggs: Aggs,
-  shardSize: number
-): Record<string, estypes.AggregationsAggregationContainer> {
-  if (shardSize <= 0) {
-    return aggs;
-  }
-
-  return {
-    sample: {
-      aggs,
-      sampler: {
-        shard_size: shardSize,
       },
     },
   };

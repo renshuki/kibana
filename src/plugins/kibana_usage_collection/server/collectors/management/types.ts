@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 export interface UsageStats {
@@ -12,6 +13,7 @@ export interface UsageStats {
    */
   'securitySolution:defaultIndex': string;
   'securitySolution:defaultThreatIndex': string;
+  'securitySolution:alertTags': string;
   'securitySolution:newsFeedUrl': string;
   'xpackReporting:customPdfLogo': string;
   'notifications:banner': string;
@@ -33,21 +35,30 @@ export interface UsageStats {
   'discover:searchFieldsFromSource': boolean;
   'discover:showFieldStatistics': boolean;
   'discover:showMultiFields': boolean;
-  'discover:enableSql': boolean;
+  enableESQL: boolean;
   'discover:maxDocFieldsDisplayed': number;
   'securitySolution:rulesTableRefresh': string;
   'observability:enableInspectEsQueries': boolean;
-  'observability:enableNewSyntheticsView': boolean;
   'observability:maxSuggestions': number;
   'observability:enableComparisonByDefault': boolean;
   'observability:enableServiceGroups': boolean;
   'observability:apmEnableServiceMetrics': boolean;
+  'observability:apmEnableContinuousRollups': boolean;
   'observability:apmAWSLambdaPriceFactor': string;
   'observability:apmAWSLambdaRequestCostPerMillion': number;
   'observability:enableInfrastructureHostsView': boolean;
+  'observability:enableInfrastructureContainerAssetView': boolean;
+  'observability:enableInfrastructureProfilingIntegration': boolean;
+  'observability:enableInfrastructureAssetCustomDashboards': boolean;
   'observability:apmAgentExplorerView': boolean;
-  'observability:profilingElasticsearchPlugin': boolean;
-  'visualize:enableLabs': boolean;
+  'observability:apmEnableTableSearchBar': boolean;
+  'observability:apmEnableServiceInventoryTableSearchBar': boolean;
+  'observability:logsExplorer:allowedDataViews': string[];
+  'observability:logSources': string[];
+  'observability:enableLogsStream': boolean;
+  'observability:newLogsOverview': boolean;
+  'observability:aiAssistantSimulatedFunctionCalling': boolean;
+  'observability:aiAssistantSearchConnectorIndexPattern': string;
   'visualization:heatmap:maxBuckets': number;
   'visualization:colorMapping': string;
   'visualization:useLegacyTimeAxis': boolean;
@@ -64,7 +75,10 @@ export interface UsageStats {
   'securitySolution:defaultAnomalyScore': number;
   'securitySolution:refreshIntervalDefaults': string;
   'securitySolution:enableNewsFeed': boolean;
+  'securitySolution:enableAssetCriticality': boolean;
+  'securitySolution:excludeColdAndFrozenTiersInAnalyzer': boolean;
   'securitySolution:enableCcsWarning': boolean;
+  'securitySolution:enableVisualizationsInFlyout': boolean;
   'search:includeFrozen': boolean;
   'courier:maxConcurrentShardRequests': number;
   'courier:setRequestPreference': string;
@@ -78,9 +92,9 @@ export interface UsageStats {
   'doc_table:highlight': boolean;
   'discover:searchOnPageLoad': boolean;
   'doc_table:hideTimeColumn': boolean;
+  'data_views:cache_max_age': number;
   'discover:sampleSize': number;
   'discover:sampleRowsPerPage': number;
-  'discover:showLegacyFieldTopValues': boolean;
   defaultColumns: string[];
   'context:defaultSize': number;
   'context:tieBreakerFields': string[];
@@ -137,12 +151,12 @@ export interface UsageStats {
   'labs:presentation:timeToPresent': boolean;
   'labs:dashboard:enable_ui': boolean;
   'labs:dashboard:deferBelowFold': boolean;
-  'labs:dashboard:dashboardControls': boolean;
   'discover:rowHeightOption': number;
   hideAnnouncements: boolean;
   isDefaultIndexMigrated: boolean;
-  'lens:useFieldExistenceSampling': boolean;
   'metrics:allowCheckingForFailedShards': boolean;
+  'observability:syntheticsThrottlingEnabled': boolean;
+  'observability:enableLegacyUptimeApp': boolean;
   'observability:apmLabsButton': boolean;
   'observability:enableAwsLambdaMetrics': boolean;
   'observability:apmProgressiveLoading': string;
@@ -150,8 +164,25 @@ export interface UsageStats {
   'observability:apmServiceInventoryOptimizedSorting': boolean;
   'observability:apmTraceExplorerTab': boolean;
   'observability:apmEnableCriticalPath': boolean;
+  'observability:apmEnableProfilingIntegration': boolean;
+  'observability:entityCentricExperience': boolean;
+  'observability:profilingShowErrorFrames': boolean;
   'securitySolution:enableGroupedNav': boolean;
   'securitySolution:showRelatedIntegrations': boolean;
   'visualization:visualize:legacyGaugeChartsLibrary': boolean;
-  'enterpriseSearch:enableEnginesSection': boolean;
+  'observability:profilingPerVCPUWattX86': number;
+  'observability:profilingPervCPUWattArm64': number;
+  'observability:profilingCo2PerKWH': number;
+  'observability:profilingDatacenterPUE': number;
+  'observability:profilingCostPervCPUPerHour': number;
+  'observability:profilingAWSCostDiscountRate': number;
+  'observability:profilingAzureCostDiscountRate': number;
+  'data_views:fields_excluded_data_tiers': string;
+  'observability:apmEnableTransactionProfiling': boolean;
+  'devTools:enablePersistentConsole': boolean;
+  'aiAssistant:preferredAIAssistantType': string;
+  'observability:profilingFetchTopNFunctionsFromStacktraces': boolean;
+  'securitySolution:excludedDataTiersForRuleExecution': string[];
+  'securitySolution:maxUnassociatedNotes': number;
+  'observability:searchExcludedDataTiers': string[];
 }

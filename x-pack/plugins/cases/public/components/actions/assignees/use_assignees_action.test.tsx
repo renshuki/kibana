@@ -79,16 +79,15 @@ describe('useAssigneesAction', () => {
     await waitFor(() => {
       expect(result.current.isFlyoutOpen).toBe(false);
       expect(onActionSuccess).toHaveBeenCalled();
-      expect(updateSpy).toHaveBeenCalledWith(
-        [
+      expect(updateSpy).toHaveBeenCalledWith({
+        cases: [
           {
             assignees: [{ uid: 'u_J41Oh6L9ki-Vo2tOogS8WRTENzhHurGtRc87NgEAlkc_0' }, { uid: '1' }],
             id: basicCase.id,
             version: basicCase.version,
           },
         ],
-        expect.anything()
-      );
+      });
     });
   });
 
@@ -111,9 +110,10 @@ describe('useAssigneesAction', () => {
     });
 
     await waitFor(() => {
-      expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith(
-        'Edited case'
-      );
+      expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith({
+        title: 'Edited case',
+        className: 'eui-textBreakWord',
+      });
     });
   });
 
@@ -136,9 +136,10 @@ describe('useAssigneesAction', () => {
     });
 
     await waitFor(() => {
-      expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith(
-        'Edited 2 cases'
-      );
+      expect(appMockRender.coreStart.notifications.toasts.addSuccess).toHaveBeenCalledWith({
+        title: 'Edited 2 cases',
+        className: 'eui-textBreakWord',
+      });
     });
   });
 });

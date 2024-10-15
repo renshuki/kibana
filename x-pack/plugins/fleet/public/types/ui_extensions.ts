@@ -6,11 +6,20 @@
  */
 
 import type { EuiStepProps } from '@elastic/eui';
-import type { ComponentType, LazyExoticComponent } from 'react';
+import type { ComponentType, LazyExoticComponent, PropsWithChildren } from 'react';
 
 import type { FleetServerAgentComponentUnit } from '../../common/types/models/agent';
 
-import type { Agent, NewPackagePolicy, PackageInfo, PackagePolicy } from '.';
+import type { PackagePolicyValidationResults } from '../services';
+
+import type {
+  Agent,
+  AgentPolicy,
+  NewPackagePolicy,
+  PackageInfo,
+  PackagePolicy,
+  SetupTechnology,
+} from '.';
 
 /** Register a Fleet UI extension */
 export type UIExtensionRegistrationCallback = (extensionPoint: UIExtensionPoint) => void;
@@ -19,6 +28,24 @@ export type UIExtensionRegistrationCallback = (extensionPoint: UIExtensionPoint)
 export interface UIExtensionsStorage {
   [key: string]: Partial<Record<UIExtensionPoint['view'], UIExtensionPoint>>;
 }
+
+/**
+ * UI Component Extension is used to replace the Define Step on
+ * the pages displaying the ability to edit/create an Integration Policy
+ */
+export type PackagePolicyReplaceDefineStepExtensionComponent =
+  ComponentType<PackagePolicyReplaceDefineStepExtensionComponentProps>;
+
+export type PackagePolicyReplaceDefineStepExtensionComponentProps = (
+  | (PackagePolicyEditExtensionComponentProps & { isEditPage: true })
+  | (PackagePolicyCreateExtensionComponentProps & { isEditPage: false })
+) & {
+  validationResults?: PackagePolicyValidationResults;
+  agentPolicies?: AgentPolicy[];
+  packageInfo: PackageInfo;
+  isAgentlessEnabled?: boolean;
+  handleSetupTechnologyChange?: (setupTechnology: SetupTechnology) => void;
+};
 
 /**
  * UI Component Extension is used on the pages displaying the ability to edit an
@@ -73,6 +100,12 @@ export interface PackageGenericErrorsListProps {
   packageErrors: FleetServerAgentComponentUnit[];
 }
 
+export interface PackagePolicyReplaceDefineStepExtension {
+  package: string;
+  view: 'package-policy-replace-define-step';
+  Component: LazyExoticComponent<PackagePolicyReplaceDefineStepExtensionComponent>;
+}
+
 /** Extension point registration contract for Integration Policy Edit views */
 export interface PackagePolicyEditExtension {
   package: string;
@@ -85,6 +118,18 @@ export interface PackagePolicyResponseExtension {
   package: string;
   view: 'package-policy-response';
   Component: LazyExoticComponent<PackagePolicyResponseExtensionComponent>;
+}
+
+export interface EndpointAgentTamperProtectionExtension {
+  package: string;
+  view: 'endpoint-agent-tamper-protection';
+  Component: LazyExoticComponent<ComponentType<PropsWithChildren<{}>>>;
+}
+
+export interface PliAuthBlockExtension {
+  package: string;
+  view: 'pli-auth-block';
+  Component: LazyExoticComponent<ComponentType>;
 }
 
 export interface PackageGenericErrorsListExtension {
@@ -184,6 +229,7 @@ export interface AgentEnrollmentFlyoutFinalStepExtension {
 
 /** Fleet UI Extension Point */
 export type UIExtensionPoint =
+  | PackagePolicyReplaceDefineStepExtension
   | PackagePolicyEditExtension
   | PackagePolicyResponseExtension
   | PackagePolicyEditTabsExtension
@@ -192,4 +238,6 @@ export type UIExtensionPoint =
   | PackageAssetsExtension
   | PackageGenericErrorsListExtension
   | AgentEnrollmentFlyoutFinalStepExtension
-  | PackagePolicyCreateMultiStepExtension;
+  | PackagePolicyCreateMultiStepExtension
+  | EndpointAgentTamperProtectionExtension
+  | PliAuthBlockExtension;

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { i18n } from '@kbn/i18n';
@@ -14,7 +15,7 @@ import {
   Dimension,
   validateAccessor,
 } from '@kbn/visualizations-plugin/common/utils';
-import { HeatmapExpressionFunctionDefinition } from '../types';
+import type { HeatmapExpressionFunctionDefinition, HeatmapExpressionProps } from '../types';
 import {
   EXPRESSION_HEATMAP_NAME,
   EXPRESSION_HEATMAP_GRID_NAME,
@@ -230,9 +231,10 @@ export const heatmapFunction = (): HeatmapExpressionFunctionDefinition => ({
             (handlers.variables?.embeddableTitle as string) ??
             handlers.getExecutionContext?.()?.description,
         },
-        syncTooltips: handlers?.isSyncTooltipsEnabled?.() ?? false,
-        syncCursor: handlers?.isSyncCursorEnabled?.() ?? true,
-        canNavigateToLens: Boolean(handlers?.variables?.canNavigateToLens),
+        syncTooltips: handlers.isSyncTooltipsEnabled?.() ?? false,
+        syncCursor: handlers.isSyncCursorEnabled?.() ?? true,
+        canNavigateToLens: Boolean(handlers.variables?.canNavigateToLens),
+        overrides: handlers.variables?.overrides as HeatmapExpressionProps['overrides'],
       },
     };
   },

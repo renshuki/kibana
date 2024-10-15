@@ -5,27 +5,35 @@
  * 2.0.
  */
 
-import { parse as parseCookie, Cookie } from 'tough-cookie';
-import { setTimeout as setTimeoutAsync } from 'timers/promises';
-import expect from '@kbn/expect';
-import { adminTestUser } from '@kbn/test';
-import type { AuthenticationProvider } from '@kbn/security-plugin/common';
-import {
+import type {
   AggregateName,
   AggregationsMultiTermsAggregate,
   AggregationsMultiTermsBucket,
   AggregationsTopHitsAggregate,
   SearchTotalHits,
 } from '@elastic/elasticsearch/lib/api/types';
-import { FtrProviderContext } from '../../ftr_provider_context';
-import { getSAMLRequestId, getSAMLResponse } from '../../fixtures/saml/saml_tools';
+import { setTimeout as setTimeoutAsync } from 'timers/promises';
+import type { Cookie } from 'tough-cookie';
+import { parse as parseCookie } from 'tough-cookie';
+
+import expect from '@kbn/expect';
+import {
+  getSAMLRequestId,
+  getSAMLResponse,
+} from '@kbn/security-api-integration-helpers/saml/saml_tools';
+import type { AuthenticationProvider } from '@kbn/security-plugin/common';
+import { adminTestUser } from '@kbn/test';
+
+import type { FtrProviderContext } from '../../ftr_provider_context';
 
 export default function ({ getService }: FtrProviderContext) {
   const supertest = getService('supertestWithoutAuth');
+  const esSupertest = getService('esSupertest');
   const es = getService('es');
   const security = getService('security');
   const esDeleteAllIndices = getService('esDeleteAllIndices');
   const config = getService('config');
+  const retry = getService('retry');
   const log = getService('log');
   const randomness = getService('randomness');
   const testUser = { username: 'test_user', password: 'changeme' };
@@ -134,19 +142,28 @@ export default function ({ getService }: FtrProviderContext) {
     return parseCookie(authenticationResponse.headers['set-cookie'][0])!;
   }
 
-  async function toggleSessionCleanupTask(enabled: boolean) {
-    await supertest
-      .post('/session/toggle_cleanup_task')
-      .set('kbn-xsrf', 'xxx')
-      .auth(adminTestUser.username, adminTestUser.password)
-      .send({ enabled })
-      .expect(200);
+  async function runCleanupTaskSoon() {
+    // In most cases, an error would mean the task is currently running so let's run it again
+    await retry.tryForTime(30000, async () => {
+      await supertest
+        .post('/session/_run_cleanup')
+        .set('kbn-xsrf', 'xxx')
+        .auth(adminTestUser.username, adminTestUser.password)
+        .send()
+        .expect(200);
+    });
   }
 
-  // FLAKY: https://github.com/elastic/kibana/issues/149092
-  // FLAKY: https://github.com/elastic/kibana/issues/149091
-  // FLAKY: https://github.com/elastic/kibana/issues/149090
-  describe.skip('Session Concurrent Limit cleanup', () => {
+  async function addESDebugLoggingSettings() {
+    const addLogging = {
+      persistent: {
+        'logger.org.elasticsearch.xpack.security.authc': 'debug',
+      },
+    };
+    await esSupertest.put('/_cluster/settings').send(addLogging).expect(200);
+  }
+
+  describe('Session Concurrent Limit cleanup', () => {
     before(async () => {
       await security.user.create('anonymous_user', {
         password: 'changeme',
@@ -161,8 +178,8 @@ export default function ({ getService }: FtrProviderContext) {
 
     beforeEach(async function () {
       this.timeout(120000);
-      await toggleSessionCleanupTask(false);
       await es.cluster.health({ index: '.kibana_security_session*', wait_for_status: 'green' });
+      await addESDebugLoggingSettings();
       await esDeleteAllIndices('.kibana_security_session*');
     });
 
@@ -177,15 +194,18 @@ export default function ({ getService }: FtrProviderContext) {
       await setTimeoutAsync(500);
       const basicSessionCookieThree = await loginWithBasic(testUser);
 
-      expect(await getNumberOfSessionDocuments()).to.be(3);
+      log.debug('Waiting for all sessions to be persisted...');
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(3);
+      });
 
-      // Let's wait for 60s to make sure cleanup routine runs after it was enabled.
+      // Poke the background task to run
+      await runCleanupTaskSoon();
       log.debug('Waiting for cleanup job to run...');
-      await toggleSessionCleanupTask(true);
-      await setTimeoutAsync(60000);
-
-      // The oldest session should have been removed, but the rest should still be valid.
-      expect(await getNumberOfSessionDocuments()).to.be(2);
+      await retry.tryForTime(30000, async () => {
+        // The oldest session should have been removed, but the rest should still be valid.
+        expect(await getNumberOfSessionDocuments()).to.be(2);
+      });
 
       await checkSessionCookieInvalid(basicSessionCookieOne);
       await checkSessionCookie(basicSessionCookieTwo, testUser.username, basicProvider);
@@ -193,28 +213,49 @@ export default function ({ getService }: FtrProviderContext) {
     });
 
     it('should properly clean up sessions that exceeded concurrent session limit even for multiple providers', async function () {
-      this.timeout(100000);
+      this.timeout(160000);
 
       log.debug(`Log in as ${testUser.username} and SAML user 3 times each with a 0.5s delay.`);
 
       const basicSessionCookieOne = await loginWithBasic(testUser);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(1);
+      });
+
       const samlSessionCookieOne = await loginWithSAML();
-      await setTimeoutAsync(500);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(2);
+      });
+
       const basicSessionCookieTwo = await loginWithBasic(testUser);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(3);
+      });
+
       const samlSessionCookieTwo = await loginWithSAML();
-      await setTimeoutAsync(500);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(4);
+      });
+
       const basicSessionCookieThree = await loginWithBasic(testUser);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(5);
+      });
+
       const samlSessionCookieThree = await loginWithSAML();
 
-      expect(await getNumberOfSessionDocuments()).to.be(6);
+      log.debug('Waiting for all sessions to be persisted...');
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(6);
+      });
 
-      // Let's wait for 60s to make sure cleanup routine runs after it was enabled.
+      // Poke the background task to run
+      await runCleanupTaskSoon();
       log.debug('Waiting for cleanup job to run...');
-      await toggleSessionCleanupTask(true);
-      await setTimeoutAsync(60000);
-
-      // The oldest session should have been removed, but the rest should still be valid.
-      expect(await getNumberOfSessionDocuments()).to.be(4);
+      await retry.tryForTime(30000, async () => {
+        // The oldest sessions should have been removed, but the rest should still be valid.
+        expect(await getNumberOfSessionDocuments()).to.be(4);
+      });
 
       await checkSessionCookieInvalid(basicSessionCookieOne);
       await checkSessionCookie(basicSessionCookieTwo, testUser.username, basicProvider);
@@ -231,15 +272,36 @@ export default function ({ getService }: FtrProviderContext) {
       log.debug(`Log in as ${testUser.username} and SAML user 3 times each with a 0.5s delay.`);
 
       const basicSessionCookieOne = await loginWithBasic(testUser);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(1);
+      });
+
       const samlSessionCookieOne = await loginWithSAML();
-      await setTimeoutAsync(500);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(2);
+      });
+
       const basicSessionCookieTwo = await loginWithBasic(testUser);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(3);
+      });
+
       const samlSessionCookieTwo = await loginWithSAML();
-      await setTimeoutAsync(500);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(4);
+      });
+
       const basicSessionCookieThree = await loginWithBasic(testUser);
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(5);
+      });
+
       const samlSessionCookieThree = await loginWithSAML();
 
-      expect(await getNumberOfSessionDocuments()).to.be(6);
+      log.debug('Waiting for all sessions to be persisted...');
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(6);
+      });
 
       // Remove `createdAt` field from the most recent sessions to emulate legacy sessions.
       // 1. Get the latest session for every unique credentials.
@@ -275,13 +337,13 @@ export default function ({ getService }: FtrProviderContext) {
         refresh: true,
       });
 
-      // Let's wait for 60s to make sure cleanup routine runs after it was enabled.
+      // Poke the background task to run
+      await runCleanupTaskSoon();
       log.debug('Waiting for cleanup job to run...');
-      await toggleSessionCleanupTask(true);
-      await setTimeoutAsync(60000);
-
-      // The oldest session should have been removed, but the rest should still be valid.
-      expect(await getNumberOfSessionDocuments()).to.be(4);
+      await retry.tryForTime(30000, async () => {
+        // The oldest session should have been removed, but the rest should still be valid.
+        expect(await getNumberOfSessionDocuments()).to.be(4);
+      });
 
       await checkSessionCookie(basicSessionCookieOne, testUser.username, basicProvider);
       await checkSessionCookie(basicSessionCookieTwo, testUser.username, basicProvider);
@@ -301,15 +363,18 @@ export default function ({ getService }: FtrProviderContext) {
       await setTimeoutAsync(500);
       const basicSessionCookieTwo = await loginWithBasic(testUser);
 
-      expect(await getNumberOfSessionDocuments()).to.be(2);
+      log.debug('Waiting for all sessions to be persisted...');
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(2);
+      });
 
-      // Let's wait for 60s to make sure cleanup routine runs after it was enabled.
+      // Poke the background task to run
+      await runCleanupTaskSoon();
       log.debug('Waiting for cleanup job to run...');
-      await toggleSessionCleanupTask(true);
-      await setTimeoutAsync(60000);
-
-      // The oldest session should have been removed, but the rest should still be valid.
-      expect(await getNumberOfSessionDocuments()).to.be(2);
+      await retry.tryForTime(30000, async () => {
+        // The oldest session should have been removed, but the rest should still be valid.
+        expect(await getNumberOfSessionDocuments()).to.be(2);
+      });
 
       await checkSessionCookie(basicSessionCookieOne, testUser.username, basicProvider);
       await checkSessionCookie(basicSessionCookieTwo, testUser.username, basicProvider);
@@ -324,15 +389,18 @@ export default function ({ getService }: FtrProviderContext) {
       const anonymousSessionCookieTwo = await loginWithAnonymous();
       const anonymousSessionCookieThree = await loginWithAnonymous();
 
-      expect(await getNumberOfSessionDocuments()).to.be(3);
+      log.debug('Waiting for all sessions to be persisted...');
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(3);
+      });
 
-      // Let's wait for 60s to make sure cleanup routine runs after it was enabled.
+      // Poke the background task to run
+      await runCleanupTaskSoon();
       log.debug('Waiting for cleanup job to run...');
-      await toggleSessionCleanupTask(true);
-      await setTimeoutAsync(60000);
-
-      // The oldest session should have been removed, but the rest should still be valid.
-      expect(await getNumberOfSessionDocuments()).to.be(3);
+      await retry.tryForTime(30000, async () => {
+        // The oldest session should have been removed, but the rest should still be valid.
+        expect(await getNumberOfSessionDocuments()).to.be(3);
+      });
 
       // All sessions should be active.
       for (const anonymousSessionCookie of [
@@ -350,34 +418,42 @@ export default function ({ getService }: FtrProviderContext) {
       log.debug(`Starting SAML handshake 3 times.`);
 
       const unauthenticatedSessionOne = await startSAMLHandshake();
+      await setTimeoutAsync(500);
       const unauthenticatedSessionTwo = await startSAMLHandshake();
+      await setTimeoutAsync(500);
       const unauthenticatedSessionThree = await startSAMLHandshake();
+      await setTimeoutAsync(500);
 
-      expect(await getNumberOfSessionDocuments()).to.be(3);
+      log.debug('Waiting for all sessions to be persisted...');
+      await retry.tryForTime(20000, async () => {
+        expect(await getNumberOfSessionDocuments()).to.be(3);
+      });
 
-      // Let's wait for 60s to make sure cleanup routine runs after it was enabled.
+      // Poke the background task to run
+      await runCleanupTaskSoon();
       log.debug('Waiting for cleanup job to run...');
-      await toggleSessionCleanupTask(true);
-      await setTimeoutAsync(60000);
-
-      // The oldest session should have been removed, but the rest should still be valid.
-      expect(await getNumberOfSessionDocuments()).to.be(3);
+      await retry.tryForTime(30000, async () => {
+        // The oldest session should have been removed, but the rest should still be valid.
+        expect(await getNumberOfSessionDocuments()).to.be(3);
+      });
 
       // Finish SAML handshake (all should succeed since we don't enforce limit at session creation time).
       const samlSessionCookieOne = await finishSAMLHandshake(
         unauthenticatedSessionOne.cookie,
         unauthenticatedSessionOne.location
       );
-      await setTimeoutAsync(500);
+      await setTimeoutAsync(500); // Ensure the order of session cookie timestamps
       const samlSessionCookieTwo = await finishSAMLHandshake(
         unauthenticatedSessionTwo.cookie,
         unauthenticatedSessionTwo.location
       );
-      await setTimeoutAsync(500);
+      await setTimeoutAsync(500); // Ensure the order of session cookie timestamps
       const samlSessionCookieThree = await finishSAMLHandshake(
         unauthenticatedSessionThree.cookie,
         unauthenticatedSessionThree.location
       );
+
+      await es.indices.refresh({ index: '.kibana_security_session*' });
 
       // For authenticated sessions limit should be enforced
       await checkSessionCookieInvalid(samlSessionCookieOne);

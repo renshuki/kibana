@@ -23,13 +23,13 @@ import { HomePublicPluginSetup } from '@kbn/home-plugin/public';
 import { SpacesPluginStart } from '@kbn/spaces-plugin/public';
 import { ExpressionsSetup, ExpressionsStart } from '@kbn/expressions-plugin/public';
 import { DataPublicPluginSetup, DataPublicPluginStart } from '@kbn/data-plugin/public';
-import { UiActionsStart } from '@kbn/ui-actions-plugin/public';
+import { UiActionsSetup, UiActionsStart } from '@kbn/ui-actions-plugin/public';
 import { EmbeddableStart } from '@kbn/embeddable-plugin/public';
 import { UsageCollectionSetup } from '@kbn/usage-collection-plugin/public';
 import { Start as InspectorStart } from '@kbn/inspector-plugin/public';
-import { BfetchPublicSetup } from '@kbn/bfetch-plugin/public';
 import { PresentationUtilPluginStart } from '@kbn/presentation-util-plugin/public';
 import { DataViewsPublicPluginStart } from '@kbn/data-views-plugin/public';
+import { ContentManagementPublicStart } from '@kbn/content-management-plugin/public';
 import { featureCatalogueEntry } from './feature_catalogue_entry';
 import { CanvasAppLocatorDefinition } from '../common/locator';
 import { SESSIONSTORAGE_LASTPATH, CANVAS_APP } from '../common/lib/constants';
@@ -37,6 +37,8 @@ import { getSessionStorage } from './lib/storage';
 import { initLoadingIndicator } from './lib/loading_indicator';
 import { getPluginApi, CanvasApi } from './plugin_api';
 import { setupExpressions } from './setup_expressions';
+import { addCanvasElementTrigger } from './state/triggers/add_canvas_element_trigger';
+import { setKibanaServices, untilPluginStartServicesReady } from './services/kibana_services';
 
 export type { CoreStart, CoreSetup };
 
@@ -51,8 +53,8 @@ export interface CanvasSetupDeps {
   expressions: ExpressionsSetup;
   home?: HomePublicPluginSetup;
   usageCollection?: UsageCollectionSetup;
-  bfetch: BfetchPublicSetup;
   charts: ChartsPluginSetup;
+  uiActions: UiActionsSetup;
 }
 
 export interface CanvasStartDeps {
@@ -67,6 +69,7 @@ export interface CanvasStartDeps {
   presentationUtil: PresentationUtilPluginStart;
   visualizations: VisualizationsStart;
   spaces?: SpacesPluginStart;
+  contentManagement: ContentManagementPublicStart;
 }
 
 /**
@@ -119,21 +122,12 @@ export class CanvasPlugin
         setupExpressions({ coreSetup, setupPlugins });
 
         // Get start services
-        const [coreStart, startPlugins] = await coreSetup.getStartServices();
+        const [[coreStart, startPlugins]] = await Promise.all([
+          coreSetup.getStartServices(),
+          untilPluginStartServicesReady(),
+        ]);
 
         srcPlugin.start(coreStart, startPlugins);
-
-        const { pluginServices } = await import('./services');
-        const { pluginServiceRegistry } = await import('./services/kibana');
-
-        pluginServices.setRegistry(
-          pluginServiceRegistry.start({
-            coreStart,
-            startPlugins,
-            appUpdater: this.appUpdater,
-            initContext: this.initContext,
-          })
-        );
 
         const { expressions, presentationUtil } = startPlugins;
         await presentationUtil.registerExpressionsLanguage(
@@ -152,7 +146,13 @@ export class CanvasPlugin
           this.appUpdater
         );
 
-        const unmount = renderApp({ coreStart, startPlugins, params, canvasStore, pluginServices });
+        const unmount = renderApp({
+          coreStart,
+          startPlugins,
+          params,
+          canvasStore,
+          appUpdater: this.appUpdater,
+        });
 
         return () => {
           unmount();
@@ -180,12 +180,15 @@ export class CanvasPlugin
       return transitions;
     });
 
+    setupPlugins.uiActions.registerTrigger(addCanvasElementTrigger);
+
     return {
       ...canvasApi,
     };
   }
 
   public start(coreStart: CoreStart, startPlugins: CanvasStartDeps) {
+    setKibanaServices(coreStart, startPlugins, this.initContext);
     initLoadingIndicator(coreStart.http.addLoadingCountSource);
   }
 }

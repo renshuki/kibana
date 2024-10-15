@@ -30,6 +30,9 @@ export function registerV1HealthRoute(server: MonitoringCore) {
     validate: {
       query: validateQuery,
     },
+    options: {
+      access: 'internal',
+    },
     async handler(req: LegacyRequest) {
       const logger = req.getLogger();
       const timeRange = {
@@ -60,9 +63,10 @@ export function registerV1HealthRoute(server: MonitoringCore) {
         getDsIndexPattern({ config, moduleType: 'kibana' }),
         getDsIndexPattern({ config, moduleType: 'logstash' }),
         getDsIndexPattern({ config, moduleType: 'beats' }),
+        getDsIndexPattern({ config, moduleType: 'enterprisesearch' }),
       ].join(',');
 
-      const entSearchIndex = getIndexPatterns({ config, moduleType: 'enterprise_search' });
+      const entSearchIndex = getIndexPatterns({ config, moduleType: 'enterprisesearch' });
 
       const monitoredClustersFn = () =>
         fetchMonitoredClusters({

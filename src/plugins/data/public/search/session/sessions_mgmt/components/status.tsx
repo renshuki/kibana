@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { EuiFlexGroup, EuiFlexItem, EuiIcon, EuiLoadingSpinner, EuiToolTip } from '@elastic/eui';
@@ -104,7 +105,7 @@ const getStatusAttributes = ({
 
     case SearchSessionStatus.CANCELLED:
       return {
-        icon: <EuiIcon color="#9AA" type="crossInACircleFilled" />,
+        icon: <EuiIcon color="#9AA" type="error" />,
         label: <TableText>{getStatusText(session.status)}</TableText>,
         toolTipContent: i18n.translate('data.mgmt.searchSessions.status.message.cancelled', {
           defaultMessage: 'Cancelled by user',
@@ -114,7 +115,7 @@ const getStatusAttributes = ({
     case SearchSessionStatus.ERROR:
       return {
         textColor: 'danger',
-        icon: <EuiIcon color="danger" type="crossInACircleFilled" />,
+        icon: <EuiIcon color="danger" type="error" />,
         label: <TableText>{getStatusText(session.status)}</TableText>,
         toolTipContent:
           session.errors && session.errors.length > 0

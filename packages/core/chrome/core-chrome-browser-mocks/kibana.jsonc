@@ -1,5 +1,6 @@
 {
-  "type": "shared-common",
+  "type": "shared-browser",
   "id": "@kbn/core-chrome-browser-mocks",
-  "owner": "@elastic/kibana-core"
+  "devOnly": true,
+  "owner": "@elastic/appex-sharedux"
 }

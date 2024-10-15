@@ -1,14 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import v8 from 'v8';
 import type { OpsProcessMetrics, MetricsCollector } from '@kbn/core-metrics-server';
 import { EventLoopDelaysMonitor } from './event_loop_delays_monitor';
+import { EventLoopUtilizationMonitor } from './event_loop_utilization_monitor';
 
 export class ProcessMetricsCollector implements MetricsCollector<OpsProcessMetrics[]> {
   static getMainThreadMetrics(processes: OpsProcessMetrics[]): undefined | OpsProcessMetrics {
@@ -21,9 +23,11 @@ export class ProcessMetricsCollector implements MetricsCollector<OpsProcessMetri
   }
 
   private readonly eventLoopDelayMonitor = new EventLoopDelaysMonitor();
+  private readonly eventLoopUtilizationMonitor = new EventLoopUtilizationMonitor();
 
   private getCurrentPidMetrics(): OpsProcessMetrics {
     const eventLoopDelayHistogram = this.eventLoopDelayMonitor.collect();
+    const eventLoopUtilization = this.eventLoopUtilizationMonitor.collect();
     const heapStats = v8.getHeapStatistics();
     const memoryUsage = process.memoryUsage();
 
@@ -35,10 +39,13 @@ export class ProcessMetricsCollector implements MetricsCollector<OpsProcessMetri
           size_limit: heapStats.heap_size_limit,
         },
         resident_set_size_in_bytes: memoryUsage.rss,
+        array_buffers_in_bytes: memoryUsage.arrayBuffers,
+        external_in_bytes: memoryUsage.external,
       },
       pid: process.pid,
-      event_loop_delay: eventLoopDelayHistogram.mean,
+      event_loop_delay: eventLoopDelayHistogram.max,
       event_loop_delay_histogram: eventLoopDelayHistogram,
+      event_loop_utilization: eventLoopUtilization,
       uptime_in_millis: process.uptime() * 1000,
     };
   }
@@ -49,5 +56,6 @@ export class ProcessMetricsCollector implements MetricsCollector<OpsProcessMetri
 
   public reset() {
     this.eventLoopDelayMonitor.reset();
+    this.eventLoopUtilizationMonitor.reset();
   }
 }

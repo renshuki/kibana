@@ -7,7 +7,7 @@
 
 import { i18n } from '@kbn/i18n';
 import type { Filter } from '@kbn/es-query';
-import { DataView } from '@kbn/data-views-plugin/public';
+import type { DataView } from '@kbn/data-views-plugin/public';
 import type {
   DateHistogramIndexPatternColumn,
   GenericIndexPatternColumn,
@@ -18,7 +18,7 @@ import type {
 } from '@kbn/lens-plugin/public';
 import { DOCUMENT_FIELD_NAME as RECORDS_FIELD } from '@kbn/lens-plugin/common/constants';
 import type { CombinedQuery } from '../../../../index_data_visualizer/types/combined_query';
-import { FieldVisConfig } from '../../stats_table/types';
+import type { FieldVisConfig } from '../../stats_table/types';
 import { SUPPORTED_FIELD_TYPES } from '../../../../../../common/constants';
 
 interface ColumnsAndLayer {
@@ -68,15 +68,24 @@ export function getNumberSettings(item: FieldVisConfig, defaultDataView: DataVie
     return { columns, layer };
   }
 
+  const operationType = item.supportedAggs?.has('avg') ? 'average' : 'max';
+  const operationLabel =
+    operationType === 'average'
+      ? i18n.translate('xpack.dataVisualizer.index.lensChart.averageOfLabel', {
+          defaultMessage: 'Average of {fieldName}',
+          values: { fieldName: item.fieldName },
+        })
+      : i18n.translate('xpack.dataVisualizer.index.lensChart.maximumOfLabel', {
+          defaultMessage: 'Maximum of {fieldName}',
+          values: { fieldName: item.fieldName },
+        });
+
   const columns: Record<string, GenericIndexPatternColumn> = {
     col2: {
       dataType: 'number',
       isBucketed: false,
-      label: i18n.translate('xpack.dataVisualizer.index.lensChart.averageOfLabel', {
-        defaultMessage: 'Average of {fieldName}',
-        values: { fieldName: item.fieldName },
-      }),
-      operationType: 'average',
+      label: operationLabel,
+      operationType,
       sourceField: item.fieldName!,
     },
     col1: {

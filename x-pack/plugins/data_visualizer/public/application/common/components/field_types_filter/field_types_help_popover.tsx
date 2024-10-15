@@ -18,11 +18,12 @@ import {
   EuiText,
   useEuiTheme,
 } from '@elastic/eui';
-import React, { FC, useMemo, useState } from 'react';
+import type { FC } from 'react';
+import React, { useMemo, useState } from 'react';
 import { i18n } from '@kbn/i18n';
 import { FieldIcon } from '@kbn/react-field';
 import { FormattedMessage } from '@kbn/i18n-react';
-import { getFieldTypeDescription } from '../../../../../common/constants';
+import { getFieldTypeDescription } from '@kbn/field-utils/src/utils/get_field_type_description';
 import { useDataVisualizerKibana } from '../../../kibana_context';
 
 interface FieldTypeTableItem {
@@ -49,9 +50,9 @@ export const FieldTypesHelpPopover: FC<{
         fieldTypes.map((type, index) => ({
           id: index,
           dataType: type,
-          description: getFieldTypeDescription(type, docLinks),
+          description: getFieldTypeDescription(type),
         })),
-      [fieldTypes, docLinks]
+      [fieldTypes]
     );
 
     const columnsSidebar = [
@@ -129,7 +130,7 @@ export const FieldTypesHelpPopover: FC<{
             compressed={true}
             rowHeader="firstName"
             columns={columnsSidebar}
-            responsive={false}
+            responsiveBreakpoint={false}
           />
         </EuiPanel>
         <EuiPanel color="transparent" paddingSize="s">

@@ -1,0 +1,4 @@
+.lnsEmbeddablePanelFeatureList {
+  max-height: $euiSize * 20;
+  @include euiYScroll;
+}
